@@ -16,6 +16,7 @@ body.forge-ui {
     --forge-soft: #D8C3B3;
     --forge-text: #F1E3D6;
     --forge-heading: 'Cinzel', 'Times New Roman', serif;
+    --forge-bar-line: color-mix(in srgb, var(--forge-brass) 45%, transparent);
     --forge-hairline: linear-gradient(90deg, transparent, color-mix(in srgb, var(--forge-brass) 55%, transparent) 18%, color-mix(in srgb, var(--forge-brass) 55%, transparent) 82%, transparent);
 
     --SmartThemeBodyColor: var(--forge-text);
@@ -56,7 +57,7 @@ body.forge-ui #top-bar::after {
     right: 0;
     bottom: 0;
     height: 1px;
-    background: var(--forge-hairline);
+    background: var(--forge-bar-line);
 }
 
 body.forge-ui .drawer-icon {
@@ -974,7 +975,8 @@ body.forge-ui #forge-ai-layout select {
     text-align-last: center;
 }
 
-/* Left panel header: same height and finish as the top bar, with no seam between them */
+/* Left panel header: same height and finish as the top bar, with no seam between them.
+   #top-bar is sized by --bottomFormBlockSize in SillyTavern's style.css, so the header uses it too. */
 body.forge-ui #left-nav-panel {
     padding-top: 0;
     border-top: none;
@@ -987,9 +989,10 @@ body.forge-ui #left-nav-panel::before {
     top: 0;
     left: 0;
     right: 0;
-    height: var(--topBarBlockSize);
+    height: var(--bottomFormBlockSize);
     background: linear-gradient(180deg, #2A110D 0%, #160A08 100%);
-    border-bottom: 1px solid color-mix(in srgb, var(--forge-brass) 45%, transparent);
+    border-bottom: 1px solid var(--forge-bar-line);
+    box-sizing: border-box;
     pointer-events: none;
     z-index: 0;
 }
@@ -1002,8 +1005,8 @@ body.forge-ui #left-nav-panel > .topRightInset {
 }
 
 body.forge-ui #left-nav-panel > #lm_button_panel_pin_div {
-    height: var(--topBarBlockSize);
-    min-height: var(--topBarBlockSize);
+    height: var(--bottomFormBlockSize);
+    min-height: var(--bottomFormBlockSize);
     flex: none;
     margin: 0;
     padding: 0 4px;
@@ -1012,10 +1015,12 @@ body.forge-ui #left-nav-panel > #lm_button_panel_pin_div {
     box-sizing: border-box;
 }
 
+/* The tip is plain text spanning the whole header; let clicks reach the pin and lock under it */
 body.forge-ui #left-nav-panel > #clickSlidersTips {
+    pointer-events: none;
     position: absolute;
     top: 0;
-    height: var(--topBarBlockSize);
+    height: var(--bottomFormBlockSize);
     margin: 0;
     display: flex;
     align-items: center;
@@ -1027,7 +1032,7 @@ body.forge-ui #left-nav-panel > #clickSlidersTips {
 body.forge-ui #left-nav-panel > .topRightInset {
     position: absolute;
     top: 0;
-    height: var(--topBarBlockSize);
+    height: var(--bottomFormBlockSize);
     display: flex;
     align-items: center;
 }
