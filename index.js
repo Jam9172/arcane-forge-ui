@@ -1,5 +1,6 @@
 import { extension_settings } from '../../../extensions.js';
-import { saveSettingsDebounced } from '../../../../script.js';
+import { saveSettingsDebounced, eventSource, event_types } from '../../../../script.js';
+import { buildAiTab, restoreAiTab, refreshModelLine } from './aiTab.js';
 
 const MODULE = 'arcaneForgeUi';
 const FONT_LINK_ID = 'arcane-forge-ui-fonts';
@@ -28,6 +29,8 @@ const COLORS = {
 
 const defaults = {
     enabled: true,
+    aiLayout: true,
+    aiHelp: false,
     fontSize: 17,
     chatScale: 110,
     headingFont: 'cinzel',
@@ -70,6 +73,16 @@ function apply() {
     for (const [key, c] of Object.entries(COLORS)) {
         body.style.setProperty(c.variable, s.colors[key]);
     }
+    applyAiLayout();
+}
+
+// The Forge ledger AI tab only covers Chat Completion; other APIs keep SillyTavern's layout.
+function applyAiLayout() {
+    const s = settings();
+    const wanted = s.enabled && s.aiLayout && $('#main_api').val() === 'openai';
+    document.body.classList.toggle('forge-ai-hide-help', !s.aiHelp);
+    if (wanted) buildAiTab();
+    else restoreAiTab();
 }
 
 function save() {
@@ -102,6 +115,14 @@ function renderSettings() {
                 <label class="checkbox_label" for="arcane-forge-ui-enabled">
                     <input type="checkbox" id="arcane-forge-ui-enabled"${s.enabled ? ' checked' : ''}>
                     <span>Use the Arcane Forge look across the whole app</span>
+                </label>
+                <label class="checkbox_label" for="forge-ui-ai-layout">
+                    <input type="checkbox" id="forge-ui-ai-layout"${s.aiLayout ? ' checked' : ''}>
+                    <span>Forge layout for the AI Response tab (Chat Completion)</span>
+                </label>
+                <label class="checkbox_label" for="forge-ui-ai-help">
+                    <input type="checkbox" id="forge-ui-ai-help"${s.aiHelp ? ' checked' : ''}>
+                    <span>Show SillyTavern's help text under AI settings</span>
                 </label>
 
                 <h4>Text</h4>
@@ -138,6 +159,14 @@ function bindSettings($root) {
         s.enabled = this.checked;
         save();
     });
+    $root.find('#forge-ui-ai-layout').on('change', function () {
+        s.aiLayout = this.checked;
+        save();
+    });
+    $root.find('#forge-ui-ai-help').on('change', function () {
+        s.aiHelp = this.checked;
+        save();
+    });
     $root.find('#forge-ui-font-size').on('input', function () {
         s.fontSize = Number(this.value);
         $root.find('#forge-ui-font-size-value').text(`${s.fontSize}px`);
@@ -161,7 +190,7 @@ function bindSettings($root) {
         save();
     });
     $root.find('#forge-ui-reset').on('click', () => {
-        extension_settings[MODULE] = structuredClone({ ...defaults, enabled: s.enabled });
+        extension_settings[MODULE] = structuredClone({ ...defaults, enabled: s.enabled, aiLayout: s.aiLayout, aiHelp: s.aiHelp });
         save();
         mountSettings();
     });
@@ -182,4 +211,8 @@ function mountSettings() {
 jQuery(() => {
     mountSettings();
     apply();
+    $('#main_api').on('change', applyAiLayout);
+    for (const name of ['CHATCOMPLETION_SOURCE_CHANGED', 'CHATCOMPLETION_MODEL_CHANGED', 'SETTINGS_LOADED']) {
+        if (event_types[name]) eventSource.on(event_types[name], refreshModelLine);
+    }
 });

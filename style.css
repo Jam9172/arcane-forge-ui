@@ -480,3 +480,438 @@ body.forge-ui ::-webkit-scrollbar-thumb:hover {
     width: auto;
     margin-top: 12px;
 }
+
+/* ---------- AI Response tab: Forge ledger layout (aiTab.js) ---------- */
+body.forge-ai-active #openai_api-presets,
+body.forge-ai-active #range_block_openai > hr {
+    display: none;
+}
+
+body.forge-ui #forge-ai-layout {
+    --forge-ai-line: color-mix(in srgb, var(--forge-border) 55%, transparent);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+    padding: 6px 4px 18px;
+    box-sizing: border-box;
+    text-align: left;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-header h2 {
+    margin: 0;
+    font-family: var(--forge-heading);
+    font-size: 1.35em;
+    color: var(--forge-brass);
+    letter-spacing: 0.04em;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-model {
+    font-size: 0.88em;
+    color: var(--forge-muted);
+}
+
+/* Preset bar */
+body.forge-ui #forge-ai-layout .forge-ai-presets {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-preset-row {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-preset-select {
+    flex: 1;
+    display: flex;
+    min-width: 0;
+}
+
+body.forge-ui #forge-ai-layout #settings_preset_openai {
+    flex: 1;
+    height: 44px;
+    margin: 0;
+    padding: 0 12px;
+    font-size: 1.05em;
+    background-color: var(--forge-card);
+    border-radius: 8px;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-more-menu {
+    position: relative;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-more-menu > summary {
+    list-style: none;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--forge-border);
+    border-radius: 8px;
+    color: var(--forge-muted);
+    cursor: pointer;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-more-menu > summary::-webkit-details-marker {
+    display: none;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-more-menu[open] > summary,
+body.forge-ui #forge-ai-layout .forge-ai-more-menu > summary:hover {
+    color: var(--forge-brass);
+    border-color: var(--forge-brass);
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 10;
+    min-width: 190px;
+    display: flex;
+    flex-direction: column;
+    padding: 6px;
+    background: var(--forge-card);
+    border: 1px solid var(--forge-border);
+    border-radius: 8px;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6);
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-menu button {
+    min-height: 40px;
+    padding: 0 10px;
+    text-align: left;
+    background: none;
+    border: none;
+    border-radius: 6px;
+    color: var(--forge-text);
+    font: inherit;
+    cursor: pointer;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-menu button:hover {
+    background: color-mix(in srgb, var(--forge-crimson) 25%, transparent);
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-menu .forge-ai-danger {
+    color: #F08A7A;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-preset-actions {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-action {
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: var(--forge-card);
+    border: 1px solid var(--forge-border);
+    border-radius: 8px;
+    color: var(--forge-soft);
+    font: inherit;
+    font-size: 0.95em;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-action:hover {
+    border-color: var(--forge-brass);
+    color: var(--forge-text);
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-action.forge-ai-primary {
+    background: var(--forge-ember);
+    border-color: var(--forge-ember);
+    color: var(--forge-card);
+    font-weight: 700;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-action.forge-ai-primary:hover {
+    filter: brightness(1.1);
+}
+
+/* Cards */
+body.forge-ui #forge-ai-layout .forge-ai-card {
+    display: flex;
+    flex-direction: column;
+    padding: 2px 14px 4px;
+    background: var(--forge-card);
+    border: 1px solid var(--forge-border);
+    border-radius: 10px;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-card > h3 {
+    margin: 0;
+    padding: 12px 0 8px;
+    font-family: var(--forge-heading);
+    font-size: 0.95em;
+    color: var(--forge-brass);
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--forge-border);
+}
+
+/* SillyTavern's range blocks become ledger rows: name and value on top, slider underneath */
+body.forge-ui #forge-ai-layout .range-block,
+body.forge-ui #forge-ai-layout .forge-ai-card > div[data-source]:not(.range-block),
+body.forge-ui #forge-ai-layout .forge-ai-card > .flex-container.flexFlowColumn {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px 12px;
+    margin: 0;
+    padding: 11px 0 10px;
+    border-bottom: 1px solid var(--forge-ai-line);
+}
+
+body.forge-ui #forge-ai-layout .range-block > * {
+    grid-column: 1 / -1;
+}
+
+body.forge-ui #forge-ai-layout .range-block-title {
+    grid-column: 1;
+    grid-row: 1;
+    width: auto;
+    text-align: left;
+    justify-content: flex-start;
+    font-size: 1em;
+    color: var(--forge-text);
+}
+
+body.forge-ui #forge-ai-layout .range-block-title .note-link-span,
+body.forge-ui #forge-ai-layout .range-block-title .fa-circle-info {
+    color: var(--forge-muted);
+}
+
+body.forge-ui #forge-ai-layout .range-block-range-and-counter {
+    display: contents;
+}
+
+body.forge-ui #forge-ai-layout .range-block-counter {
+    grid-column: 2;
+    grid-row: 1;
+    flex: none;
+    margin: 0;
+}
+
+body.forge-ui #forge-ai-layout .range-block-counter input,
+body.forge-ui #forge-ai-layout #openai_max_tokens,
+body.forge-ui #forge-ai-layout #seed_openai {
+    width: 84px;
+    height: 30px;
+    margin: 0;
+    padding: 0 8px;
+    text-align: right;
+    background: var(--forge-inset);
+    border: 1px solid transparent;
+    border-radius: 5px;
+    font-family: var(--forge-heading);
+    font-size: 0.95em;
+    color: var(--forge-brass);
+}
+
+body.forge-ui #forge-ai-layout .range-block-counter input:focus,
+body.forge-ui #forge-ai-layout #openai_max_tokens:focus,
+body.forge-ui #forge-ai-layout #seed_openai:focus {
+    border-color: color-mix(in srgb, var(--forge-ember) 70%, transparent);
+}
+
+/* Once, in testing, four sliders came back with an inline display:none after the layout was rebuilt;
+   no SillyTavern code hides these wrappers on purpose, so keep them visible. */
+body.forge-ui #forge-ai-layout .range-block-range {
+    display: block !important;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+}
+
+body.forge-ui #forge-ai-layout .range-block-range input[type="range"] {
+    width: 100%;
+    margin: 0;
+}
+
+/* Rows whose value is a typed number or a dropdown keep it on the right of the name */
+body.forge-ui #forge-ai-layout .range-block:has(#openai_max_tokens) > .wide100p,
+body.forge-ui #forge-ai-layout .range-block:has(#seed_openai) > .wide100p,
+body.forge-ui #forge-ai-layout .range-block:has(#openrouter_middleout) > .wide100p {
+    grid-column: 2;
+    grid-row: 1;
+    width: auto;
+}
+
+body.forge-ui #forge-ai-layout #openrouter_middleout,
+body.forge-ui #forge-ai-layout .forge-ai-card select {
+    width: auto;
+    min-width: 120px;
+    height: 34px;
+    margin: 0;
+}
+
+body.forge-ui #forge-ai-layout .oneline-dropdown {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    grid-column: 1 / -1;
+}
+
+body.forge-ui #forge-ai-layout .toggle-description,
+body.forge-ui #forge-ai-layout .range-block small,
+body.forge-ui #forge-ai-layout .forge-ai-card > div[data-source]:not(.range-block) {
+    width: auto;
+    margin: 0;
+    text-align: left;
+    font-size: 0.85em;
+    color: var(--forge-muted);
+}
+
+/* Checkbox rows: text on the left, switch on the right */
+body.forge-ui #forge-ai-layout label.checkbox_label {
+    flex-direction: row-reverse;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    min-height: 32px;
+    width: 100%;
+    margin: 0;
+}
+
+body.forge-ui #forge-ai-layout input[type="checkbox"]:not(.displayNone) {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: none;
+    width: 42px;
+    height: 24px;
+    margin: 0;
+    border: none;
+    outline: none;
+    border-radius: 12px;
+    background: radial-gradient(circle at 12px 50%, var(--forge-muted) 0 7px, transparent 8px);
+    /* SillyTavern colours checked boxes with a more specific rule */
+    background-color: var(--forge-track) !important;
+    box-shadow: none;
+    filter: none;
+    transform: none;
+    transition: background 0.15s;
+    cursor: pointer;
+}
+
+body.forge-ui #forge-ai-layout input[type="checkbox"]:not(.displayNone)::before {
+    display: none;
+}
+
+body.forge-ui #forge-ai-layout input[type="checkbox"]:not(.displayNone):checked {
+    background: radial-gradient(circle at 30px 50%, #FFF3E8 0 7px, transparent 8px);
+    background-color: var(--forge-ember) !important;
+}
+
+body.forge-ui #forge-ai-layout input[type="checkbox"]:focus-visible {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--forge-brass) 60%, transparent);
+}
+
+/* "More" folds and the Behaviour / Logit bias / Prompts rows */
+body.forge-ui #forge-ai-layout details > summary {
+    cursor: pointer;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-more > summary {
+    list-style: none;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    color: var(--forge-brass);
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-more > summary::after {
+    content: '›';
+    margin-left: 6px;
+    transition: transform 0.15s;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-more[open] > summary::after {
+    transform: rotate(90deg);
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-more > summary::-webkit-details-marker,
+body.forge-ui #forge-ai-layout .forge-ai-link > summary::-webkit-details-marker {
+    display: none;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-links {
+    padding: 0 14px;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-link {
+    border-bottom: 1px solid var(--forge-ai-line);
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-link:last-child {
+    border-bottom: none;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-link > summary {
+    list-style: none;
+    min-height: 50px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    font-family: var(--forge-heading);
+    font-size: 0.95em;
+    color: var(--forge-text);
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-link > summary span {
+    flex: none;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-link > summary small {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-family: var(--mainFontFamily);
+    font-size: 0.9em;
+    color: var(--forge-muted);
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-link > summary small::after {
+    content: ' ›';
+    display: inline-block;
+    transition: transform 0.15s;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-link[open] > summary small::after {
+    transform: rotate(90deg);
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-link-body {
+    padding: 0 0 12px;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-link-body > .range-block:last-child,
+body.forge-ui #forge-ai-layout .forge-ai-more-body > .range-block:last-child {
+    border-bottom: none;
+}
+
+/* Help text is off by default for a cleaner tab (setting: "Show SillyTavern's help text") */
+body.forge-ai-hide-help #forge-ai-layout [data-card="length"] .toggle-description,
+body.forge-ai-hide-help #forge-ai-layout [data-card="sampling"] .toggle-description,
+body.forge-ai-hide-help #forge-ai-layout [data-card="features"] .toggle-description {
+    display: none;
+}
