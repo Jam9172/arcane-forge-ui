@@ -48,7 +48,23 @@ body.forge-ui ::selection {
 /* ---------- Top bar ---------- */
 body.forge-ui #top-bar {
     background: var(--forge-bar-bg);
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6);
+    /* Negative spread keeps the shadow under the bar only; a sideways shadow showed as a seam
+       where the bar meets the panel headers on either side. */
+    box-shadow: 0 10px 18px -10px rgba(0, 0, 0, 0.7);
+}
+
+/* SillyTavern leaves a 1px gap between the side panels and the bar; these stubs bridge it */
+body.forge-ui #top-bar::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -2px;
+    right: -2px;
+    height: 100%;
+    z-index: -1;
+    box-sizing: border-box;
+    background: var(--forge-bar-bg);
+    border-bottom: 1px solid var(--forge-bar-line);
 }
 
 body.forge-ui #top-bar::after {
@@ -982,7 +998,11 @@ body.forge-ui #forge-ai-layout select {
    It is drawn as a background layer on the border box; the real border stays for spacing. */
 body.forge-ui #left-nav-panel {
     border-right-color: transparent;
+    /* Layers, top first: the bar's line and fill across the full border box (so the 1px border column
+       in the bar zone matches the top bar too), then the border line below the bar, then the panel fill. */
     background:
+        linear-gradient(var(--forge-bar-line), var(--forge-bar-line)) 0 calc(var(--bottomFormBlockSize) - 1px) / 100% 1px no-repeat,
+        var(--forge-bar-bg) 0 0 / 100% var(--bottomFormBlockSize) no-repeat,
         linear-gradient(var(--forge-border), var(--forge-border)) right bottom / 1px calc(100% - var(--bottomFormBlockSize)) no-repeat,
         linear-gradient(180deg, var(--forge-card), var(--forge-bg));
     background-origin: border-box;
@@ -1095,10 +1115,10 @@ body.forge-ui #top-settings-holder .drawer-icon.fa-plug { --forge-top-icon: url(
 body.forge-ui #top-settings-holder .drawer-icon.fa-plug-circle-exclamation { --forge-top-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M8%203v5%20M14%203v5%20M5%208h12v2.5%20M5%208v3a6%206%200%200%200%207%205.9%20M11%2017v4%20M18.5%2013.5a3.5%203.5%200%201%200%200%207a3.5%203.5%200%201%200%200-7z%20M18.5%2015.5v1.6%20M18.5%2018.8v.01%22/%3E%3C/svg%3E"); }
 body.forge-ui #top-settings-holder .drawer-icon.fa-font { --forge-top-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M5.5%2020l6.5-16%206.5%2016%20M8.4%2013.5h7.2%20M3.5%2020h4.5%20M16%2020h4.5%22/%3E%3C/svg%3E"); }
 body.forge-ui #top-settings-holder .drawer-icon.fa-book-atlas { --forge-top-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M5%204.5h11a3%203%200%200%201%203%203V20H8a3%203%200%200%201-3-3z%20M5%2017a3%203%200%200%201%203-3h11%20M10%208h5%20M10%2010.5h3%22/%3E%3C/svg%3E"); }
-body.forge-ui #top-settings-holder .drawer-icon.fa-user-cog { --forge-top-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M12%202.8l1.6%202.3%202.7-.7.7%202.7%202.3%201.6-1.2%202.5%201.2%202.5-2.3%201.6-.7%202.7-2.7-.7L12%2021.2l-1.6-2.3-2.7.7-.7-2.7-2.3-1.6L5.9%2012%204.7%209.5%207%207.9l.7-2.7%202.7.7z%20M12%209a3%203%200%201%200%200%206a3%203%200%201%200%200-6z%22/%3E%3C/svg%3E"); }
-body.forge-ui #top-settings-holder .drawer-icon.fa-panorama { --forge-top-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M4.5%2021V10a7.5%207.5%200%200%201%2015%200v11z%20M4.5%2021l5-6%203%203%202.5-3.5%204.5%206.5%20M15%209h.01%22/%3E%3C/svg%3E"); }
-body.forge-ui #top-settings-holder .drawer-icon.fa-cubes { --forge-top-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M12%203l4%202.3v4.6L12%2012l-4-2.1V5.3z%20M7%2012.5l4%202.3v4.6L7%2021.5l-4-2.1v-4.6z%20M17%2012.5l4%202.3v4.6l-4%202.1-4-2.1v-4.6z%22/%3E%3C/svg%3E"); }
-body.forge-ui #top-settings-holder .drawer-icon.fa-face-smile { --forge-top-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M5%204.5c4%201.5%2010%201.5%2014%200v6.5a7%207%200%200%201-14%200z%20M8.3%2010.2c.6-.6%201.6-.6%202.2%200%20M13.5%2010.2c.6-.6%201.6-.6%202.2%200%20M9%2014.5c1.8%201.4%204.2%201.4%206%200%22/%3E%3C/svg%3E"); }
+body.forge-ui #top-settings-holder .drawer-icon.fa-user-cog { --forge-top-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M9.93%205.31%20L10.44%202.93%20L13.56%202.93%20L14.07%205.31%20L15.27%205.81%20L17.31%204.49%20L19.51%206.69%20L18.19%208.73%20L18.69%209.93%20L21.07%2010.44%20L21.07%2013.56%20L18.69%2014.07%20L18.19%2015.27%20L19.51%2017.31%20L17.31%2019.51%20L15.27%2018.19%20L14.07%2018.69%20L13.56%2021.07%20L10.44%2021.07%20L9.93%2018.69%20L8.73%2018.19%20L6.69%2019.51%20L4.49%2017.31%20L5.81%2015.27%20L5.31%2014.07%20L2.93%2013.56%20L2.93%2010.44%20L5.31%209.93%20L5.81%208.73%20L4.49%206.69%20L6.69%204.49%20L8.73%205.81z%20M12%209a3%203%200%201%200%200%206a3%203%200%201%200%200-6z%22/%3E%3C/svg%3E"); }
+body.forge-ui #top-settings-holder .drawer-icon.fa-panorama { --forge-top-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M4%204h16v16H4z%20M4%2017l5-5%204%204%202.5-2.5L20%2018%20M15.5%206.8a1.6%201.6%200%201%200%200%203.2a1.6%201.6%200%201%200%200-3.2z%22/%3E%3C/svg%3E"); }
+body.forge-ui #top-settings-holder .drawer-icon.fa-cubes { --forge-top-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M12%202.5l4%202.3v4.6L12%2011.7%208%209.4V4.8z%20M8%204.8l4%202.3%204-2.3%20M12%207.1v4.6%20M7%2012.2l4%202.3v4.6L7%2021.4l-4-2.3v-4.6z%20M3%2014.5l4%202.3%204-2.3%20M7%2016.8v4.6%20M17%2012.2l4%202.3v4.6l-4%202.3-4-2.3v-4.6z%20M13%2014.5l4%202.3%204-2.3%20M17%2016.8v4.6%22/%3E%3C/svg%3E"); }
+body.forge-ui #top-settings-holder .drawer-icon.fa-face-smile { --forge-top-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M12%203.5a8.5%208.5%200%201%200%200%2017a8.5%208.5%200%201%200%200-17z%20M9%2010h.01%20M15%2010h.01%20M8.5%2014c1.9%202.2%205.1%202.2%207%200%22/%3E%3C/svg%3E"); }
 body.forge-ui #top-settings-holder .drawer-icon.fa-address-card { --forge-top-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%205h18v14H3z%20M9%208.5a2%202%200%201%200%200%204a2%202%200%201%200%200-4z%20M5.5%2016.5c.6-1.8%201.9-2.6%203.5-2.6s2.9.8%203.5%202.6%20M15%209h3%20M15%2012h3%20M15%2015h2%22/%3E%3C/svg%3E"); }
 
 /* Disconnected API keeps SillyTavern's red warning, in the Forge danger red */
