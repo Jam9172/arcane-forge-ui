@@ -833,6 +833,7 @@ body.forge-ui #forge-ai-layout .oneline-dropdown {
 
 body.forge-ui #forge-ai-layout .toggle-description,
 body.forge-ui #forge-ai-layout .range-block small,
+body.forge-ui #forge-ai-layout .range-input-description,
 body.forge-ui #forge-ai-layout .forge-ai-card > div[data-source]:not(.range-block) {
     width: auto;
     margin: 0;
@@ -1171,4 +1172,40 @@ body.forge-ui #forge-ai-layout .tt-gp-block.tt-gp-inactive.inline-drawer:not([st
 
 body.forge-ui #forge-ai-layout .tt-gp-remove {
     display: none !important;
+}
+
+/* Setting names in the AI tab use the same font as the card titles (setting: "AI setting names").
+   Every child is included so TauriTavern's inner label spans match too. */
+body.forge-ui #forge-ai-layout .range-block-title,
+body.forge-ui #forge-ai-layout .range-block-title > span,
+body.forge-ui #forge-ai-layout .forge-ai-card label.checkbox_label > span,
+body.forge-ui #forge-ai-layout .forge-ai-card .oneline-dropdown > label,
+body.forge-ui #forge-ai-layout .forge-ai-card .oneline-dropdown > span {
+    font-family: var(--forge-heading);
+    font-size: 0.95em;
+    font-weight: 500;
+}
+
+body.forge-ui.forge-ai-body-labels #forge-ai-layout .range-block-title,
+body.forge-ui.forge-ai-body-labels #forge-ai-layout .range-block-title > span,
+body.forge-ui.forge-ai-body-labels #forge-ai-layout .forge-ai-card label.checkbox_label > span,
+body.forge-ui.forge-ai-body-labels #forge-ai-layout .forge-ai-card .oneline-dropdown > label,
+body.forge-ui.forge-ai-body-labels #forge-ai-layout .forge-ai-card .oneline-dropdown > span {
+    font-family: var(--forge-body-font);
+    font-size: 1em;
+    font-weight: 400;
+}
+
+/* Sampler descriptions sit on their own line under the slider */
+body.forge-ui #forge-ai-layout .forge-ai-desc,
+body.forge-ui #forge-ai-layout .range-input-description {
+    display: block;
+    grid-column: 1 / -1;
+    margin-top: -2px;
+    line-height: 1.3;
+}
+
+body.forge-ai-hide-desc #forge-ai-layout .forge-ai-desc,
+body.forge-ai-hide-desc #forge-ai-layout .range-input-description {
+    display: none;
 }

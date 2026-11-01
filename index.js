@@ -31,6 +31,8 @@ const defaults = {
     enabled: true,
     aiLayout: true,
     aiHelp: false,
+    aiDescriptions: true,
+    aiLabelFont: 'heading',
     fontSize: 17,
     chatScale: 110,
     headingFont: 'cinzel',
@@ -81,6 +83,8 @@ function applyAiLayout() {
     const s = settings();
     const wanted = s.enabled && s.aiLayout && $('#main_api').val() === 'openai';
     document.body.classList.toggle('forge-ai-hide-help', !s.aiHelp);
+    document.body.classList.toggle('forge-ai-hide-desc', !s.aiDescriptions);
+    document.body.classList.toggle('forge-ai-body-labels', s.aiLabelFont === 'body');
     if (wanted) buildAiTab();
     else restoreAiTab();
 }
@@ -123,6 +127,17 @@ function renderSettings() {
                 <label class="checkbox_label" for="forge-ui-ai-help">
                     <input type="checkbox" id="forge-ui-ai-help"${s.aiHelp ? ' checked' : ''}>
                     <span>Show SillyTavern's help text under AI settings</span>
+                </label>
+                <label class="checkbox_label" for="forge-ui-ai-desc">
+                    <input type="checkbox" id="forge-ui-ai-desc"${s.aiDescriptions ? ' checked' : ''}>
+                    <span>Short description under each sampler</span>
+                </label>
+                <label class="forge-ui-select">
+                    <span>AI setting names</span>
+                    <select id="forge-ui-ai-label-font" class="text_pole">
+                        <option value="heading"${s.aiLabelFont === 'heading' ? ' selected' : ''}>Heading font (matches card titles)</option>
+                        <option value="body"${s.aiLabelFont === 'body' ? ' selected' : ''}>Body font</option>
+                    </select>
                 </label>
 
                 <h4>Text</h4>
@@ -167,6 +182,14 @@ function bindSettings($root) {
         s.aiHelp = this.checked;
         save();
     });
+    $root.find('#forge-ui-ai-desc').on('change', function () {
+        s.aiDescriptions = this.checked;
+        save();
+    });
+    $root.find('#forge-ui-ai-label-font').on('change', function () {
+        s.aiLabelFont = this.value;
+        save();
+    });
     $root.find('#forge-ui-font-size').on('input', function () {
         s.fontSize = Number(this.value);
         $root.find('#forge-ui-font-size-value').text(`${s.fontSize}px`);
@@ -190,7 +213,7 @@ function bindSettings($root) {
         save();
     });
     $root.find('#forge-ui-reset').on('click', () => {
-        extension_settings[MODULE] = structuredClone({ ...defaults, enabled: s.enabled, aiLayout: s.aiLayout, aiHelp: s.aiHelp });
+        extension_settings[MODULE] = structuredClone({ ...defaults, enabled: s.enabled, aiLayout: s.aiLayout, aiHelp: s.aiHelp, aiDescriptions: s.aiDescriptions });
         save();
         mountSettings();
     });

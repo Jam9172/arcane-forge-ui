@@ -21,6 +21,31 @@ function move(el, target, anchor = null) {
 
 let observer = null;
 
+// One short line under each sampler. TauriTavern ships its own line for Temperature
+// (.range-input-description); a row that already has one keeps it.
+const DESCRIPTIONS = {
+    temp_openai: 'Controls token randomness.',
+    top_p_openai: 'Picks only from the likeliest tokens that add up to this share. 1 turns it off.',
+    min_p_openai: 'Drops tokens much less likely than the top one. 0 turns it off.',
+    freq_pen_openai: 'Discourages using the same words over and over.',
+    pres_pen_openai: 'Nudges the model toward new words and topics.',
+    top_k_openai: 'Picks only from this many of the likeliest tokens. 0 turns it off.',
+    top_a_openai: 'Drops unlikely tokens, more so when one token is a clear favourite. 0 turns it off.',
+    repetition_penalty_openai: 'Discourages repeating recent tokens. 1 turns it off.',
+    seed_openai: 'The same seed gives the same reply. -1 picks a random one.',
+};
+
+function addDescriptions() {
+    for (const [id, text] of Object.entries(DESCRIPTIONS)) {
+        const row = block(id);
+        if (!row || row.querySelector('.range-input-description, .forge-ai-desc')) continue;
+        const note = document.createElement('small');
+        note.className = 'forge-ai-desc';
+        note.textContent = text;
+        row.append(note);
+    }
+}
+
 // TauriTavern adds a "Request Parameter Management" bar (.tt-gp-bar) above the first parameter block,
 // possibly after this layout is built. In this layout every parameter is a plain control instead, so the
 // bar is parked in a hidden holder (and goes back where it was if the layout is turned off).
@@ -72,6 +97,7 @@ export function restoreAiTab() {
         if (next && !layout.contains(next)) next.before(el);
         else byId('range_block_openai')?.prepend(el);
     }
+    document.querySelectorAll('.forge-ai-desc').forEach((note) => note.remove());
     layout?.remove();
     document.body.classList.remove('forge-ai-active');
 }
@@ -216,6 +242,7 @@ export function buildAiTab() {
     move(drawer('main_prompt_quick_edit_textarea'), prompts);
     move(drawer('impersonation_prompt_textarea'), prompts);
 
+    addDescriptions();
     layout.querySelector('.forge-ai-model').textContent = modelLine();
     layout.addEventListener('click', (event) => {
         const button = event.target.closest('[data-proxy]');
