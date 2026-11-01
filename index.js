@@ -255,9 +255,28 @@ function mountSettings() {
     bindSettings($root);
 }
 
+// WebKit (TauriTavern on macOS) can leave a cleared selection painted on chat
+// messages that are off screen. Rebuilding the chat's layer once repaints them.
+function watchSelectionRepaint() {
+    let hadSelection = false;
+    document.addEventListener('selectionchange', () => {
+        const selection = document.getSelection();
+        const hasSelection = !!selection && !selection.isCollapsed;
+        if (hadSelection && !hasSelection && document.body.classList.contains('forge-ui')) {
+            const chat = document.getElementById('chat');
+            if (chat && !chat.style.transform) {
+                chat.style.transform = 'translateZ(0)';
+                requestAnimationFrame(() => requestAnimationFrame(() => { chat.style.transform = ''; }));
+            }
+        }
+        hadSelection = hasSelection;
+    });
+}
+
 jQuery(() => {
     mountSettings();
     apply();
+    watchSelectionRepaint();
     $('#main_api').on('change', applyAiLayout);
     for (const name of ['CHATCOMPLETION_SOURCE_CHANGED', 'CHATCOMPLETION_MODEL_CHANGED', 'SETTINGS_LOADED']) {
         if (event_types[name]) eventSource.on(event_types[name], refreshModelLine);

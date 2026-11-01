@@ -2,6 +2,10 @@
 
 Newest first. The version number is in `manifest.json`.
 
+## 0.9.1 (not published yet)
+
+- After Select All (Ctrl/Cmd+A) and clicking away, the chat is redrawn so messages that were off screen no longer keep a leftover highlight (a WebKit drawing glitch seen in TauriTavern on macOS).
+
 ## 0.9.0 (2026-11-01): first public release
 
 - Published on GitHub under the MIT licence, with install steps in the README.
