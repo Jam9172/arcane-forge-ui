@@ -1252,4 +1252,9 @@ body.forge-ui input[type="number"]::-webkit-outer-spin-button {
     body.forge-ui #form_sheld {
         margin-bottom: 0;
     }
+    /* Square corners where surfaces meet each other or the window edge, so no background peeks through */
+    body.forge-ui #send_form,
+    body.forge-ui .rpg-panel[data-theme="forge"] {
+        border-radius: 0;
+    }
 }
