@@ -517,11 +517,54 @@ body.forge-ui #forge-ai-layout .forge-ai-model {
     color: var(--forge-muted);
 }
 
-/* Preset bar */
-body.forge-ui #forge-ai-layout .forge-ai-presets {
+/* Preset card */
+body.forge-ui #forge-ai-layout .forge-ai-preset-card {
+    gap: 10px;
+    padding-bottom: 14px;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-preset-head {
     display: flex;
-    flex-direction: column;
-    gap: 8px;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--forge-border);
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-preset-head h3 {
+    margin: 0;
+    padding: 12px 0 8px;
+    font-family: var(--forge-heading);
+    font-size: 0.95em;
+    color: var(--forge-brass);
+    letter-spacing: 0.06em;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-icon-button {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--forge-muted);
+    cursor: pointer;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-icon-button:hover {
+    color: var(--forge-brass);
+    border-color: var(--forge-border);
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-bind.is-on {
+    color: var(--forge-ember);
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-menu button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 body.forge-ui #forge-ai-layout .forge-ai-preset-row {
@@ -914,4 +957,87 @@ body.forge-ai-hide-help #forge-ai-layout [data-card="length"] .toggle-descriptio
 body.forge-ai-hide-help #forge-ai-layout [data-card="sampling"] .toggle-description,
 body.forge-ai-hide-help #forge-ai-layout [data-card="features"] .toggle-description {
     display: none;
+}
+
+/* Every typed value and dropdown in the tab is centred */
+body.forge-ui #forge-ai-layout input[type="text"],
+body.forge-ui #forge-ai-layout input[type="number"],
+body.forge-ui #forge-ai-layout input:not([type]),
+body.forge-ui #forge-ai-layout .range-block-counter input,
+body.forge-ui #forge-ai-layout #openai_max_tokens,
+body.forge-ui #forge-ai-layout #seed_openai {
+    text-align: center;
+}
+
+body.forge-ui #forge-ai-layout select {
+    text-align: center;
+    text-align-last: center;
+}
+
+/* Left panel header: same height and finish as the top bar, with no seam between them */
+body.forge-ui #left-nav-panel {
+    padding-top: 0;
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+}
+
+body.forge-ui #left-nav-panel::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--topBarBlockSize);
+    background: linear-gradient(180deg, #2A110D 0%, #160A08 100%);
+    border-bottom: 1px solid color-mix(in srgb, var(--forge-brass) 45%, transparent);
+    pointer-events: none;
+    z-index: 0;
+}
+
+body.forge-ui #left-nav-panel > #lm_button_panel_pin_div,
+body.forge-ui #left-nav-panel > #clickSlidersTips,
+body.forge-ui #left-nav-panel > .topRightInset {
+    position: relative;
+    z-index: 1;
+}
+
+body.forge-ui #left-nav-panel > #lm_button_panel_pin_div {
+    height: var(--topBarBlockSize);
+    min-height: var(--topBarBlockSize);
+    flex: none;
+    margin: 0;
+    padding: 0 4px;
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+}
+
+body.forge-ui #left-nav-panel > #clickSlidersTips {
+    position: absolute;
+    top: 0;
+    height: var(--topBarBlockSize);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8em;
+    color: var(--forge-muted);
+}
+
+body.forge-ui #left-nav-panel > .topRightInset {
+    position: absolute;
+    top: 0;
+    height: var(--topBarBlockSize);
+    display: flex;
+    align-items: center;
+}
+
+body.forge-ui #left-nav-panel > .scrollableInner {
+    margin-top: 0;
+    padding-top: 6px;
+}
+
+/* TauriTavern's parameter bar, now inside the "Request parameters" fold */
+body.forge-ui #forge-ai-layout .tt-gp-bar {
+    margin: 0;
 }

@@ -215,4 +215,8 @@ jQuery(() => {
     for (const name of ['CHATCOMPLETION_SOURCE_CHANGED', 'CHATCOMPLETION_MODEL_CHANGED', 'SETTINGS_LOADED']) {
         if (event_types[name]) eventSource.on(event_types[name], refreshModelLine);
     }
+    // TauriTavern sets the API after extensions start, so check again once settings and the app are ready.
+    for (const name of ['SETTINGS_LOADED', 'SETTINGS_LOADED_AFTER', 'APP_READY']) {
+        if (event_types[name]) eventSource.on(event_types[name], applyAiLayout);
+    }
 });
