@@ -21,6 +21,10 @@ Turn it on or off under Extensions → Arcane Forge UI. Off restores your normal
 
 Pairs well with the RPG Companion fork's Arcane Forge theme, but works on its own.
 
+## Changelog
+
+What changed in each version is in [CHANGELOG.md](CHANGELOG.md).
+
 ## Licence
 
 MIT. See [LICENSE](LICENSE). The Cinzel and Alegreya Sans fonts load from Google Fonts and are under the SIL Open Font License.
