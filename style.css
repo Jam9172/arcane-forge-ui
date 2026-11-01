@@ -1129,3 +1129,46 @@ body.forge-ui #top-settings-holder .drawer-icon.fa-plug-circle-exclamation {
 body.forge-ui #top-settings-holder .drawer-icon.openIcon {
     filter: drop-shadow(0 0 6px color-mix(in srgb, var(--forge-ember) 60%, transparent));
 }
+
+
+/* ---------- Rules SillyTavern scopes to #openai_settings, repeated for controls moved into the layout ---------- */
+body.forge-ui #forge-ai-layout input[type="checkbox"]:not(:checked) ~ [data-cc-toggle],
+body.forge-ui #forge-ai-layout input[type="checkbox"]:not(:checked) ~ *:has([data-cc-toggle]),
+body.forge-ui #forge-ai-layout [data-cc-toggle="false"] > .icon-supported,
+body.forge-ui #forge-ai-layout [data-cc-toggle="true"] > .icon-unsupported {
+    display: none;
+}
+
+body.forge-ui #forge-ai-layout [data-cc-toggle="true"] > .icon-supported {
+    color: var(--active);
+}
+
+body.forge-ui #forge-ai-layout [data-cc-toggle="false"] > .icon-unsupported {
+    color: var(--golden);
+}
+
+body.forge-ui #forge-ai-layout:has(#openai_function_calling:not(:checked)) #tool_call_recurse_limit_block {
+    display: none;
+}
+
+body.forge-ui #forge-ai-layout:has(#openai_function_calling:checked):has(#claude_assistant_prefill:not(:placeholder-shown), #claude_assistant_impersonation:not(:placeholder-shown)) #claude_function_prefill_warning {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin: 10px 0;
+}
+
+/* ---------- TauriTavern: every parameter is a plain, always-visible control ---------- */
+/* Its panel hides blocks that are switched off or not "added"; show them again unless SillyTavern
+   itself hid them for the current provider (inline display: none). */
+body.forge-ui #forge-ai-layout .tt-gp-block.tt-gp-inactive:not([style*="display: none"]):is(.range-block, div[data-source]:not(.inline-drawer)) {
+    display: grid !important;
+}
+
+body.forge-ui #forge-ai-layout .tt-gp-block.tt-gp-inactive.inline-drawer:not([style*="display: none"]) {
+    display: block !important;
+}
+
+body.forge-ui #forge-ai-layout .tt-gp-remove {
+    display: none !important;
+}

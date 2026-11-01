@@ -22,14 +22,30 @@ function move(el, target, anchor = null) {
 let observer = null;
 
 // TauriTavern adds a "Request Parameter Management" bar (.tt-gp-bar) above the first parameter block,
-// possibly after this layout is built. Keep it inside its own fold instead of between the cards.
+// possibly after this layout is built. In this layout every parameter is a plain control instead, so the
+// bar is parked in a hidden holder (and goes back where it was if the layout is turned off).
 function adoptParamBar() {
     const layout = byId(LAYOUT_ID);
     const bar = document.querySelector('#ai_response_configuration .tt-gp-bar');
-    if (!layout) return;
-    const fold = layout.querySelector('[data-card="params"]');
-    fold.closest('details').hidden = !bar;
-    if (bar && !fold.contains(bar)) move(bar, fold);
+    if (!layout || !bar) return;
+    const holder = layout.querySelector('[data-card="params"]');
+    if (!holder.contains(bar)) move(bar, holder);
+}
+
+// TauriTavern keeps a per-preset list of parameters to leave out of requests. With every parameter
+// shown as a normal control, a value you can see should also be sent, as in plain SillyTavern.
+export function clearOmittedParams() {
+    if (!byId(LAYOUT_ID)) return;
+    try {
+        const settings = SillyTavern.getContext().chatCompletionSettings;
+        const tt = settings?.extensions?.tauritavern;
+        if (!tt?.omit_params) return;
+        delete tt.omit_params;
+        if (!Object.keys(tt).length) delete settings.extensions.tauritavern;
+        SillyTavern.getContext().saveSettingsDebounced();
+    } catch (error) {
+        console.warn('[Arcane Forge UI] Could not clear omitted parameters', error);
+    }
 }
 
 function syncBindState() {
@@ -130,6 +146,8 @@ const LAYOUT_HTML = `
 
     <section class="forge-ai-card" data-card="features"><h3>Model features</h3></section>
 
+    <div data-card="params" hidden></div>
+
     <section class="forge-ai-card forge-ai-links">
         <details class="forge-ai-link">
             <summary><span>Behaviour</span><small>Names, continue, system</small></summary>
@@ -138,10 +156,6 @@ const LAYOUT_HTML = `
         <details class="forge-ai-link">
             <summary><span>Logit bias</span><small>Ban or boost words</small></summary>
             <div class="forge-ai-link-body" data-card="bias"></div>
-        </details>
-        <details class="forge-ai-link forge-ai-params-link" hidden>
-            <summary><span>Request parameters</span><small>Choose what is sent</small></summary>
-            <div class="forge-ai-link-body" data-card="params"></div>
         </details>
         <details class="forge-ai-link">
             <summary><span>Prompts</span><small>Order and contents</small></summary>
@@ -213,6 +227,7 @@ export function buildAiTab() {
     syncBindState();
 
     adoptParamBar();
+    clearOmittedParams();
     observer = new MutationObserver(adoptParamBar);
     observer.observe(host, { childList: true, subtree: true });
 

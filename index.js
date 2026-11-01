@@ -1,6 +1,6 @@
 import { extension_settings } from '../../../extensions.js';
 import { saveSettingsDebounced, eventSource, event_types } from '../../../../script.js';
-import { buildAiTab, restoreAiTab, refreshModelLine } from './aiTab.js';
+import { buildAiTab, restoreAiTab, refreshModelLine, clearOmittedParams } from './aiTab.js';
 
 const MODULE = 'arcaneForgeUi';
 const FONT_LINK_ID = 'arcane-forge-ui-fonts';
@@ -218,5 +218,9 @@ jQuery(() => {
     // TauriTavern sets the API after extensions start, so check again once settings and the app are ready.
     for (const name of ['SETTINGS_LOADED', 'SETTINGS_LOADED_AFTER', 'APP_READY']) {
         if (event_types[name]) eventSource.on(event_types[name], applyAiLayout);
+    }
+    // A newly loaded preset may carry TauriTavern's "leave out" list again.
+    for (const name of ['OAI_PRESET_CHANGED_AFTER', 'SETTINGS_LOADED_AFTER']) {
+        if (event_types[name]) eventSource.on(event_types[name], clearOmittedParams);
     }
 });
