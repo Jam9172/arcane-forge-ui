@@ -22,6 +22,7 @@ body.forge-ui {
        background image shows through all of them equally (setting: "Panel opacity"). The top bar and
        the cards inside panels stay solid. */
     --forge-panel-alpha: 88%;
+    --forge-panel-blur: 12px;
     --forge-panel-fill: linear-gradient(180deg, color-mix(in srgb, var(--forge-card) var(--forge-panel-alpha), transparent), color-mix(in srgb, var(--forge-bg) var(--forge-panel-alpha), transparent));
     --forge-hairline: linear-gradient(90deg, transparent, color-mix(in srgb, var(--forge-brass) 55%, transparent) 18%, color-mix(in srgb, var(--forge-brass) 55%, transparent) 82%, transparent);
 
@@ -1257,4 +1258,16 @@ body.forge-ui input[type="number"]::-webkit-outer-spin-button {
     body.forge-ui .rpg-panel[data-theme="forge"] {
         border-radius: 0;
     }
+}
+
+/* Frosted panels: anything behind a see-through panel (the background, or chat items such as the
+   "is thinking..." line sliding under the left panel) is blurred out instead of showing as a ghost
+   (setting: "Panel blur"). */
+body.forge-ui .drawer-content,
+body.forge-ui #left-nav-panel,
+body.forge-ui #right-nav-panel,
+body.forge-ui .rpg-panel[data-theme="forge"] {
+    /* !important: SillyTavern's "No Blur Effect" setting strips every backdrop filter with !important */
+    -webkit-backdrop-filter: blur(var(--forge-panel-blur)) !important;
+    backdrop-filter: blur(var(--forge-panel-blur)) !important;
 }

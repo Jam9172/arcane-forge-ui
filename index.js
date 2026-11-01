@@ -36,6 +36,7 @@ const defaults = {
     fontSize: 17,
     chatScale: 110,
     panelOpacity: 88,
+    panelBlur: 12,
     headingFont: 'cinzel',
     bodyFont: 'alegreya',
     colors: Object.fromEntries(Object.entries(COLORS).map(([key, c]) => [key, c.value])),
@@ -72,6 +73,7 @@ function apply() {
     body.style.setProperty('--forge-font-px', `${s.fontSize}px`);
     body.style.setProperty('--forge-chat-scale', String(s.chatScale / 100));
     body.style.setProperty('--forge-panel-alpha', `${s.panelOpacity}%`);
+    body.style.setProperty('--forge-panel-blur', `${s.panelBlur}px`);
     body.style.setProperty('--forge-heading', (HEADING_FONTS[s.headingFont] ?? HEADING_FONTS.cinzel).value);
     body.style.setProperty('--forge-body-font', (BODY_FONTS[s.bodyFont] ?? BODY_FONTS.alegreya).value);
     for (const [key, c] of Object.entries(COLORS)) {
@@ -165,6 +167,10 @@ function renderSettings() {
                     <span>Panel opacity <output id="forge-ui-panel-opacity-value">${s.panelOpacity}%</output></span>
                     <input type="range" id="forge-ui-panel-opacity" min="50" max="100" step="2" value="${s.panelOpacity}">
                 </label>
+                <label class="forge-ui-range">
+                    <span>Panel blur <output id="forge-ui-panel-blur-value">${s.panelBlur}px</output></span>
+                    <input type="range" id="forge-ui-panel-blur" min="0" max="24" step="1" value="${s.panelBlur}">
+                </label>
 
                 <h4>Colours</h4>
                 <div class="forge-ui-colors">${colorRows}</div>
@@ -211,6 +217,11 @@ function bindSettings($root) {
     $root.find('#forge-ui-panel-opacity').on('input', function () {
         s.panelOpacity = Number(this.value);
         $root.find('#forge-ui-panel-opacity-value').text(`${s.panelOpacity}%`);
+        save();
+    });
+    $root.find('#forge-ui-panel-blur').on('input', function () {
+        s.panelBlur = Number(this.value);
+        $root.find('#forge-ui-panel-blur-value').text(`${s.panelBlur}px`);
         save();
     });
     $root.find('#forge-ui-heading-font').on('change', function () {
