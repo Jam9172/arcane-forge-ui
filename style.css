@@ -17,6 +17,7 @@ body.forge-ui {
     --forge-text: #F1E3D6;
     --forge-heading: 'Cinzel', 'Times New Roman', serif;
     --forge-bar-line: color-mix(in srgb, var(--forge-brass) 45%, transparent);
+    --forge-bar-bg: linear-gradient(180deg, #2A110D 0%, #160A08 100%);
     --forge-hairline: linear-gradient(90deg, transparent, color-mix(in srgb, var(--forge-brass) 55%, transparent) 18%, color-mix(in srgb, var(--forge-brass) 55%, transparent) 82%, transparent);
 
     --SmartThemeBodyColor: var(--forge-text);
@@ -46,7 +47,7 @@ body.forge-ui ::selection {
 
 /* ---------- Top bar ---------- */
 body.forge-ui #top-bar {
-    background: linear-gradient(180deg, #2A110D 0%, #160A08 100%);
+    background: var(--forge-bar-bg);
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6);
 }
 
@@ -977,7 +978,14 @@ body.forge-ui #forge-ai-layout select {
 
 /* Left panel header: same height and finish as the top bar, with no seam between them.
    #top-bar is sized by --bottomFormBlockSize in SillyTavern's style.css, so the header uses it too. */
+/* The right border stops at the bar, so the panel header and the top bar read as one strip.
+   It is drawn as a background layer on the border box; the real border stays for spacing. */
 body.forge-ui #left-nav-panel {
+    border-right-color: transparent;
+    background:
+        linear-gradient(var(--forge-border), var(--forge-border)) right bottom / 1px calc(100% - var(--bottomFormBlockSize)) no-repeat,
+        linear-gradient(180deg, var(--forge-card), var(--forge-bg));
+    background-origin: border-box;
     padding-top: 0;
     border-top: none;
     border-radius: 0 0 8px 8px;
@@ -990,7 +998,7 @@ body.forge-ui #left-nav-panel::before {
     left: 0;
     right: 0;
     height: var(--bottomFormBlockSize);
-    background: linear-gradient(180deg, #2A110D 0%, #160A08 100%);
+    background: var(--forge-bar-bg);
     border-bottom: 1px solid var(--forge-bar-line);
     box-sizing: border-box;
     pointer-events: none;
@@ -1045,4 +1053,59 @@ body.forge-ui #left-nav-panel > .scrollableInner {
 /* TauriTavern's parameter bar, now inside the "Request parameters" fold */
 body.forge-ui #forge-ai-layout .tt-gp-bar {
     margin: 0;
+}
+
+/* ---------- Top bar icons: original Forge set, drawn as masks over the icon colour ---------- */
+body.forge-ui #top-settings-holder .drawer-icon.fa-sliders,
+body.forge-ui #top-settings-holder .drawer-icon.fa-plug,
+body.forge-ui #top-settings-holder .drawer-icon.fa-plug-circle-exclamation,
+body.forge-ui #top-settings-holder .drawer-icon.fa-font,
+body.forge-ui #top-settings-holder .drawer-icon.fa-book-atlas,
+body.forge-ui #top-settings-holder .drawer-icon.fa-user-cog,
+body.forge-ui #top-settings-holder .drawer-icon.fa-panorama,
+body.forge-ui #top-settings-holder .drawer-icon.fa-cubes,
+body.forge-ui #top-settings-holder .drawer-icon.fa-face-smile,
+body.forge-ui #top-settings-holder .drawer-icon.fa-address-card {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+body.forge-ui #top-settings-holder .drawer-icon.fa-sliders::before,
+body.forge-ui #top-settings-holder .drawer-icon.fa-plug::before,
+body.forge-ui #top-settings-holder .drawer-icon.fa-plug-circle-exclamation::before,
+body.forge-ui #top-settings-holder .drawer-icon.fa-font::before,
+body.forge-ui #top-settings-holder .drawer-icon.fa-book-atlas::before,
+body.forge-ui #top-settings-holder .drawer-icon.fa-user-cog::before,
+body.forge-ui #top-settings-holder .drawer-icon.fa-panorama::before,
+body.forge-ui #top-settings-holder .drawer-icon.fa-cubes::before,
+body.forge-ui #top-settings-holder .drawer-icon.fa-face-smile::before,
+body.forge-ui #top-settings-holder .drawer-icon.fa-address-card::before {
+    content: '';
+    display: block;
+    width: 0.9em;
+    height: 0.9em;
+    background-color: currentColor;
+    -webkit-mask: var(--forge-top-icon) center / contain no-repeat;
+    mask: var(--forge-top-icon) center / contain no-repeat;
+}
+
+body.forge-ui #top-settings-holder .drawer-icon.fa-sliders { --forge-top-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M6%203v3%20M6%2010v11%20M12%203v9%20M12%2016v5%20M18%203v5%20M18%2012v9%20M6%206l2%202-2%202-2-2z%20M12%2012l2%202-2%202-2-2z%20M18%208l2%202-2%202-2-2z%22/%3E%3C/svg%3E"); }
+body.forge-ui #top-settings-holder .drawer-icon.fa-plug { --forge-top-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M9%203v5%20M15%203v5%20M6%208h12v3a6%206%200%200%201-12%200z%20M12%2017v4%22/%3E%3C/svg%3E"); }
+body.forge-ui #top-settings-holder .drawer-icon.fa-plug-circle-exclamation { --forge-top-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M8%203v5%20M14%203v5%20M5%208h12v2.5%20M5%208v3a6%206%200%200%200%207%205.9%20M11%2017v4%20M18.5%2013.5a3.5%203.5%200%201%200%200%207a3.5%203.5%200%201%200%200-7z%20M18.5%2015.5v1.6%20M18.5%2018.8v.01%22/%3E%3C/svg%3E"); }
+body.forge-ui #top-settings-holder .drawer-icon.fa-font { --forge-top-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M5.5%2020l6.5-16%206.5%2016%20M8.4%2013.5h7.2%20M3.5%2020h4.5%20M16%2020h4.5%22/%3E%3C/svg%3E"); }
+body.forge-ui #top-settings-holder .drawer-icon.fa-book-atlas { --forge-top-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M5%204.5h11a3%203%200%200%201%203%203V20H8a3%203%200%200%201-3-3z%20M5%2017a3%203%200%200%201%203-3h11%20M10%208h5%20M10%2010.5h3%22/%3E%3C/svg%3E"); }
+body.forge-ui #top-settings-holder .drawer-icon.fa-user-cog { --forge-top-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M12%202.8l1.6%202.3%202.7-.7.7%202.7%202.3%201.6-1.2%202.5%201.2%202.5-2.3%201.6-.7%202.7-2.7-.7L12%2021.2l-1.6-2.3-2.7.7-.7-2.7-2.3-1.6L5.9%2012%204.7%209.5%207%207.9l.7-2.7%202.7.7z%20M12%209a3%203%200%201%200%200%206a3%203%200%201%200%200-6z%22/%3E%3C/svg%3E"); }
+body.forge-ui #top-settings-holder .drawer-icon.fa-panorama { --forge-top-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M4.5%2021V10a7.5%207.5%200%200%201%2015%200v11z%20M4.5%2021l5-6%203%203%202.5-3.5%204.5%206.5%20M15%209h.01%22/%3E%3C/svg%3E"); }
+body.forge-ui #top-settings-holder .drawer-icon.fa-cubes { --forge-top-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M12%203l4%202.3v4.6L12%2012l-4-2.1V5.3z%20M7%2012.5l4%202.3v4.6L7%2021.5l-4-2.1v-4.6z%20M17%2012.5l4%202.3v4.6l-4%202.1-4-2.1v-4.6z%22/%3E%3C/svg%3E"); }
+body.forge-ui #top-settings-holder .drawer-icon.fa-face-smile { --forge-top-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M5%204.5c4%201.5%2010%201.5%2014%200v6.5a7%207%200%200%201-14%200z%20M8.3%2010.2c.6-.6%201.6-.6%202.2%200%20M13.5%2010.2c.6-.6%201.6-.6%202.2%200%20M9%2014.5c1.8%201.4%204.2%201.4%206%200%22/%3E%3C/svg%3E"); }
+body.forge-ui #top-settings-holder .drawer-icon.fa-address-card { --forge-top-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%205h18v14H3z%20M9%208.5a2%202%200%201%200%200%204a2%202%200%201%200%200-4z%20M5.5%2016.5c.6-1.8%201.9-2.6%203.5-2.6s2.9.8%203.5%202.6%20M15%209h3%20M15%2012h3%20M15%2015h2%22/%3E%3C/svg%3E"); }
+
+/* Disconnected API keeps SillyTavern's red warning, in the Forge danger red */
+body.forge-ui #top-settings-holder .drawer-icon.fa-plug-circle-exclamation {
+    color: #E5432F;
+}
+
+body.forge-ui #top-settings-holder .drawer-icon.openIcon {
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--forge-ember) 60%, transparent));
 }
