@@ -18,6 +18,11 @@ body.forge-ui {
     --forge-heading: 'Cinzel', 'Times New Roman', serif;
     --forge-bar-line: color-mix(in srgb, var(--forge-brass) 45%, transparent);
     --forge-bar-bg: linear-gradient(180deg, #2A110D 0%, #160A08 100%);
+    /* Every large surface (side panels, chat column, message box, RPG Companion) shares one fill, so the
+       background image shows through all of them equally (setting: "Panel opacity"). The top bar and
+       the cards inside panels stay solid. */
+    --forge-panel-alpha: 88%;
+    --forge-panel-fill: linear-gradient(180deg, color-mix(in srgb, var(--forge-card) var(--forge-panel-alpha), transparent), color-mix(in srgb, var(--forge-bg) var(--forge-panel-alpha), transparent));
     --forge-hairline: linear-gradient(90deg, transparent, color-mix(in srgb, var(--forge-brass) 55%, transparent) 18%, color-mix(in srgb, var(--forge-brass) 55%, transparent) 82%, transparent);
 
     --SmartThemeBodyColor: var(--forge-text);
@@ -25,7 +30,7 @@ body.forge-ui {
     --SmartThemeUnderlineColor: var(--forge-brass);
     --SmartThemeQuoteColor: var(--forge-ember);
     --SmartThemeBlurTintColor: rgba(18, 9, 8, 0.94);
-    --SmartThemeChatTintColor: rgba(18, 9, 8, 0.82);
+    --SmartThemeChatTintColor: color-mix(in srgb, var(--forge-bg) var(--forge-panel-alpha), transparent);
     --SmartThemeUserMesBlurTintColor: rgba(30, 16, 13, 0.92);
     --SmartThemeBotMesBlurTintColor: rgba(30, 16, 13, 0.92);
     --SmartThemeShadowColor: rgba(0, 0, 0, 0.7);
@@ -93,15 +98,16 @@ body.forge-ui .drawer-icon.openIcon {
 
 /* ---------- Drawers and side panels ---------- */
 body.forge-ui .drawer-content {
-    background: linear-gradient(180deg, rgba(30, 16, 13, 0.97), rgba(18, 9, 8, 0.97));
+    background: var(--forge-panel-fill);
     border: 1px solid var(--forge-border);
     border-radius: 8px;
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6), inset 0 0 0 1px color-mix(in srgb, var(--forge-brass) 8%, transparent);
 }
 
 body.forge-ui #left-nav-panel,
-body.forge-ui #right-nav-panel {
-    background: linear-gradient(180deg, var(--forge-card), var(--forge-bg));
+body.forge-ui #right-nav-panel,
+body.forge-ui .rpg-panel[data-theme="forge"] {
+    background: var(--forge-panel-fill);
     border-radius: 0 0 8px 8px;
 }
 
@@ -160,14 +166,14 @@ body.forge-ui .character_select .avatar img {
 
 /* ---------- Chat ---------- */
 body.forge-ui #chat {
-    background-color: var(--SmartThemeChatTintColor);
+    background: var(--forge-panel-fill);
 }
 
 body.forge-ui .mes {
     margin: 8px 6px 0;
     width: calc(100% - 12px);
     padding: 10px 12px 4px;
-    background: linear-gradient(180deg, rgba(30, 16, 13, 0.88), rgba(23, 12, 10, 0.88));
+    background: linear-gradient(180deg, var(--forge-card), #170C0A);
     border: 1px solid var(--forge-border);
     border-left: 3px solid var(--forge-crimson);
     border-radius: 6px;
@@ -176,7 +182,7 @@ body.forge-ui .mes {
 
 body.forge-ui .mes[is_user="true"] {
     border-left-color: var(--forge-brass);
-    background: linear-gradient(180deg, rgba(36, 22, 16, 0.88), rgba(26, 15, 11, 0.88));
+    background: linear-gradient(180deg, #24160F, #1A0F0B);
 }
 
 body.forge-ui .mes[is_system="true"] {
@@ -259,7 +265,7 @@ body.forge-ui .mes_reasoning_header {
 
 /* ---------- Message box ---------- */
 body.forge-ui #send_form {
-    background: linear-gradient(180deg, var(--forge-card), #150A08);
+    background: var(--forge-panel-fill);
     border: 1px solid var(--forge-border);
     border-top: 1px solid color-mix(in srgb, var(--forge-brass) 35%, transparent);
     border-radius: 8px 8px 0 0;
@@ -1005,7 +1011,7 @@ body.forge-ui #left-nav-panel {
         linear-gradient(var(--forge-bar-line), var(--forge-bar-line)) 0 calc(var(--bottomFormBlockSize) - 1px) / 100% 1px no-repeat,
         var(--forge-bar-bg) 0 0 / 100% var(--bottomFormBlockSize) no-repeat,
         linear-gradient(var(--forge-border), var(--forge-border)) right bottom / 1px calc(100% - var(--bottomFormBlockSize)) no-repeat,
-        linear-gradient(180deg, var(--forge-card), var(--forge-bg));
+        var(--forge-panel-fill);
     background-origin: border-box;
     padding-top: 0;
     border-top: none;
@@ -1208,4 +1214,13 @@ body.forge-ui #forge-ai-layout .range-input-description {
 body.forge-ai-hide-desc #forge-ai-layout .forge-ai-desc,
 body.forge-ai-hide-desc #forge-ai-layout .range-input-description {
     display: none;
+}
+
+/* Number spinners: WebKit draws the arrows dark grey, nearly invisible on the inset fields.
+   Inverting and tinting them turns them brass, matching the value next to them. */
+body.forge-ui input[type="number"]::-webkit-inner-spin-button,
+body.forge-ui input[type="number"]::-webkit-outer-spin-button {
+    opacity: 1;
+    filter: invert(1) sepia(1) saturate(2.5) hue-rotate(-10deg) brightness(0.95);
+    cursor: pointer;
 }

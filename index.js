@@ -35,6 +35,7 @@ const defaults = {
     aiLabelFont: 'heading',
     fontSize: 17,
     chatScale: 110,
+    panelOpacity: 88,
     headingFont: 'cinzel',
     bodyFont: 'alegreya',
     colors: Object.fromEntries(Object.entries(COLORS).map(([key, c]) => [key, c.value])),
@@ -70,6 +71,7 @@ function apply() {
 
     body.style.setProperty('--forge-font-px', `${s.fontSize}px`);
     body.style.setProperty('--forge-chat-scale', String(s.chatScale / 100));
+    body.style.setProperty('--forge-panel-alpha', `${s.panelOpacity}%`);
     body.style.setProperty('--forge-heading', (HEADING_FONTS[s.headingFont] ?? HEADING_FONTS.cinzel).value);
     body.style.setProperty('--forge-body-font', (BODY_FONTS[s.bodyFont] ?? BODY_FONTS.alegreya).value);
     for (const [key, c] of Object.entries(COLORS)) {
@@ -158,6 +160,12 @@ function renderSettings() {
                     <select id="forge-ui-body-font" class="text_pole">${options(BODY_FONTS, s.bodyFont)}</select>
                 </label>
 
+                <h4>Panels</h4>
+                <label class="forge-ui-range">
+                    <span>Panel opacity <output id="forge-ui-panel-opacity-value">${s.panelOpacity}%</output></span>
+                    <input type="range" id="forge-ui-panel-opacity" min="50" max="100" step="2" value="${s.panelOpacity}">
+                </label>
+
                 <h4>Colours</h4>
                 <div class="forge-ui-colors">${colorRows}</div>
 
@@ -198,6 +206,11 @@ function bindSettings($root) {
     $root.find('#forge-ui-chat-scale').on('input', function () {
         s.chatScale = Number(this.value);
         $root.find('#forge-ui-chat-scale-value').text(`${s.chatScale}%`);
+        save();
+    });
+    $root.find('#forge-ui-panel-opacity').on('input', function () {
+        s.panelOpacity = Number(this.value);
+        $root.find('#forge-ui-panel-opacity-value').text(`${s.panelOpacity}%`);
         save();
     });
     $root.find('#forge-ui-heading-font').on('change', function () {
