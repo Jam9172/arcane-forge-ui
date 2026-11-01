@@ -36,7 +36,7 @@ const defaults = {
     fontSize: 17,
     chatScale: 110,
     panelOpacity: 88,
-    panelBlur: 12,
+    panelBlur: 0,
     headingFont: 'cinzel',
     bodyFont: 'alegreya',
     colors: Object.fromEntries(Object.entries(COLORS).map(([key, c]) => [key, c.value])),

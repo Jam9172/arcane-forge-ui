@@ -22,7 +22,7 @@ body.forge-ui {
        background image shows through all of them equally (setting: "Panel opacity"). The top bar and
        the cards inside panels stay solid. */
     --forge-panel-alpha: 88%;
-    --forge-panel-blur: 12px;
+    --forge-panel-blur: 0px;
     --forge-panel-fill: linear-gradient(180deg, color-mix(in srgb, var(--forge-card) var(--forge-panel-alpha), transparent), color-mix(in srgb, var(--forge-bg) var(--forge-panel-alpha), transparent));
     --forge-hairline: linear-gradient(90deg, transparent, color-mix(in srgb, var(--forge-brass) 55%, transparent) 18%, color-mix(in srgb, var(--forge-brass) 55%, transparent) 82%, transparent);
 
