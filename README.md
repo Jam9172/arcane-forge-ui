@@ -30,4 +30,4 @@ What changed in each version is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Licence
 
-MIT. See [LICENSE](LICENSE). The Cinzel and Alegreya Sans fonts load from Google Fonts and are under the SIL Open Font License.
+MIT. See [LICENSE](LICENSE). The Cinzel and Alegreya Sans fonts are bundled in `fonts/` under the SIL Open Font License 1.1 (see the OFL files there).

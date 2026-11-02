@@ -55,12 +55,13 @@ function settings() {
 }
 
 // Cinzel for headings and names, Alegreya Sans for body text (same pair as RPG Companion's Forge theme).
+// Bundled in fonts/, so they work offline and nothing is fetched from Google.
 function loadFonts() {
     if (document.getElementById(FONT_LINK_ID)) return;
     const link = document.createElement('link');
     link.id = FONT_LINK_ID;
     link.rel = 'stylesheet';
-    link.href = 'https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Alegreya+Sans:wght@400;500;700&display=swap';
+    link.href = new URL('./fonts/fonts.css', import.meta.url).href;
     document.head.appendChild(link);
 }
 
