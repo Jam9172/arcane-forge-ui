@@ -2,6 +2,10 @@
 
 Newest first. The version number is in `manifest.json`.
 
+## 0.10.1 (2026-11-02)
+
+- Italics inside coloured dialogue keep the speaker's colour again (for example `<font color=…>"I *told* you"</font>` from RPG Companion's Dialogue Coloring). Italics inside plain quotes keep the quote colour too. Italics in narration are unchanged.
+
 ## 0.10.0 (2026-11-02)
 
 - Colour pickers now reach every shade: buttons, borders, the top bar, message tints and overlays are all mixed from your colours, and RPG Companion's Forge panel follows them too.

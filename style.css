@@ -278,6 +278,13 @@ body.forge-ui .mes_text i {
     color: var(--forge-soft);
 }
 
+/* Italics and quotes inside coloured dialogue (<font color>, inline colour styles, quotes) keep that
+   colour, as in plain SillyTavern; the two rules above would otherwise win and repaint them. */
+body.forge-ui .mes_text :is(q, font[color], [style*="color"]) :is(em, i),
+body.forge-ui .mes_text :is(font[color], [style*="color"]) :is(u, q, q::before, q::after) {
+    color: inherit;
+}
+
 body.forge-ui .mes_buttons .mes_button,
 body.forge-ui .extraMesButtons > div,
 body.forge-ui .swipe_left,
