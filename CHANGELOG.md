@@ -2,10 +2,10 @@
 
 Newest first. The version number is in `manifest.json`.
 
-## 0.9.1 (not published yet)
+## 0.9.1 (2026-11-01)
 
+- README: early beta warning.
 - Panel blur is off by default again, so the side panels are see-through like before 0.9.0. The Panel blur slider still turns it on.
-- After Select All (Ctrl/Cmd+A) and clicking away, the chat is redrawn so messages that were off screen no longer keep a leftover highlight (a WebKit drawing glitch seen in TauriTavern on macOS).
 
 ## 0.9.0 (2026-11-01): first public release
 

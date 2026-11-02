@@ -1,5 +1,8 @@
 # Arcane Forge UI
 
+> [!WARNING]
+> **Early beta.** Arcane Forge UI is in early beta and progresses slowly. Expect rough edges, layout bugs and changes between versions. Please report problems on the [Issues page](https://github.com/Jam9172/arcane-forge-ui/issues).
+
 A SillyTavern / TauriTavern UI extension that carries the Arcane Forge look from the [RPG Companion fork](https://github.com/Jam9172/rpg-companion-sillytavern) across the whole app: top bar, side panels, chat messages, message box, buttons, form controls, popups and toasts.
 
 ## Features
