@@ -159,13 +159,29 @@ const ICONS = {
     remove: icon('M5 7h14 M9 7V4h6v3 M7 7l1 13h8l1-13 M10 11v5 M14 11v5'),
     bind: icon('M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1 M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1'),
     more: icon('M5 12h.01 M12 12h.01 M19 12h.01'),
+    gear: icon('M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z'),
 };
+
+// Opens the Extensions drawer at Arcane Forge UI's own settings.
+function openForgeSettings() {
+    const extensions = byId('extensions-settings-button');
+    if (!extensions?.querySelector('.drawer-content')?.classList.contains('openDrawer')) {
+        extensions?.querySelector('.drawer-toggle')?.click();
+    }
+    const section = document.querySelector('.arcane-forge-ui-settings .inline-drawer');
+    if (!section) return;
+    if (!$(section).find('.inline-drawer-content').is(':visible')) {
+        section.querySelector('.inline-drawer-toggle')?.click();
+    }
+    setTimeout(() => section.scrollIntoView({ block: 'start', behavior: 'smooth' }), 250);
+}
 
 const LAYOUT_HTML = `
 <div id="${LAYOUT_ID}">
     <div class="forge-ai-header">
         <h2>AI Response</h2>
         <span class="forge-ai-model"></span>
+        <button type="button" class="forge-ai-icon-button forge-ai-gear" title="Arcane Forge UI settings" aria-label="Arcane Forge UI settings">${ICONS.gear}</button>
     </div>
 
     <section class="forge-ai-card forge-ai-preset-card">
@@ -276,6 +292,10 @@ export function buildAiTab() {
     addDescriptions();
     layout.querySelector('.forge-ai-model').textContent = modelLine();
     layout.addEventListener('click', (event) => {
+        if (event.target.closest('.forge-ai-gear')) {
+            openForgeSettings();
+            return;
+        }
         const button = event.target.closest('[data-proxy]');
         if (!button) return;
         document.querySelector(button.dataset.proxy)?.click();

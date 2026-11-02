@@ -532,9 +532,20 @@ body.forge-ui #forge-ai-layout {
 }
 
 body.forge-ui #forge-ai-layout .forge-ai-header {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 10px;
+    row-gap: 2px;
+    align-items: center;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-header > :not(.forge-ai-gear) {
+    grid-column: 1;
+}
+
+body.forge-ui #forge-ai-layout .forge-ai-header .forge-ai-gear {
+    grid-column: 2;
+    grid-row: 1 / span 2;
 }
 
 body.forge-ui #forge-ai-layout .forge-ai-header h2 {
