@@ -1,5 +1,6 @@
 import { extension_settings } from '../../../extensions.js';
 import { saveSettingsDebounced, eventSource, event_types } from '../../../../script.js';
+import { download } from '../../../utils.js';
 import { buildAiTab, restoreAiTab, refreshModelLine, clearOmittedParams, restoreOmittedParams } from './aiTab.js';
 
 const MODULE = 'arcaneForgeUi';
@@ -29,6 +30,18 @@ const COLORS = {
     danger: { label: 'Danger (delete buttons, warnings)', variable: '--forge-danger', value: '#E5432F' },
 };
 
+// Built-in palettes for the seven colours above. Saved palettes live in settings.savedPalettes.
+const PALETTES = {
+    ember: { label: 'Ember (Forge default)', colors: Object.fromEntries(Object.entries(COLORS).map(([key, c]) => [key, c.value])) },
+    frost: { label: 'Frost', colors: { ember: '#5AB4E8', brass: '#C9D6E3', crimson: '#2F6FA8', text: '#E6EEF5', card: '#121A24', bg: '#0A1018', danger: '#E5533F' } },
+    night: { label: 'Night', colors: { ember: '#A27BE8', brass: '#C9B27A', crimson: '#5B2A8C', text: '#ECE4F5', card: '#1A1426', bg: '#0F0B17', danger: '#E5533F' } },
+    verdant: { label: 'Verdant', colors: { ember: '#6CC46A', brass: '#D2B26A', crimson: '#2F6B3A', text: '#E8EFE2', card: '#131C14', bg: '#0B110C', danger: '#E5533F' } },
+};
+
+// What "Export look" writes and "Import look" accepts (on/off switches and backups stay per device).
+const LOOK_FORMAT = 'arcane-forge-ui-look';
+const HEX = /^#[0-9a-f]{6}$/i;
+
 const defaults = {
     enabled: true,
     aiLayout: true,
@@ -40,6 +53,7 @@ const defaults = {
     panelOpacity: 88,
     panelBlur: 0,
     focusRing: true,
+    savedPalettes: {},
     headingFont: 'cinzel',
     bodyFont: 'alegreya',
     colors: Object.fromEntries(Object.entries(COLORS).map(([key, c]) => [key, c.value])),
@@ -109,8 +123,68 @@ function options(map, selected) {
         .join('');
 }
 
+function escapeHtml(text) {
+    return String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function validColors(colors) {
+    if (!colors || typeof colors !== 'object') return null;
+    const out = {};
+    for (const key of Object.keys(COLORS)) {
+        if (HEX.test(colors[key] ?? '')) out[key] = colors[key];
+    }
+    return Object.keys(out).length ? out : null;
+}
+
+function exportLook() {
+    const s = settings();
+    const look = {
+        fontSize: s.fontSize, chatScale: s.chatScale, panelOpacity: s.panelOpacity, panelBlur: s.panelBlur,
+        headingFont: s.headingFont, bodyFont: s.bodyFont, aiLabelFont: s.aiLabelFont, aiDescriptions: s.aiDescriptions,
+        aiHelp: s.aiHelp, focusRing: s.focusRing, colors: s.colors, savedPalettes: s.savedPalettes,
+    };
+    download(JSON.stringify({ format: LOOK_FORMAT, version: 1, look }, null, 4), 'arcane-forge-ui-look.json', 'application/json');
+}
+
+// Copies only known keys with sane values, so a hand-edited or foreign file can't break the settings.
+function importLook(text) {
+    let look;
+    try {
+        const data = JSON.parse(text);
+        if (data?.format !== LOOK_FORMAT || typeof data.look !== 'object') throw new Error('not a look file');
+        look = data.look;
+    } catch {
+        toastr.error('That file is not an Arcane Forge UI look.');
+        return;
+    }
+    const s = settings();
+    const clamp = (value, min, max) => (Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : undefined);
+    const numbers = { fontSize: [13, 24], chatScale: [80, 150], panelOpacity: [50, 100], panelBlur: [0, 24] };
+    for (const [key, [min, max]] of Object.entries(numbers)) {
+        const value = clamp(Number(look[key]), min, max);
+        if (value !== undefined) s[key] = value;
+    }
+    if (HEADING_FONTS[look.headingFont]) s.headingFont = look.headingFont;
+    if (BODY_FONTS[look.bodyFont]) s.bodyFont = look.bodyFont;
+    if (['heading', 'body'].includes(look.aiLabelFont)) s.aiLabelFont = look.aiLabelFont;
+    for (const key of ['aiDescriptions', 'aiHelp', 'focusRing']) {
+        if (typeof look[key] === 'boolean') s[key] = look[key];
+    }
+    Object.assign(s.colors, validColors(look.colors) ?? {});
+    if (look.savedPalettes && typeof look.savedPalettes === 'object') {
+        for (const [name, colors] of Object.entries(look.savedPalettes)) {
+            const valid = validColors(colors);
+            if (valid && name.trim()) s.savedPalettes[name.trim().slice(0, 40)] = valid;
+        }
+    }
+    save();
+    mountSettings();
+    toastr.success('Look imported.');
+}
+
 function renderSettings() {
     const s = settings();
+    const savedNames = Object.keys(s.savedPalettes).sort((a, b) => a.localeCompare(b));
     const colorRows = Object.entries(COLORS).map(([key, c]) => `
         <label class="forge-ui-color-row">
             <input type="color" data-color="${key}" value="${s.colors[key]}">
@@ -184,7 +258,23 @@ function renderSettings() {
                 </label>
 
                 <h4>Colours</h4>
+                <div class="forge-ui-palette-row">
+                    <select id="forge-ui-palette" class="text_pole" aria-label="Palette">
+                        <option value="">Choose a palette…</option>
+                        <optgroup label="Built in">${Object.entries(PALETTES).map(([key, p]) => `<option value="builtin:${key}">${p.label}</option>`).join('')}</optgroup>
+                        ${savedNames.length ? `<optgroup label="Saved">${savedNames.map((name) => `<option value="saved:${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('')}</optgroup>` : ''}
+                    </select>
+                    <div class="menu_button" id="forge-ui-palette-save" title="Save the current colours as a palette">Save</div>
+                    <div class="menu_button" id="forge-ui-palette-delete" title="Delete the chosen saved palette">Delete</div>
+                </div>
                 <div class="forge-ui-colors">${colorRows}</div>
+
+                <h4>Share</h4>
+                <div class="forge-ui-share-row">
+                    <div class="menu_button" id="forge-ui-export" title="Save colours, fonts, sizes, panels and saved palettes to a file">Export look</div>
+                    <div class="menu_button" id="forge-ui-import" title="Load a look file exported from Arcane Forge UI">Import look</div>
+                    <input type="file" id="forge-ui-import-file" accept=".json,application/json" hidden>
+                </div>
 
                 <div class="menu_button" id="forge-ui-reset">Reset to Forge defaults</div>
                 <small>Text size multiplies with SillyTavern's own Font Scale in User Settings.</small>
@@ -251,8 +341,44 @@ function bindSettings($root) {
         s.colors[this.dataset.color] = this.value;
         save();
     });
+    $root.find('#forge-ui-palette').on('change', function () {
+        const [kind, name] = [this.value.slice(0, this.value.indexOf(':')), this.value.slice(this.value.indexOf(':') + 1)];
+        const colors = kind === 'builtin' ? PALETTES[name]?.colors : kind === 'saved' ? s.savedPalettes[name] : null;
+        if (!colors) return;
+        Object.assign(s.colors, colors);
+        save();
+        mountSettings();
+        $('#forge-ui-palette').val(this.value);
+    });
+    $root.find('#forge-ui-palette-save').on('click', async () => {
+        const { callGenericPopup, POPUP_TYPE } = SillyTavern.getContext();
+        const name = await callGenericPopup('Name for this palette:', POPUP_TYPE.INPUT, '');
+        if (typeof name !== 'string' || !name.trim()) return;
+        const key = name.trim().slice(0, 40);
+        s.savedPalettes[key] = { ...s.colors };
+        save();
+        mountSettings();
+        $('#forge-ui-palette').val(`saved:${key}`);
+    });
+    $root.find('#forge-ui-palette-delete').on('click', () => {
+        const value = String($root.find('#forge-ui-palette').val() ?? '');
+        if (!value.startsWith('saved:')) {
+            toastr.info('Choose one of your saved palettes first.');
+            return;
+        }
+        delete s.savedPalettes[value.slice(6)];
+        save();
+        mountSettings();
+    });
+    $root.find('#forge-ui-export').on('click', exportLook);
+    $root.find('#forge-ui-import').on('click', () => $root.find('#forge-ui-import-file').trigger('click'));
+    $root.find('#forge-ui-import-file').on('change', async function () {
+        const file = this.files?.[0];
+        this.value = '';
+        if (file) importLook(await file.text());
+    });
     $root.find('#forge-ui-reset').on('click', () => {
-        extension_settings[MODULE] = structuredClone({ ...defaults, enabled: s.enabled, aiLayout: s.aiLayout, aiHelp: s.aiHelp, aiDescriptions: s.aiDescriptions, omitParamsBackup: s.omitParamsBackup ?? {} });
+        extension_settings[MODULE] = structuredClone({ ...defaults, enabled: s.enabled, aiLayout: s.aiLayout, aiHelp: s.aiHelp, aiDescriptions: s.aiDescriptions, omitParamsBackup: s.omitParamsBackup ?? {}, savedPalettes: s.savedPalettes ?? {} });
         save();
         mountSettings();
     });
