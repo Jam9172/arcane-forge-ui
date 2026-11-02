@@ -148,10 +148,14 @@ body.forge-ui .rpg-panel[data-theme="forge"] {
     border-radius: 0 0 8px 8px;
 }
 
+/* Extension titles come as <b>, <strong>, <span>, <h4> or bare text inside the drawer header, so the
+   Extensions drawer sets the heading font on each extension's own header and everything in it inherits
+   (folds inside an extension's settings keep their own fonts). */
 body.forge-ui h3,
 body.forge-ui h4,
 body.forge-ui h5,
-body.forge-ui .inline-drawer-header b,
+body.forge-ui .inline-drawer-header :is(b, strong),
+body.forge-ui :is(#extensions_settings, #extensions_settings2) .inline-drawer:not(.inline-drawer .inline-drawer) > .inline-drawer-header,
 body.forge-ui .standoutHeader {
     font-family: var(--forge-heading);
     color: var(--forge-brass);
