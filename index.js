@@ -1,6 +1,6 @@
 import { extension_settings } from '../../../extensions.js';
 import { saveSettingsDebounced, eventSource, event_types } from '../../../../script.js';
-import { buildAiTab, restoreAiTab, refreshModelLine, clearOmittedParams } from './aiTab.js';
+import { buildAiTab, restoreAiTab, refreshModelLine, clearOmittedParams, restoreOmittedParams } from './aiTab.js';
 
 const MODULE = 'arcaneForgeUi';
 const FONT_LINK_ID = 'arcane-forge-ui-fonts';
@@ -237,7 +237,7 @@ function bindSettings($root) {
         save();
     });
     $root.find('#forge-ui-reset').on('click', () => {
-        extension_settings[MODULE] = structuredClone({ ...defaults, enabled: s.enabled, aiLayout: s.aiLayout, aiHelp: s.aiHelp, aiDescriptions: s.aiDescriptions });
+        extension_settings[MODULE] = structuredClone({ ...defaults, enabled: s.enabled, aiLayout: s.aiLayout, aiHelp: s.aiHelp, aiDescriptions: s.aiDescriptions, omitParamsBackup: s.omitParamsBackup ?? {} });
         save();
         mountSettings();
     });
@@ -266,8 +266,12 @@ jQuery(() => {
     for (const name of ['SETTINGS_LOADED', 'SETTINGS_LOADED_AFTER', 'APP_READY']) {
         if (event_types[name]) eventSource.on(event_types[name], applyAiLayout);
     }
-    // A newly loaded preset may carry TauriTavern's "leave out" list again.
+    // A newly loaded preset may carry TauriTavern's "leave out" list again (cleared and backed up with
+    // the Forge layout on, or given back from the backup with it off).
     for (const name of ['OAI_PRESET_CHANGED_AFTER', 'SETTINGS_LOADED_AFTER']) {
-        if (event_types[name]) eventSource.on(event_types[name], clearOmittedParams);
+        if (event_types[name]) {
+            eventSource.on(event_types[name], clearOmittedParams);
+            eventSource.on(event_types[name], restoreOmittedParams);
+        }
     }
 });

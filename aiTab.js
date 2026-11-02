@@ -57,6 +57,14 @@ function adoptParamBar() {
     if (!holder.contains(bar)) move(bar, holder);
 }
 
+// Lists cleared below are kept here per preset name, so TauriTavern's choices come back once
+// the Forge layout is off.
+function omitBackups() {
+    const ext = SillyTavern.getContext().extensionSettings;
+    ext.arcaneForgeUi ??= {};
+    return ext.arcaneForgeUi.omitParamsBackup ??= {};
+}
+
 // TauriTavern keeps a per-preset list of parameters to leave out of requests. With every parameter
 // shown as a normal control, a value you can see should also be sent, as in plain SillyTavern.
 export function clearOmittedParams() {
@@ -65,11 +73,33 @@ export function clearOmittedParams() {
         const settings = SillyTavern.getContext().chatCompletionSettings;
         const tt = settings?.extensions?.tauritavern;
         if (!tt?.omit_params) return;
+        const preset = settings.preset_settings_openai;
+        if (preset) omitBackups()[preset] = structuredClone(tt.omit_params);
         delete tt.omit_params;
         if (!Object.keys(tt).length) delete settings.extensions.tauritavern;
         SillyTavern.getContext().saveSettingsDebounced();
     } catch (error) {
         console.warn('[Arcane Forge UI] Could not clear omitted parameters', error);
+    }
+}
+
+// With the Forge layout off, the current preset gets its saved list back (once; TauriTavern's own
+// controls own it from then on).
+export function restoreOmittedParams() {
+    if (byId(LAYOUT_ID)) return;
+    try {
+        const ctx = SillyTavern.getContext();
+        const settings = ctx.chatCompletionSettings;
+        const preset = settings?.preset_settings_openai;
+        const backups = omitBackups();
+        if (!preset || !backups[preset]) return;
+        settings.extensions ??= {};
+        const tt = settings.extensions.tauritavern ??= {};
+        tt.omit_params ??= backups[preset];
+        delete backups[preset];
+        ctx.saveSettingsDebounced();
+    } catch (error) {
+        console.warn('[Arcane Forge UI] Could not restore omitted parameters', error);
     }
 }
 
@@ -100,6 +130,7 @@ export function restoreAiTab() {
     document.querySelectorAll('.forge-ai-desc').forEach((note) => note.remove());
     layout?.remove();
     document.body.classList.remove('forge-ai-active');
+    restoreOmittedParams();
 }
 
 function modelLine() {
