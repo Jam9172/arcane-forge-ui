@@ -173,6 +173,80 @@ body.forge-ui .inline-drawer-header {
     border-bottom: 1px solid color-mix(in srgb, var(--forge-brass) 18%, transparent);
 }
 
+/* Extensions drawer cards (body.forge-ext-cards). Each extension's own fold becomes a flat card with a
+   slim accent edge: brass on hover, ember when open. The arrow is a plain chevron that turns when the
+   card opens, and an open card's settings join its header as one card. Only each extension's top-level
+   fold is restyled, and the order is left as SillyTavern lays it out. */
+body.forge-ui.forge-ext-cards :is(#extensions_settings, #extensions_settings2) .inline-drawer:not(.inline-drawer .inline-drawer) {
+    margin-bottom: 6px;
+}
+
+body.forge-ui.forge-ext-cards :is(#extensions_settings, #extensions_settings2) .inline-drawer:not(.inline-drawer .inline-drawer) > .inline-drawer-header {
+    min-height: 40px;
+    margin: 0;
+    padding: 6px 8px 6px 14px;
+    gap: 8px;
+    border: 1px solid var(--forge-border);
+    border-radius: 8px;
+    background: linear-gradient(180deg, var(--forge-track), var(--forge-card));
+    box-shadow: inset 3px 0 0 transparent, 0 1px 2px rgb(0 0 0 / 25%);
+    filter: none;
+    transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+body.forge-ui.forge-ext-cards :is(#extensions_settings, #extensions_settings2) .inline-drawer:not(.inline-drawer .inline-drawer) > .inline-drawer-header:hover {
+    filter: none;
+    border-color: color-mix(in srgb, var(--forge-brass) 40%, var(--forge-border));
+    background: linear-gradient(180deg, var(--forge-active), var(--forge-card));
+    box-shadow: inset 3px 0 0 var(--forge-brass), 0 1px 2px rgb(0 0 0 / 25%);
+}
+
+/* Open card */
+body.forge-ui.forge-ext-cards :is(#extensions_settings, #extensions_settings2) .inline-drawer:not(.inline-drawer .inline-drawer):has(> .inline-drawer-header .inline-drawer-icon.up) > .inline-drawer-header {
+    border-color: color-mix(in srgb, var(--forge-ember) 45%, var(--forge-border));
+    border-radius: 8px 8px 0 0;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--forge-ember) 10%, var(--forge-card)), var(--forge-card));
+    box-shadow: inset 3px 0 0 var(--forge-ember);
+}
+
+body.forge-ui.forge-ext-cards :is(#extensions_settings, #extensions_settings2) .inline-drawer:not(.inline-drawer .inline-drawer) > .inline-drawer-content {
+    padding: 10px 12px 12px;
+    border: 1px solid color-mix(in srgb, var(--forge-ember) 45%, var(--forge-border));
+    border-top: 0;
+    border-radius: 0 0 8px 8px;
+    background: var(--forge-inset);
+}
+
+/* Arrow: a plain chevron in a small round button that turns half a circle when the card opens */
+body.forge-ui.forge-ext-cards :is(#extensions_settings, #extensions_settings2) .inline-drawer:not(.inline-drawer .inline-drawer) > .inline-drawer-header .inline-drawer-icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    border: 1px solid transparent;
+    border-radius: 50%;
+    font-size: 0.8em;
+    color: var(--forge-muted);
+    filter: none;
+    transition: transform 0.2s ease, color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+body.forge-ui.forge-ext-cards :is(#extensions_settings, #extensions_settings2) .inline-drawer:not(.inline-drawer .inline-drawer) > .inline-drawer-header .inline-drawer-icon:is(.fa-circle-chevron-down, .fa-circle-chevron-up)::before {
+    content: "\f078";
+}
+
+body.forge-ui.forge-ext-cards :is(#extensions_settings, #extensions_settings2) .inline-drawer:not(.inline-drawer .inline-drawer) > .inline-drawer-header:hover .inline-drawer-icon {
+    color: var(--forge-brass);
+    border-color: var(--forge-border);
+    background: var(--forge-inset);
+}
+
+body.forge-ui.forge-ext-cards :is(#extensions_settings, #extensions_settings2) .inline-drawer:not(.inline-drawer .inline-drawer) > .inline-drawer-header .inline-drawer-icon.up {
+    transform: rotate(180deg);
+    color: var(--forge-ember);
+}
+
 body.forge-ui .inline-drawer-icon {
     color: var(--forge-muted);
 }
