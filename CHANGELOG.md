@@ -2,6 +2,18 @@
 
 Newest first. The version number is in `manifest.json`.
 
+## 0.10.0 (not published yet)
+
+- Colour pickers now reach every shade: buttons, borders, the top bar, message tints and overlays are all mixed from your colours, and RPG Companion's Forge panel follows them too.
+- New Danger colour picker (delete buttons and warnings).
+- Palettes: built-in Ember, Frost, Night and Verdant, plus your own saved palettes.
+- Export look / Import look: save colours, fonts, sizes, panels and saved palettes to a file and load them back.
+- User Settings in the Forge card layout: cards, brass section titles, switches and roomier rows (can be turned off).
+- Gear button in the AI Response header that opens these settings.
+- Ember ring around whatever you reach with Tab (can be turned off).
+- Fonts are bundled, so the look works offline and nothing loads from Google.
+- TauriTavern's per-preset "leave out" lists are backed up before the AI tab clears them, and come back when the Forge AI layout is turned off.
+
 ## 0.9.1 (2026-11-01)
 
 - README: early beta warning.
