@@ -4,20 +4,56 @@
 /* Palette. SillyTavern sets its SmartTheme variables inline on <html>; declaring them on
    <body> wins for everything inside it without !important. */
 body.forge-ui {
+    /* The seven picked colours (settings: "Colours"); index.js sets them inline. */
     --forge-bg: #120908;
     --forge-card: #1E100D;
-    --forge-inset: #170C0A;
-    --forge-track: #3A1B15;
-    --forge-border: #4A2219;
     --forge-crimson: #A61E1A;
     --forge-ember: #E8622C;
     --forge-brass: #D9A35B;
-    --forge-muted: #B79A88;
-    --forge-soft: #D8C3B3;
     --forge-text: #F1E3D6;
+    --forge-danger: #E5432F;
+    /* Every other shade is mixed from those, so a custom palette reaches all of it. With the default
+       colours these land on the original hand-picked shades. */
+    --forge-heat: color-mix(in srgb, var(--forge-crimson) 60%, var(--forge-ember));
+    --forge-inset: color-mix(in srgb, var(--forge-card) 45%, var(--forge-bg));
+    --forge-track: color-mix(in srgb, var(--forge-heat) 18%, var(--forge-card));
+    --forge-border: color-mix(in srgb, var(--forge-heat) 26%, var(--forge-card));
+    --forge-active: color-mix(in srgb, var(--forge-heat) 10%, var(--forge-card));
+    --forge-muted: color-mix(in srgb, color-mix(in srgb, var(--forge-text) 70%, var(--forge-brass)) 75%, var(--forge-card));
+    --forge-dim: color-mix(in srgb, var(--forge-muted) 70%, var(--forge-card));
+    --forge-soft: color-mix(in srgb, color-mix(in srgb, var(--forge-text) 85%, var(--forge-brass)) 92%, var(--forge-card));
+    --forge-bright: color-mix(in srgb, var(--forge-text) 60%, white);
+    --forge-danger-soft: color-mix(in srgb, var(--forge-danger) 60%, var(--forge-text));
+    --forge-primary-edge: color-mix(in srgb, var(--forge-ember) 55%, var(--forge-crimson));
+    --forge-crimson-deep: color-mix(in srgb, var(--forge-crimson) 62%, var(--forge-bg));
+    --forge-button-top: var(--forge-track);
+    --forge-button-bottom: color-mix(in srgb, var(--forge-ember) 5%, var(--forge-card));
+    --forge-button-border: color-mix(in srgb, var(--forge-heat) 36%, var(--forge-card));
+    --forge-button-hover-top: var(--forge-border);
+    --forge-button-hover-bottom: color-mix(in srgb, var(--forge-ember) 9%, var(--forge-card));
+    --forge-user-mes-top: color-mix(in srgb, var(--forge-brass) 4%, var(--forge-card));
+    --forge-user-mes-bottom: color-mix(in srgb, var(--forge-brass) 3%, var(--forge-inset));
     --forge-heading: 'Cinzel', 'Times New Roman', serif;
     --forge-bar-line: color-mix(in srgb, var(--forge-brass) 45%, transparent);
-    --forge-bar-bg: linear-gradient(180deg, #2A110D 0%, #160A08 100%);
+    --forge-bar-bg: linear-gradient(180deg, color-mix(in srgb, var(--forge-crimson) 9%, var(--forge-card)) 0%, color-mix(in srgb, var(--forge-card) 40%, var(--forge-bg)) 100%);
+    /* The final colours under names RPG Companion's Forge panel reads (it keeps its own --forge-*
+       copies as a fallback for when this extension is off). */
+    --forge-ui-bg: var(--forge-bg);
+    --forge-ui-card: var(--forge-card);
+    --forge-ui-text: var(--forge-text);
+    --forge-ui-ember: var(--forge-ember);
+    --forge-ui-crimson: var(--forge-crimson);
+    --forge-ui-brass: var(--forge-brass);
+    --forge-ui-danger: var(--forge-danger);
+    --forge-ui-inset: var(--forge-inset);
+    --forge-ui-track: var(--forge-track);
+    --forge-ui-border: var(--forge-border);
+    --forge-ui-active: var(--forge-active);
+    --forge-ui-muted: var(--forge-muted);
+    --forge-ui-dim: var(--forge-dim);
+    --forge-ui-soft: var(--forge-soft);
+    --forge-ui-bright: var(--forge-bright);
+    --forge-ui-primary-edge: var(--forge-primary-edge);
     /* Every large surface (side panels, chat column, message box, RPG Companion) shares one fill, so the
        background image shows through all of them equally (setting: "Panel opacity"). The top bar and
        the cards inside panels stay solid. */
@@ -30,10 +66,10 @@ body.forge-ui {
     --SmartThemeEmColor: var(--forge-muted);
     --SmartThemeUnderlineColor: var(--forge-brass);
     --SmartThemeQuoteColor: var(--forge-ember);
-    --SmartThemeBlurTintColor: rgba(18, 9, 8, 0.94);
+    --SmartThemeBlurTintColor: color-mix(in srgb, var(--forge-bg) 94%, transparent);
     --SmartThemeChatTintColor: color-mix(in srgb, var(--forge-bg) var(--forge-panel-alpha), transparent);
-    --SmartThemeUserMesBlurTintColor: rgba(30, 16, 13, 0.92);
-    --SmartThemeBotMesBlurTintColor: rgba(30, 16, 13, 0.92);
+    --SmartThemeUserMesBlurTintColor: color-mix(in srgb, var(--forge-card) 92%, transparent);
+    --SmartThemeBotMesBlurTintColor: color-mix(in srgb, var(--forge-card) 92%, transparent);
     --SmartThemeShadowColor: rgba(0, 0, 0, 0.7);
     --SmartThemeBorderColor: var(--forge-border);
     --mainFontFamily: var(--forge-body-font);
@@ -174,7 +210,7 @@ body.forge-ui .mes {
     margin: 8px 6px 0;
     width: calc(100% - 12px);
     padding: 10px 12px 4px;
-    background: linear-gradient(180deg, var(--forge-card), #170C0A);
+    background: linear-gradient(180deg, var(--forge-card), var(--forge-inset));
     border: 1px solid var(--forge-border);
     border-left: 3px solid var(--forge-crimson);
     border-radius: 6px;
@@ -183,7 +219,7 @@ body.forge-ui .mes {
 
 body.forge-ui .mes[is_user="true"] {
     border-left-color: var(--forge-brass);
-    background: linear-gradient(180deg, #24160F, #1A0F0B);
+    background: linear-gradient(180deg, var(--forge-user-mes-top), var(--forge-user-mes-bottom));
 }
 
 body.forge-ui .mes[is_system="true"] {
@@ -258,8 +294,8 @@ body.forge-ui .mes_reasoning_details {
 }
 
 body.forge-ui .mes_reasoning_header {
-    background: linear-gradient(180deg, #3A1712, #241009);
-    border: 1px solid #5C2A1E;
+    background: linear-gradient(180deg, var(--forge-button-top), var(--forge-button-bottom));
+    border: 1px solid var(--forge-button-border);
     font-family: var(--forge-heading);
     color: var(--forge-brass);
 }
@@ -309,7 +345,7 @@ body.forge-ui #send_but:hover {
 }
 
 body.forge-ui #mes_stop {
-    color: var(--forge-danger, #E5432F);
+    color: var(--forge-danger);
 }
 
 /* ---------- Buttons ---------- */
@@ -319,22 +355,22 @@ body.forge-ui .menu_button {
     font-size: 0.92em;
     letter-spacing: 0.03em;
     color: var(--forge-text);
-    background: linear-gradient(180deg, #3A1712, #241009);
-    border: 1px solid #5C2A1E;
+    background: linear-gradient(180deg, var(--forge-button-top), var(--forge-button-bottom));
+    border: 1px solid var(--forge-button-border);
     border-radius: 5px;
     box-shadow: inset 0 1px 0 color-mix(in srgb, var(--forge-brass) 12%, transparent);
 }
 
 body.forge-ui .menu_button:hover {
-    background: linear-gradient(180deg, #4C1D15, #2E130C);
+    background: linear-gradient(180deg, var(--forge-button-hover-top), var(--forge-button-hover-bottom));
     border-color: var(--forge-ember);
-    color: #FFF3E8;
+    color: var(--forge-bright);
 }
 
 body.forge-ui .menu_button.active,
 body.forge-ui .menu_button.toggleEnabled,
 body.forge-ui .menu_button.redOverlayGlow {
-    background: linear-gradient(180deg, var(--forge-crimson), #6E1310);
+    background: linear-gradient(180deg, var(--forge-crimson), var(--forge-crimson-deep));
     border-color: var(--forge-ember);
 }
 
@@ -442,7 +478,7 @@ body.forge-ui dialog.popup {
 }
 
 body.forge-ui .popup::backdrop {
-    background: rgba(8, 3, 2, 0.6);
+    background: color-mix(in srgb, color-mix(in srgb, var(--forge-bg) 45%, black) 60%, transparent);
     backdrop-filter: blur(3px);
 }
 
@@ -465,7 +501,7 @@ body.forge-ui ::-webkit-scrollbar-thumb {
 }
 
 body.forge-ui ::-webkit-scrollbar-thumb:hover {
-    background-color: #5C2A1E;
+    background-color: var(--forge-button-border);
 }
 
 /* ---------- Extension settings panel ---------- */
@@ -692,7 +728,7 @@ body.forge-ui #forge-ai-layout .forge-ai-menu button:hover {
 }
 
 body.forge-ui #forge-ai-layout .forge-ai-menu .forge-ai-danger {
-    color: #F08A7A;
+    color: var(--forge-danger-soft);
 }
 
 body.forge-ui #forge-ai-layout .forge-ai-preset-actions {
@@ -904,7 +940,7 @@ body.forge-ui #forge-ai-layout input[type="checkbox"]:not(.displayNone)::before 
 }
 
 body.forge-ui #forge-ai-layout input[type="checkbox"]:not(.displayNone):checked {
-    background: radial-gradient(circle at 30px 50%, #FFF3E8 0 7px, transparent 8px);
+    background: radial-gradient(circle at 30px 50%, var(--forge-bright) 0 7px, transparent 8px);
     background-color: var(--forge-ember) !important;
 }
 
@@ -1150,7 +1186,7 @@ body.forge-ui #top-settings-holder .drawer-icon.fa-address-card { --forge-top-ic
 
 /* Disconnected API keeps SillyTavern's red warning, in the Forge danger red */
 body.forge-ui #top-settings-holder .drawer-icon.fa-plug-circle-exclamation {
-    color: #E5432F;
+    color: var(--forge-danger);
 }
 
 body.forge-ui #top-settings-holder .drawer-icon.openIcon {

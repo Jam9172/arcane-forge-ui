@@ -17,7 +17,8 @@ const BODY_FONTS = {
     serif: { label: 'Georgia (serif)', value: "Georgia, 'Times New Roman', serif" },
 };
 
-// Each colour maps to a CSS variable in style.css; every shade and glow is mixed from these.
+// Each colour maps to a CSS variable in style.css; every other shade and glow is mixed from these
+// (and RPG Companion's Forge panel follows them too).
 const COLORS = {
     ember: { label: 'Accent (ember)', variable: '--forge-ember', value: '#E8622C' },
     brass: { label: 'Trim (brass)', variable: '--forge-brass', value: '#D9A35B' },
@@ -25,6 +26,7 @@ const COLORS = {
     text: { label: 'Text', variable: '--forge-text', value: '#F1E3D6' },
     card: { label: 'Panels and messages', variable: '--forge-card', value: '#1E100D' },
     bg: { label: 'Page background', variable: '--forge-bg', value: '#120908' },
+    danger: { label: 'Danger (delete buttons, warnings)', variable: '--forge-danger', value: '#E5432F' },
 };
 
 const defaults = {
