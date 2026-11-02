@@ -12,7 +12,7 @@ Newest first. The version number is in `manifest.json`.
 - Gear button in the AI Response header that opens these settings.
 - Ember ring around whatever you reach with Tab (can be turned off).
 - Fonts are bundled, so the look works offline and nothing loads from Google.
-- Every extension title in the Extensions drawer uses the Forge heading font (Quick Reply, Story Mode and others wrote theirs in tags the old rule missed).
+- Every extension title in the Extensions drawer is in the Forge heading font and brass, whatever tag it uses and even when the extension colours its own title (Quick Reply, Story Mode).
 - TauriTavern's per-preset "leave out" lists are backed up before the AI tab clears them, and come back when the Forge AI layout is turned off.
 
 ## 0.9.1 (2026-11-01)
