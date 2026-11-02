@@ -1,6 +1,10 @@
 # Changelog
 
-Newest first. The version number is in `manifest.json`.
+Newest first. The version number is in `manifest.json`. Changes collect under "Unreleased" and ship together in the next release.
+
+## Unreleased
+
+- README: the RPG Companion fork is now called RPG Companion Arcane.
 
 ## 0.11.0 (2026-11-02)
 
