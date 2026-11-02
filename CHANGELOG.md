@@ -2,7 +2,7 @@
 
 Newest first. The version number is in `manifest.json`.
 
-## 0.10.0 (not published yet)
+## 0.10.0 (2026-11-02)
 
 - Colour pickers now reach every shade: buttons, borders, the top bar, message tints and overlays are all mixed from your colours, and RPG Companion's Forge panel follows them too.
 - New Danger colour picker (delete buttons and warnings).
