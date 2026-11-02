@@ -2,7 +2,7 @@
 
 Newest first. The version number is in `manifest.json`.
 
-## Unreleased
+## 0.11.0 (2026-11-02)
 
 - Extensions drawer: each extension is a flat Forge card with a slim accent edge (brass on hover, ember when open), a plain chevron that turns when the card opens, and its settings joined to the header as one card. The order is unchanged. Can be turned off ("Forge cards for the Extensions drawer").
 
