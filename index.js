@@ -37,6 +37,7 @@ const defaults = {
     chatScale: 110,
     panelOpacity: 88,
     panelBlur: 0,
+    focusRing: true,
     headingFont: 'cinzel',
     bodyFont: 'alegreya',
     colors: Object.fromEntries(Object.entries(COLORS).map(([key, c]) => [key, c.value])),
@@ -70,6 +71,7 @@ function apply() {
     const body = document.body;
     if (s.enabled) loadFonts();
     body.classList.toggle('forge-ui', s.enabled);
+    body.classList.toggle('forge-no-focus-ring', !s.focusRing);
 
     body.style.setProperty('--forge-font-px', `${s.fontSize}px`);
     body.style.setProperty('--forge-chat-scale', String(s.chatScale / 100));
@@ -173,6 +175,12 @@ function renderSettings() {
                     <input type="range" id="forge-ui-panel-blur" min="0" max="24" step="1" value="${s.panelBlur}">
                 </label>
 
+                <h4>Keyboard</h4>
+                <label class="checkbox_label" for="forge-ui-focus-ring">
+                    <input type="checkbox" id="forge-ui-focus-ring"${s.focusRing ? ' checked' : ''}>
+                    <span>Ember ring around the control you reach with Tab (mouse clicks don't show it)</span>
+                </label>
+
                 <h4>Colours</h4>
                 <div class="forge-ui-colors">${colorRows}</div>
 
@@ -223,6 +231,10 @@ function bindSettings($root) {
     $root.find('#forge-ui-panel-blur').on('input', function () {
         s.panelBlur = Number(this.value);
         $root.find('#forge-ui-panel-blur-value').text(`${s.panelBlur}px`);
+        save();
+    });
+    $root.find('#forge-ui-focus-ring').on('change', function () {
+        s.focusRing = this.checked;
         save();
     });
     $root.find('#forge-ui-heading-font').on('change', function () {

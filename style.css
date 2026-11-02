@@ -376,6 +376,14 @@ body.forge-ui input:focus {
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--forge-ember) 30%, transparent);
 }
 
+/* Keyboard focus: a clear ember ring on whatever Tab lands on (setting: "Keyboard"). :focus-visible keeps
+   it off mouse clicks; text boxes already show focus with their ember border. */
+body.forge-ui:not(.forge-no-focus-ring) :is(.interactable, .menu_button, .right_menu_button, .drawer-toggle, .mes_button, button, a, summary, [tabindex], input[type="checkbox"], input[type="radio"], input[type="range"], input[type="color"], select):focus-visible,
+body.forge-ui:not(.forge-no-focus-ring) #forge-ai-layout input[type="checkbox"]:focus-visible {
+    outline: 2px solid var(--forge-ember);
+    outline-offset: 2px;
+}
+
 body.forge-ui #send_textarea,
 body.forge-ui #send_textarea:focus {
     background-color: transparent;
