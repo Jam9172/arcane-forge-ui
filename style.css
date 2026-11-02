@@ -415,7 +415,8 @@ body.forge-ui input:focus {
 /* Keyboard focus: a clear ember ring on whatever Tab lands on (setting: "Keyboard"). :focus-visible keeps
    it off mouse clicks; text boxes already show focus with their ember border. */
 body.forge-ui:not(.forge-no-focus-ring) :is(.interactable, .menu_button, .right_menu_button, .drawer-toggle, .mes_button, button, a, summary, [tabindex], input[type="checkbox"], input[type="radio"], input[type="range"], input[type="color"], select):focus-visible,
-body.forge-ui:not(.forge-no-focus-ring) #forge-ai-layout input[type="checkbox"]:focus-visible {
+body.forge-ui:not(.forge-no-focus-ring) #forge-ai-layout input[type="checkbox"]:focus-visible,
+body.forge-ui:not(.forge-no-focus-ring) #user-settings-block-content input[type="checkbox"]:focus-visible {
     outline: 2px solid var(--forge-ember);
     outline-offset: 2px;
 }
@@ -502,6 +503,81 @@ body.forge-ui ::-webkit-scrollbar-thumb {
 
 body.forge-ui ::-webkit-scrollbar-thumb:hover {
     background-color: var(--forge-button-border);
+}
+
+/* ---------- User Settings: Forge card layout (setting: "Forge layout for User Settings") ----------
+   Styling only: SillyTavern's own controls stay where they are, so every handler keeps working and
+   turning the setting off gives back the stock layout. Each column is a card like the AI tab's. */
+body.forge-ui.forge-user-layout #user-settings-block-content {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+    align-items: start;
+    gap: 12px;
+    padding: 4px 2px 12px;
+}
+
+body.forge-ui.forge-user-layout #user-settings-block-content > div {
+    width: auto;
+    min-width: 0;
+    margin: 0;
+    padding: 4px 14px 12px;
+    background: var(--forge-card);
+    border: 1px solid var(--forge-border);
+    border-radius: 10px;
+    box-sizing: border-box;
+}
+
+/* Section headings: engraved brass titles over a hairline, instead of SillyTavern's pill bars */
+body.forge-ui.forge-user-layout #user-settings-block-content h4,
+body.forge-ui.forge-user-layout #user-settings-block-content .standoutHeader {
+    margin: 14px 0 6px;
+    padding: 0 0 7px;
+    background: none;
+    border: 0;
+    border-bottom: 1px solid var(--forge-border);
+    border-radius: 0;
+    box-shadow: none;
+    font-family: var(--forge-heading);
+    font-size: 0.95em;
+    color: var(--forge-brass);
+    letter-spacing: 0.06em;
+}
+
+body.forge-ui.forge-user-layout #user-settings-block-content > div > h4:first-child,
+body.forge-ui.forge-user-layout #user-settings-block-content > div > :first-child h4:first-of-type {
+    margin-top: 10px;
+}
+
+/* Checkbox rows: text on the left, switch on the right, a little more room between rows */
+body.forge-ui.forge-user-layout #user-settings-block-content label.checkbox_label:has(> input[type="checkbox"]:only-of-type) {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    min-height: 34px;
+    width: 100%;
+    margin: 0;
+    font-size: 1em;
+    border-bottom: 1px solid color-mix(in srgb, var(--forge-border) 55%, transparent);
+}
+
+/* SillyTavern writes most of these labels in <small>; at Forge's larger text they read as full size */
+body.forge-ui.forge-user-layout #user-settings-block-content label.checkbox_label > small {
+    font-size: 0.95em;
+}
+
+/* The switch goes to the far right; any icon after the text stays beside it */
+body.forge-ui.forge-user-layout #user-settings-block-content label.checkbox_label:has(> input[type="checkbox"]:only-of-type) > input[type="checkbox"] {
+    order: 99;
+    margin-left: auto;
+}
+
+body.forge-ui.forge-user-layout #user-settings-block-content select,
+body.forge-ui.forge-user-layout #user-settings-block-content .text_pole {
+    min-height: 32px;
+}
+
+body.forge-ui.forge-user-layout #user-settings-block-content .menu_button {
+    margin: 2px 4px 2px 0;
 }
 
 /* ---------- Extension settings panel ---------- */
@@ -937,7 +1013,8 @@ body.forge-ui #forge-ai-layout label.checkbox_label {
     margin: 0;
 }
 
-body.forge-ui #forge-ai-layout input[type="checkbox"]:not(.displayNone) {
+body.forge-ui #forge-ai-layout input[type="checkbox"]:not(.displayNone),
+body.forge-ui.forge-user-layout #user-settings-block-content input[type="checkbox"]:not(.displayNone) {
     -webkit-appearance: none;
     appearance: none;
     flex: none;
@@ -957,11 +1034,13 @@ body.forge-ui #forge-ai-layout input[type="checkbox"]:not(.displayNone) {
     cursor: pointer;
 }
 
-body.forge-ui #forge-ai-layout input[type="checkbox"]:not(.displayNone)::before {
+body.forge-ui #forge-ai-layout input[type="checkbox"]:not(.displayNone)::before,
+body.forge-ui.forge-user-layout #user-settings-block-content input[type="checkbox"]:not(.displayNone)::before {
     display: none;
 }
 
-body.forge-ui #forge-ai-layout input[type="checkbox"]:not(.displayNone):checked {
+body.forge-ui #forge-ai-layout input[type="checkbox"]:not(.displayNone):checked,
+body.forge-ui.forge-user-layout #user-settings-block-content input[type="checkbox"]:not(.displayNone):checked {
     background: radial-gradient(circle at 30px 50%, var(--forge-bright) 0 7px, transparent 8px);
     background-color: var(--forge-ember) !important;
 }

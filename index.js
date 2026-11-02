@@ -45,6 +45,7 @@ const HEX = /^#[0-9a-f]{6}$/i;
 const defaults = {
     enabled: true,
     aiLayout: true,
+    userLayout: true,
     aiHelp: false,
     aiDescriptions: true,
     aiLabelFont: 'heading',
@@ -88,6 +89,7 @@ function apply() {
     if (s.enabled) loadFonts();
     body.classList.toggle('forge-ui', s.enabled);
     body.classList.toggle('forge-no-focus-ring', !s.focusRing);
+    body.classList.toggle('forge-user-layout', s.userLayout);
 
     body.style.setProperty('--forge-font-px', `${s.fontSize}px`);
     body.style.setProperty('--forge-chat-scale', String(s.chatScale / 100));
@@ -207,6 +209,10 @@ function renderSettings() {
                     <input type="checkbox" id="forge-ui-ai-layout"${s.aiLayout ? ' checked' : ''}>
                     <span>Forge layout for the AI Response tab (Chat Completion)</span>
                 </label>
+                <label class="checkbox_label" for="forge-ui-user-layout">
+                    <input type="checkbox" id="forge-ui-user-layout"${s.userLayout ? ' checked' : ''}>
+                    <span>Forge layout for User Settings (cards, switches, roomier rows)</span>
+                </label>
                 <label class="checkbox_label" for="forge-ui-ai-help">
                     <input type="checkbox" id="forge-ui-ai-help"${s.aiHelp ? ' checked' : ''}>
                     <span>Show SillyTavern's help text under AI settings</span>
@@ -291,6 +297,10 @@ function bindSettings($root) {
     });
     $root.find('#forge-ui-ai-layout').on('change', function () {
         s.aiLayout = this.checked;
+        save();
+    });
+    $root.find('#forge-ui-user-layout').on('change', function () {
+        s.userLayout = this.checked;
         save();
     });
     $root.find('#forge-ui-ai-help').on('change', function () {
@@ -378,7 +388,7 @@ function bindSettings($root) {
         if (file) importLook(await file.text());
     });
     $root.find('#forge-ui-reset').on('click', () => {
-        extension_settings[MODULE] = structuredClone({ ...defaults, enabled: s.enabled, aiLayout: s.aiLayout, aiHelp: s.aiHelp, aiDescriptions: s.aiDescriptions, omitParamsBackup: s.omitParamsBackup ?? {}, savedPalettes: s.savedPalettes ?? {} });
+        extension_settings[MODULE] = structuredClone({ ...defaults, enabled: s.enabled, aiLayout: s.aiLayout, userLayout: s.userLayout, aiHelp: s.aiHelp, aiDescriptions: s.aiDescriptions, omitParamsBackup: s.omitParamsBackup ?? {}, savedPalettes: s.savedPalettes ?? {} });
         save();
         mountSettings();
     });
