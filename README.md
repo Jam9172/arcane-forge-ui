@@ -1,3 +1,5 @@
+## Disclaimer: This code was written entirely using AI on top of the RPG companion extension released by Marinara. Please support the original creator over me.
+
 # Arcane Forge UI
 
 > [!WARNING]
