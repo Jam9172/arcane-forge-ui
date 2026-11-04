@@ -378,6 +378,26 @@ body.forge-ui .swipes-counter {
     font-family: var(--forge-heading);
 }
 
+/* Swipe arrows together on the right (body.forge-swipes-right): the left arrow moves from the far left of
+   the message to sit beside the right one, ‹ ›, with the counter centred under the pair */
+body.forge-ui.forge-swipes-right .mes .swipeRightBlock {
+    width: 64px;
+}
+
+body.forge-ui.forge-swipes-right .mes .swipeRightBlock .swipe_right {
+    align-self: flex-end;
+    margin-right: 6px;
+}
+
+body.forge-ui.forge-swipes-right .mes .swipeRightBlock .swipes-counter {
+    align-self: stretch;
+}
+
+body.forge-ui.forge-swipes-right .mes .swipe_left {
+    left: auto;
+    right: 33px;
+}
+
 /* Reasoning / thinking blocks */
 body.forge-ui .mes_reasoning_details {
     border: 1px solid var(--forge-border);

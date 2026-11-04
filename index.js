@@ -48,6 +48,7 @@ const defaults = {
     userLayout: true,
     extCards: true,
     icons: true,
+    swipesRight: true,
     aiHelp: false,
     aiDescriptions: true,
     aiLabelFont: 'heading',
@@ -94,6 +95,7 @@ function apply() {
     body.classList.toggle('forge-user-layout', s.userLayout);
     body.classList.toggle('forge-ext-cards', s.extCards);
     body.classList.toggle('forge-icons', s.icons !== false);
+    body.classList.toggle('forge-swipes-right', s.swipesRight !== false);
 
     body.style.setProperty('--forge-font-px', `${s.fontSize}px`);
     body.style.setProperty('--forge-chat-scale', String(s.chatScale / 100));
@@ -225,6 +227,10 @@ function renderSettings() {
                     <input type="checkbox" id="forge-ui-icons"${s.icons !== false ? ' checked' : ''}>
                     <span>Forge icons for the message box (menu, wand, send)</span>
                 </label>
+                <label class="checkbox_label" for="forge-ui-swipes-right">
+                    <input type="checkbox" id="forge-ui-swipes-right"${s.swipesRight !== false ? ' checked' : ''}>
+                    <span>Both swipe arrows on the right of the message</span>
+                </label>
                 <label class="checkbox_label" for="forge-ui-ai-help">
                     <input type="checkbox" id="forge-ui-ai-help"${s.aiHelp ? ' checked' : ''}>
                     <span>Show SillyTavern's help text under AI settings</span>
@@ -323,6 +329,10 @@ function bindSettings($root) {
         s.icons = this.checked;
         save();
     });
+    $root.find('#forge-ui-swipes-right').on('change', function () {
+        s.swipesRight = this.checked;
+        save();
+    });
     $root.find('#forge-ui-ai-help').on('change', function () {
         s.aiHelp = this.checked;
         save();
@@ -408,7 +418,7 @@ function bindSettings($root) {
         if (file) importLook(await file.text());
     });
     $root.find('#forge-ui-reset').on('click', () => {
-        extension_settings[MODULE] = structuredClone({ ...defaults, enabled: s.enabled, aiLayout: s.aiLayout, userLayout: s.userLayout, extCards: s.extCards, icons: s.icons, aiHelp: s.aiHelp, aiDescriptions: s.aiDescriptions, omitParamsBackup: s.omitParamsBackup ?? {}, savedPalettes: s.savedPalettes ?? {} });
+        extension_settings[MODULE] = structuredClone({ ...defaults, enabled: s.enabled, aiLayout: s.aiLayout, userLayout: s.userLayout, extCards: s.extCards, icons: s.icons, swipesRight: s.swipesRight, aiHelp: s.aiHelp, aiDescriptions: s.aiDescriptions, omitParamsBackup: s.omitParamsBackup ?? {}, savedPalettes: s.savedPalettes ?? {} });
         save();
         mountSettings();
     });

@@ -4,6 +4,7 @@ Newest first. The version number is in `manifest.json`. Changes collect under "U
 
 ## Unreleased
 
+- Both swipe arrows sit together at the bottom right of a message (‹ ›), with the swipe counter centred under them, instead of one at each side. Can be turned off ("Both swipe arrows on the right of the message").
 - New Forge icons in the message box: the menu is three bars with diamond studs, the wand is a slim wand with star sparkles, and Send is an ember arrow with a forged head and fletching. They follow your palette colours. Can be turned off ("Forge icons for the message box").
 - README: the RPG Companion fork is now called RPG Companion Arcane.
 
