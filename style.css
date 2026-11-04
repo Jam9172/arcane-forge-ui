@@ -393,9 +393,15 @@ body.forge-ui.forge-swipes-right .mes .swipeRightBlock .swipes-counter {
     align-self: stretch;
 }
 
+/* SillyTavern centres the right arrow's glyph in its box but leaves the left one at the box's top left,
+   so side by side they looked uneven: centre it the same way (hidden arrows are hidden with opacity and
+   visibility, not display, so this does not show them) */
 body.forge-ui.forge-swipes-right .mes .swipe_left {
     left: auto;
     right: 33px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 /* Reasoning / thinking blocks */
