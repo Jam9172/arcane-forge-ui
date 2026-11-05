@@ -55,6 +55,8 @@ const defaults = {
     aiLabelFont: 'heading',
     fontSize: 17,
     chatScale: 110,
+    phoneCompact: true,
+    phoneChatScale: 100,
     panelOpacity: 88,
     panelBlur: 0,
     drawerOpacity: 100,
@@ -99,9 +101,11 @@ function apply() {
     body.classList.toggle('forge-ext-cards', s.extCards);
     body.classList.toggle('forge-icons', s.icons !== false);
     body.classList.toggle('forge-swipes-right', s.swipesRight !== false);
+    body.classList.toggle('forge-phone-compact', s.phoneCompact !== false);
 
     body.style.setProperty('--forge-font-px', `${s.fontSize}px`);
     body.style.setProperty('--forge-chat-scale', String(s.chatScale / 100));
+    body.style.setProperty('--forge-phone-chat-scale', String((s.phoneChatScale ?? 100) / 100));
     body.style.setProperty('--forge-panel-alpha', `${s.panelOpacity}%`);
     body.style.setProperty('--forge-panel-blur', `${s.panelBlur}px`);
     body.style.setProperty('--forge-drawer-alpha', `${s.drawerOpacity ?? 100}%`);
@@ -151,7 +155,7 @@ function validColors(colors) {
 function exportLook() {
     const s = settings();
     const look = {
-        fontSize: s.fontSize, chatScale: s.chatScale, panelOpacity: s.panelOpacity, panelBlur: s.panelBlur, drawerOpacity: s.drawerOpacity,
+        fontSize: s.fontSize, chatScale: s.chatScale, phoneChatScale: s.phoneChatScale, phoneCompact: s.phoneCompact, panelOpacity: s.panelOpacity, panelBlur: s.panelBlur, drawerOpacity: s.drawerOpacity,
         headingFont: s.headingFont, bodyFont: s.bodyFont, aiLabelFont: s.aiLabelFont, aiDescriptions: s.aiDescriptions,
         aiHelp: s.aiHelp, focusRing: s.focusRing, colors: s.colors, savedPalettes: s.savedPalettes,
     };
@@ -171,11 +175,12 @@ function importLook(text) {
     }
     const s = settings();
     const clamp = (value, min, max) => (Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : undefined);
-    const numbers = { fontSize: [13, 24], chatScale: [80, 150], panelOpacity: [50, 100], panelBlur: [0, 24], drawerOpacity: [50, 100] };
+    const numbers = { fontSize: [13, 24], chatScale: [80, 150], phoneChatScale: [70, 150], panelOpacity: [50, 100], panelBlur: [0, 24], drawerOpacity: [50, 100] };
     for (const [key, [min, max]] of Object.entries(numbers)) {
         const value = clamp(Number(look[key]), min, max);
         if (value !== undefined) s[key] = value;
     }
+    if (typeof look.phoneCompact === 'boolean') s.phoneCompact = look.phoneCompact;
     if (HEADING_FONTS[look.headingFont]) s.headingFont = look.headingFont;
     if (BODY_FONTS[look.bodyFont]) s.bodyFont = look.bodyFont;
     if (['heading', 'body'].includes(look.aiLabelFont)) s.aiLabelFont = look.aiLabelFont;
@@ -263,6 +268,14 @@ function renderSettings() {
                 <label class="forge-ui-range">
                     <span>Chat text <output id="forge-ui-chat-scale-value">${s.chatScale}%</output></span>
                     <input type="range" id="forge-ui-chat-scale" min="80" max="150" step="5" value="${s.chatScale}">
+                </label>
+                <label class="forge-ui-range" title="Chat text size on phones (screens up to 1000px wide), in place of Chat text">
+                    <span>Phone chat text <output id="forge-ui-phone-chat-scale-value">${s.phoneChatScale ?? 100}%</output></span>
+                    <input type="range" id="forge-ui-phone-chat-scale" min="70" max="150" step="5" value="${s.phoneChatScale ?? 100}">
+                </label>
+                <label class="checkbox_label" for="forge-ui-phone-compact">
+                    <input type="checkbox" id="forge-ui-phone-compact"${s.phoneCompact !== false ? ' checked' : ''}>
+                    <span>Compact messages on phones: small avatar beside the name and less padding, so the text gets the full width</span>
                 </label>
                 <label class="forge-ui-select">
                     <span>Heading font</span>
@@ -369,6 +382,15 @@ function bindSettings($root) {
     $root.find('#forge-ui-chat-scale').on('input', function () {
         s.chatScale = Number(this.value);
         $root.find('#forge-ui-chat-scale-value').text(`${s.chatScale}%`);
+        save();
+    });
+    $root.find('#forge-ui-phone-chat-scale').on('input', function () {
+        s.phoneChatScale = Number(this.value);
+        $root.find('#forge-ui-phone-chat-scale-value').text(`${s.phoneChatScale}%`);
+        save();
+    });
+    $root.find('#forge-ui-phone-compact').on('change', function () {
+        s.phoneCompact = this.checked;
         save();
     });
     $root.find('#forge-ui-panel-opacity').on('input', function () {

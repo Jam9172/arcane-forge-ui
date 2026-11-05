@@ -1672,3 +1672,54 @@ body.forge-ui.forge-menu-cards #advanced-formatting-cc-notice {
     border-radius: 8px;
     color: var(--forge-soft);
 }
+
+/* ==========================================================================
+   Phones (up to 1000px): chat text has its own size (Phone chat text), and
+   with Compact messages on (body.forge-phone-compact) the avatar shrinks to
+   sit beside the name and the padding is trimmed, so the text runs the full
+   width of the message instead of beside an avatar column.
+   ========================================================================== */
+@media (max-width: 1000px) {
+    body.forge-ui .mes_text {
+        font-size: calc(var(--mainFontSize) * var(--forge-phone-chat-scale, 1));
+    }
+
+    body.forge-ui.forge-phone-compact .mes {
+        width: calc(100% - 8px);
+        margin: 6px 4px 0;
+        padding: 8px 10px 4px;
+    }
+
+    body.forge-ui.forge-phone-compact .mes .mesAvatarWrapper {
+        position: absolute;
+        top: 8px;
+        left: 10px;
+        padding: 0;
+        z-index: 1;
+    }
+
+    body.forge-ui.forge-phone-compact .mes .mesAvatarWrapper .avatar,
+    body.forge-ui.forge-phone-compact .mes .mesAvatarWrapper .avatar img {
+        width: 32px;
+        height: 32px;
+        min-width: 32px;
+    }
+
+    body.forge-ui.forge-phone-compact .mes .mes_block {
+        padding-left: 0;
+    }
+
+    body.forge-ui.forge-phone-compact .mes .ch_name {
+        min-height: 32px;
+        padding-left: 42px;
+        align-items: center;
+    }
+
+    body.forge-ui.forge-phone-compact .mes .mes_text,
+    body.forge-ui.forge-phone-compact .mes .mes_reasoning_details,
+    body.forge-ui.forge-phone-compact .mes .mes_media_wrapper,
+    body.forge-ui.forge-phone-compact .mes .mes_file_wrapper {
+        padding-right: 0;
+        margin-right: 0;
+    }
+}

@@ -4,6 +4,8 @@ Newest first. The version number is in `manifest.json`. Changes collect under "U
 
 ## Unreleased
 
+- Phones fit more text: with **Compact messages on phones** (on by default) the avatar shrinks to sit beside the name and the padding is trimmed, so a message's text runs its full width instead of beside an avatar column (about 40% more per line on an iPhone). New **Phone chat text** size under Text (100% by default), used on phones in place of Chat text, so the phone can be smaller than the desktop.
+
 - Personas, Advanced Formatting and World Info get the Forge card layout User Settings has: each column or block is a card and the pill-shaped section bars are brass headings. Styling only, so every control stays where it was. Can be turned off ("Forge cards for Personas, Advanced Formatting and World Info"). API Connections is unchanged.
 - Drawers that open over the chat and the RPG panel (the character card and the top bar's menus) are solid now, so the panel and text under them no longer show through. New **Drawer opacity** setting under Panels (100% by default) if you want them see-through again.
 - Fixed SillyTavern buttons that are just an icon (the star, book, globe, export and delete buttons on the character card, and others) showing as empty boxes: the heading font reached their icons.
