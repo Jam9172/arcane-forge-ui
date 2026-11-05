@@ -46,6 +46,7 @@ const defaults = {
     enabled: true,
     aiLayout: true,
     userLayout: true,
+    menuCards: true,
     extCards: true,
     icons: true,
     swipesRight: true,
@@ -94,6 +95,7 @@ function apply() {
     body.classList.toggle('forge-ui', s.enabled);
     body.classList.toggle('forge-no-focus-ring', !s.focusRing);
     body.classList.toggle('forge-user-layout', s.userLayout);
+    body.classList.toggle('forge-menu-cards', s.menuCards ?? true);
     body.classList.toggle('forge-ext-cards', s.extCards);
     body.classList.toggle('forge-icons', s.icons !== false);
     body.classList.toggle('forge-swipes-right', s.swipesRight !== false);
@@ -221,6 +223,10 @@ function renderSettings() {
                     <input type="checkbox" id="forge-ui-user-layout"${s.userLayout ? ' checked' : ''}>
                     <span>Forge layout for User Settings (cards, switches, roomier rows)</span>
                 </label>
+                <label class="checkbox_label" for="forge-ui-menu-cards">
+                    <input type="checkbox" id="forge-ui-menu-cards"${s.menuCards ?? true ? ' checked' : ''}>
+                    <span>Forge cards for Personas, Advanced Formatting and World Info</span>
+                </label>
                 <label class="checkbox_label" for="forge-ui-ext-cards">
                     <input type="checkbox" id="forge-ui-ext-cards"${s.extCards ? ' checked' : ''}>
                     <span>Forge cards for the Extensions drawer (flat cards, turning arrows)</span>
@@ -327,6 +333,10 @@ function bindSettings($root) {
         s.userLayout = this.checked;
         save();
     });
+    $root.find('#forge-ui-menu-cards').on('change', function () {
+        s.menuCards = this.checked;
+        save();
+    });
     $root.find('#forge-ui-ext-cards').on('change', function () {
         s.extCards = this.checked;
         save();
@@ -429,7 +439,7 @@ function bindSettings($root) {
         if (file) importLook(await file.text());
     });
     $root.find('#forge-ui-reset').on('click', () => {
-        extension_settings[MODULE] = structuredClone({ ...defaults, enabled: s.enabled, aiLayout: s.aiLayout, userLayout: s.userLayout, extCards: s.extCards, icons: s.icons, swipesRight: s.swipesRight, aiHelp: s.aiHelp, aiDescriptions: s.aiDescriptions, omitParamsBackup: s.omitParamsBackup ?? {}, savedPalettes: s.savedPalettes ?? {} });
+        extension_settings[MODULE] = structuredClone({ ...defaults, enabled: s.enabled, aiLayout: s.aiLayout, userLayout: s.userLayout, menuCards: s.menuCards, extCards: s.extCards, icons: s.icons, swipesRight: s.swipesRight, aiHelp: s.aiHelp, aiDescriptions: s.aiDescriptions, omitParamsBackup: s.omitParamsBackup ?? {}, savedPalettes: s.savedPalettes ?? {} });
         save();
         mountSettings();
     });

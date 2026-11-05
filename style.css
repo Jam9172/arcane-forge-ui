@@ -1604,3 +1604,71 @@ body.forge-ui .menu_button.fa-brands::before {
     font-family: "Font Awesome 6 Brands";
     letter-spacing: 0;
 }
+
+/* ---------- Personas, Advanced Formatting and World Info: Forge cards (setting: "Forge cards for
+   Personas, Advanced Formatting and World Info") ----------
+   Styling only, like the User Settings layout: SillyTavern's controls stay where they are. Each column
+   or block becomes a card, and the pill-shaped section bars become brass headings over a hairline. */
+body.forge-ui.forge-menu-cards #advanced-formatting-button .drawer-content > .flex-container.spaceEvenly {
+    gap: 12px;
+    align-items: flex-start;
+}
+
+body.forge-ui.forge-menu-cards :is(#ContextSettings, #InstructSettingsColumn, #SystemPromptColumn),
+body.forge-ui.forge-menu-cards #persona-management-block > :is(.persona_management_left_column, .persona_management_right_column),
+body.forge-ui.forge-menu-cards #wiTopBlock,
+body.forge-ui.forge-menu-cards #world_popup:has(#world_popup_entries_list > *) {
+    min-width: 0;
+    padding: 6px 14px 12px;
+    background: var(--forge-card);
+    border: 1px solid var(--forge-border);
+    border-radius: 10px;
+    box-sizing: border-box;
+}
+
+/* Advanced Formatting has three columns in a narrow drawer: tighter cards there, so its dropdowns keep room */
+body.forge-ui.forge-menu-cards :is(#ContextSettings, #InstructSettingsColumn, #SystemPromptColumn) {
+    padding: 4px 8px 10px;
+}
+
+body.forge-ui.forge-menu-cards #advanced-formatting-button .drawer-content > .flex-container.spaceEvenly {
+    gap: 8px;
+}
+
+body.forge-ui.forge-menu-cards #persona-management-block {
+    gap: 12px;
+    align-items: flex-start;
+}
+
+body.forge-ui.forge-menu-cards #wiTopBlock {
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+body.forge-ui.forge-menu-cards #world_popup > hr {
+    display: none;
+}
+
+body.forge-ui.forge-menu-cards :is(#advanced-formatting-button, #persona-management-button, #WI-SP-button) .drawer-content :is(h4.standoutHeader, .standoutHeader) {
+    margin: 12px 0 6px;
+    padding: 0 0 7px;
+    background: none;
+    border: 0;
+    border-bottom: 1px solid var(--forge-border);
+    border-radius: 0;
+    box-shadow: none;
+    font-family: var(--forge-heading);
+    font-size: 0.95em;
+    color: var(--forge-brass);
+    letter-spacing: 0.06em;
+}
+
+/* The notice that greys out what Chat Completion ignores: a calm ember note instead of a warning bar */
+body.forge-ui.forge-menu-cards #advanced-formatting-cc-notice {
+    margin: 6px 0 12px;
+    padding: 8px 12px;
+    background: color-mix(in srgb, var(--forge-ember) 8%, var(--forge-card));
+    border: 1px solid color-mix(in srgb, var(--forge-ember) 35%, var(--forge-border));
+    border-radius: 8px;
+    color: var(--forge-soft);
+}

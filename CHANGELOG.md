@@ -4,6 +4,7 @@ Newest first. The version number is in `manifest.json`. Changes collect under "U
 
 ## Unreleased
 
+- Personas, Advanced Formatting and World Info get the Forge card layout User Settings has: each column or block is a card and the pill-shaped section bars are brass headings. Styling only, so every control stays where it was. Can be turned off ("Forge cards for Personas, Advanced Formatting and World Info"). API Connections is unchanged.
 - Drawers that open over the chat and the RPG panel (the character card and the top bar's menus) are solid now, so the panel and text under them no longer show through. New **Drawer opacity** setting under Panels (100% by default) if you want them see-through again.
 - Fixed SillyTavern buttons that are just an icon (the star, book, globe, export and delete buttons on the character card, and others) showing as empty boxes: the heading font reached their icons.
 - Both swipe arrows sit together at the bottom right of a message (‹ ›), with the swipe counter centred under them, instead of one at each side. Can be turned off ("Both swipe arrows on the right of the message").
