@@ -56,6 +56,7 @@ const defaults = {
     chatScale: 110,
     panelOpacity: 88,
     panelBlur: 0,
+    drawerOpacity: 100,
     focusRing: true,
     savedPalettes: {},
     headingFont: 'cinzel',
@@ -101,6 +102,7 @@ function apply() {
     body.style.setProperty('--forge-chat-scale', String(s.chatScale / 100));
     body.style.setProperty('--forge-panel-alpha', `${s.panelOpacity}%`);
     body.style.setProperty('--forge-panel-blur', `${s.panelBlur}px`);
+    body.style.setProperty('--forge-drawer-alpha', `${s.drawerOpacity ?? 100}%`);
     body.style.setProperty('--forge-heading', (HEADING_FONTS[s.headingFont] ?? HEADING_FONTS.cinzel).value);
     body.style.setProperty('--forge-body-font', (BODY_FONTS[s.bodyFont] ?? BODY_FONTS.alegreya).value);
     for (const [key, c] of Object.entries(COLORS)) {
@@ -147,7 +149,7 @@ function validColors(colors) {
 function exportLook() {
     const s = settings();
     const look = {
-        fontSize: s.fontSize, chatScale: s.chatScale, panelOpacity: s.panelOpacity, panelBlur: s.panelBlur,
+        fontSize: s.fontSize, chatScale: s.chatScale, panelOpacity: s.panelOpacity, panelBlur: s.panelBlur, drawerOpacity: s.drawerOpacity,
         headingFont: s.headingFont, bodyFont: s.bodyFont, aiLabelFont: s.aiLabelFont, aiDescriptions: s.aiDescriptions,
         aiHelp: s.aiHelp, focusRing: s.focusRing, colors: s.colors, savedPalettes: s.savedPalettes,
     };
@@ -167,7 +169,7 @@ function importLook(text) {
     }
     const s = settings();
     const clamp = (value, min, max) => (Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : undefined);
-    const numbers = { fontSize: [13, 24], chatScale: [80, 150], panelOpacity: [50, 100], panelBlur: [0, 24] };
+    const numbers = { fontSize: [13, 24], chatScale: [80, 150], panelOpacity: [50, 100], panelBlur: [0, 24], drawerOpacity: [50, 100] };
     for (const [key, [min, max]] of Object.entries(numbers)) {
         const value = clamp(Number(look[key]), min, max);
         if (value !== undefined) s[key] = value;
@@ -274,6 +276,10 @@ function renderSettings() {
                     <span>Panel blur <output id="forge-ui-panel-blur-value">${s.panelBlur}px</output></span>
                     <input type="range" id="forge-ui-panel-blur" min="0" max="24" step="1" value="${s.panelBlur}">
                 </label>
+                <label class="forge-ui-range" title="Menus that open over the chat and the RPG panel (the character card, the top bar's drawers). Higher keeps what is under them from showing through.">
+                    <span>Drawer opacity <output id="forge-ui-drawer-opacity-value">${s.drawerOpacity ?? 100}%</output></span>
+                    <input type="range" id="forge-ui-drawer-opacity" min="50" max="100" step="2" value="${s.drawerOpacity ?? 100}">
+                </label>
 
                 <h4>Keyboard</h4>
                 <label class="checkbox_label" for="forge-ui-focus-ring">
@@ -363,6 +369,11 @@ function bindSettings($root) {
     $root.find('#forge-ui-panel-blur').on('input', function () {
         s.panelBlur = Number(this.value);
         $root.find('#forge-ui-panel-blur-value').text(`${s.panelBlur}px`);
+        save();
+    });
+    $root.find('#forge-ui-drawer-opacity').on('input', function () {
+        s.drawerOpacity = Number(this.value);
+        $root.find('#forge-ui-drawer-opacity-value').text(`${s.drawerOpacity}%`);
         save();
     });
     $root.find('#forge-ui-focus-ring').on('change', function () {

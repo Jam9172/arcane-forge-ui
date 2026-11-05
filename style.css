@@ -60,6 +60,10 @@ body.forge-ui {
     --forge-panel-alpha: 88%;
     --forge-panel-blur: 0px;
     --forge-panel-fill: linear-gradient(180deg, color-mix(in srgb, var(--forge-card) var(--forge-panel-alpha), transparent), color-mix(in srgb, var(--forge-bg) var(--forge-panel-alpha), transparent));
+    /* Drawers open over the chat and the RPG panel, so they get their own, more solid fill (setting:
+       "Drawer opacity"); at the panel opacity, the panel and text under them showed through */
+    --forge-drawer-alpha: 100%;
+    --forge-drawer-fill: linear-gradient(180deg, color-mix(in srgb, var(--forge-card) var(--forge-drawer-alpha), transparent), color-mix(in srgb, var(--forge-bg) var(--forge-drawer-alpha), transparent));
     --forge-hairline: linear-gradient(90deg, transparent, color-mix(in srgb, var(--forge-brass) 55%, transparent) 18%, color-mix(in srgb, var(--forge-brass) 55%, transparent) 82%, transparent);
 
     --SmartThemeBodyColor: var(--forge-text);
@@ -1577,4 +1581,26 @@ body.forge-ui .rpg-panel[data-theme="forge"] {
     /* !important: SillyTavern's "No Blur Effect" setting strips every backdrop filter with !important */
     -webkit-backdrop-filter: blur(var(--forge-panel-blur)) !important;
     backdrop-filter: blur(var(--forge-panel-blur)) !important;
+}
+
+/* Drawers over the chat and the RPG panel: the drawer fill (see --forge-drawer-alpha) */
+body.forge-ui .drawer-content,
+body.forge-ui #left-nav-panel.drawer-content,
+body.forge-ui #right-nav-panel {
+    background: var(--forge-drawer-fill);
+}
+
+/* Some SillyTavern buttons are the icon themselves (<div class="menu_button fa-solid fa-star">). The
+   heading font set on .menu_button reached their glyph, which drew as an empty box: give them back the
+   icon font. */
+body.forge-ui .menu_button:is(.fa-solid, .fa-regular),
+body.forge-ui .menu_button:is(.fa-solid, .fa-regular)::before {
+    font-family: "Font Awesome 6 Free";
+    letter-spacing: 0;
+}
+
+body.forge-ui .menu_button.fa-brands,
+body.forge-ui .menu_button.fa-brands::before {
+    font-family: "Font Awesome 6 Brands";
+    letter-spacing: 0;
 }
