@@ -83,8 +83,24 @@ export function clearOmittedParams() {
     }
 }
 
-// With the Forge layout off, the current preset gets its saved list back (once; TauriTavern's own
-// controls own it from then on).
+// Writes a list into the saved preset `name` (keeping one it already has). While the Forge layout was on, the
+// preset may have been saved without its list; giving it back to the open settings alone would lose it
+// again at the next preset switch. Only the list is written: unsaved changes to other settings stay unsaved.
+async function keepInSavedPreset(ctx, name, list) {
+    const manager = ctx.getPresetManager?.('openai');
+    const saved = manager?.getCompletionPresetByName?.(name);
+    if (!saved) return;
+    saved.extensions ??= {};
+    const tt = saved.extensions.tauritavern ??= {};
+    // (the open settings can share this object with the saved preset, so "it has one" proves nothing
+    // about the preset's file: write it either way)
+    tt.omit_params ??= structuredClone(list);
+    await manager.savePreset(name, saved, { skipUpdate: true });
+}
+
+// With the Forge layout off, the current preset gets its saved list back, in the open settings and in
+// the saved preset (once; TauriTavern's own controls own it from then on). The backup is only dropped
+// when the list is safely in the preset.
 export function restoreOmittedParams() {
     if (byId(LAYOUT_ID)) return;
     try {
@@ -92,14 +108,32 @@ export function restoreOmittedParams() {
         const settings = ctx.chatCompletionSettings;
         const preset = settings?.preset_settings_openai;
         const backups = omitBackups();
-        if (!preset || !backups[preset]) return;
+        const list = preset && backups[preset];
+        if (!list) return;
         settings.extensions ??= {};
         const tt = settings.extensions.tauritavern ??= {};
-        tt.omit_params ??= backups[preset];
-        delete backups[preset];
-        ctx.saveSettingsDebounced();
+        tt.omit_params ??= structuredClone(list);
+        keepInSavedPreset(ctx, preset, list).then(() => {
+            if (backups[preset] === list) delete backups[preset];
+            ctx.saveSettingsDebounced();
+        }).catch((error) => console.warn('[Arcane Forge UI] Could not write omitted parameters to the preset; keeping the backup', error));
     } catch (error) {
         console.warn('[Arcane Forge UI] Could not restore omitted parameters', error);
+    }
+}
+
+// A renamed preset takes its backed-up list along (it is kept under the preset's name)
+export function renameOmittedParamsBackup({ apiId, oldName, newName } = {}) {
+    if (apiId !== 'openai' || !oldName || !newName) return;
+    try {
+        const backups = omitBackups();
+        if (!backups[oldName]) return;
+        backups[newName] ??= backups[oldName];
+        delete backups[oldName];
+        SillyTavern.getContext().saveSettingsDebounced();
+        restoreOmittedParams();
+    } catch (error) {
+        console.warn('[Arcane Forge UI] Could not move omitted parameters to the renamed preset', error);
     }
 }
 

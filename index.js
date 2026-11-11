@@ -1,7 +1,7 @@
 import { extension_settings } from '../../../extensions.js';
 import { saveSettingsDebounced, eventSource, event_types } from '../../../../script.js';
 import { download } from '../../../utils.js';
-import { buildAiTab, restoreAiTab, refreshModelLine, clearOmittedParams, restoreOmittedParams } from './aiTab.js';
+import { buildAiTab, restoreAiTab, refreshModelLine, clearOmittedParams, restoreOmittedParams, renameOmittedParamsBackup } from './aiTab.js';
 
 const MODULE = 'arcaneForgeUi';
 const FONT_LINK_ID = 'arcane-forge-ui-fonts';
@@ -498,4 +498,6 @@ jQuery(() => {
             eventSource.on(event_types[name], restoreOmittedParams);
         }
     }
+    // The backup is kept under the preset's name, so it follows a rename
+    if (event_types.PRESET_RENAMED) eventSource.on(event_types.PRESET_RENAMED, renameOmittedParamsBackup);
 });
