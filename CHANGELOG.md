@@ -4,6 +4,7 @@ Newest first. The version number is in `manifest.json`. Changes collect under "U
 
 ## Unreleased
 
+- Fixed message text running under the swipe arrows of the last reply (on phones a tap on a word could hit an arrow). The text now ends clear of the arrows and of the counter under them: the last line stops short of them, or they get a line of their own when it is full. With the arrows at both ends on a phone, the text stops above them.
 - Phones fit more text: with **Compact messages on phones** (on by default) the avatar shrinks to sit beside the name and the padding is trimmed, so a message's text runs its full width instead of beside an avatar column (about 40% more per line on an iPhone). New **Phone chat text** size under Text (100% by default), used on phones in place of Chat text, so the phone can be smaller than the desktop.
 
 - Personas, Advanced Formatting and World Info get the Forge card layout User Settings has: each column or block is a card and the pill-shaped section bars are brass headings. Styling only, so every control stays where it was. Can be turned off ("Forge cards for Personas, Advanced Formatting and World Info"). API Connections is unchanged.

@@ -408,6 +408,29 @@ body.forge-ui.forge-swipes-right .mes .swipe_left {
     justify-content: center;
 }
 
+/* Room for the swipe arrows. They sit over the bottom corner of the reply, where its last lines used
+   to run under them. On a reply that shows them, the text ends with an invisible spacer as wide as the
+   arrows (the way chat apps keep a timestamp clear): it shares the last line when there is room and
+   takes a line of its own when there isn't; and the text stops above the counter under the arrows. */
+body.forge-ui:not(.hideAllSwipeButtons, .swipeAllMessages) .mes.last_mes:is(.swipes_visible, .last_swipe) .mes_text,
+body.forge-ui.swipeAllMessages:not(.hideAllSwipeButtons) .mes:is(.swipes_visible, .last_swipe) .mes_text {
+    padding-bottom: calc(var(--swipeCounterHeight, 15px) + var(--swipeCounterMargin, 5px));
+}
+
+body.forge-ui:not(.hideAllSwipeButtons, .swipeAllMessages) .mes.last_mes:is(.swipes_visible, .last_swipe) .mes_text > :last-child::after,
+body.forge-ui.swipeAllMessages:not(.hideAllSwipeButtons) .mes:is(.swipes_visible, .last_swipe) .mes_text > :last-child::after {
+    content: '';
+    display: inline-block;
+    width: 36px;
+    height: 25px;
+    vertical-align: bottom;
+}
+
+body.forge-ui.forge-swipes-right:not(.hideAllSwipeButtons, .swipeAllMessages) .mes.last_mes:is(.swipes_visible, .last_swipe) .mes_text > :last-child::after,
+body.forge-ui.forge-swipes-right.swipeAllMessages:not(.hideAllSwipeButtons) .mes:is(.swipes_visible, .last_swipe) .mes_text > :last-child::after {
+    width: 70px;
+}
+
 /* Reasoning / thinking blocks */
 body.forge-ui .mes_reasoning_details {
     border: 1px solid var(--forge-border);
@@ -1721,5 +1744,17 @@ body.forge-ui.forge-menu-cards #advanced-formatting-cc-notice {
     body.forge-ui.forge-phone-compact .mes .mes_file_wrapper {
         padding-right: 0;
         margin-right: 0;
+    }
+
+    /* With the arrows at both ends (not together on the right), the left one would sit on the start of
+       the last line, now that the text runs the full width: the text stops above the row of arrows */
+    body.forge-ui.forge-phone-compact:not(.forge-swipes-right, .hideAllSwipeButtons, .swipeAllMessages) .mes.last_mes:is(.swipes_visible, .last_swipe) .mes_text,
+    body.forge-ui.forge-phone-compact.swipeAllMessages:not(.forge-swipes-right, .hideAllSwipeButtons) .mes:is(.swipes_visible, .last_swipe) .mes_text {
+        padding-bottom: calc(25px + var(--swipeCounterHeight, 15px) + var(--swipeCounterMargin, 5px));
+    }
+
+    body.forge-ui.forge-phone-compact:not(.forge-swipes-right, .hideAllSwipeButtons, .swipeAllMessages) .mes.last_mes:is(.swipes_visible, .last_swipe) .mes_text > :last-child::after,
+    body.forge-ui.forge-phone-compact.swipeAllMessages:not(.forge-swipes-right, .hideAllSwipeButtons) .mes:is(.swipes_visible, .last_swipe) .mes_text > :last-child::after {
+        content: none;
     }
 }
