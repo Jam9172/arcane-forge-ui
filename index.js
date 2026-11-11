@@ -167,7 +167,7 @@ function importLook(text) {
     let look;
     try {
         const data = JSON.parse(text);
-        if (data?.format !== LOOK_FORMAT || typeof data.look !== 'object') throw new Error('not a look file');
+        if (data?.format !== LOOK_FORMAT || !data.look || typeof data.look !== 'object' || Array.isArray(data.look)) throw new Error('not a look file');
         look = data.look;
     } catch {
         toastr.error('That file is not an Arcane Forge UI look.');
