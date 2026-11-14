@@ -4,6 +4,7 @@ Newest first. The version number is in `manifest.json`. Changes collect under "U
 
 ## Unreleased
 
+- TauriTavern: choosing **Delete messages** no longer throws the chat back to the first loaded message. TauriTavern puts the keyboard focus on that message's checkbox when delete mode opens, and some of its webviews (iPhone and iPad among them) scroll to it. The focus now goes to a checkbox that is on screen and the chat is held where it was, until you scroll. Only while Arcane Forge UI is on; SillyTavern itself never jumped.
 - Fixed TauriTavern's per-preset "leave out" lists being lost. With the Forge AI layout on, a preset's list is set aside; if you saved or renamed the preset in the meantime, the list never came back when the layout was turned off. It is now written back into the saved preset too, and a renamed preset takes its list along.
 - Fixed **Import look** doing nothing, with no message, for a file whose look is empty (`"look": null`). It now says the file is not an Arcane Forge UI look.
 - Fixed message text running under the swipe arrows of the last reply (on phones a tap on a word could hit an arrow). The text now ends clear of the arrows and of the counter under them: the last line stops short of them, or they get a line of their own when it is full. With the arrows at both ends on a phone, the text stops above them.

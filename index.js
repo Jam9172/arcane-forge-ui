@@ -2,6 +2,7 @@ import { extension_settings } from '../../../extensions.js';
 import { saveSettingsDebounced, eventSource, event_types } from '../../../../script.js';
 import { download } from '../../../utils.js';
 import { buildAiTab, restoreAiTab, refreshModelLine, clearOmittedParams, restoreOmittedParams, renameOmittedParamsBackup } from './aiTab.js';
+import { installDeleteModeScrollGuard } from './deleteMode.js';
 
 const MODULE = 'arcaneForgeUi';
 const FONT_LINK_ID = 'arcane-forge-ui-fonts';
@@ -500,4 +501,6 @@ jQuery(() => {
     }
     // The backup is kept under the preset's name, so it follows a rename
     if (event_types.PRESET_RENAMED) eventSource.on(event_types.PRESET_RENAMED, renameOmittedParamsBackup);
+    // TauriTavern: "Delete messages" jumped the chat back to the first loaded message
+    installDeleteModeScrollGuard(() => settings().enabled);
 });
