@@ -184,3 +184,68 @@ None.
 
 - Nothing from the brief.
 - TauriTavern's expanded message editor (`tt-chat-input`, bible section 8) was not looked at. This brief does not change what is sent, so how the modes behave while that editor is open is left to M2.
+
+## Check
+
+**PASS.** Checked on `batch/M1-mode-bar` at `d3d7aef`. The batch was cut from `overhaul` at `9eee05a`. `overhaul` has since moved to `1f070de` (S1-chat-column merged). That merge touched only lane S files and S1's docs, none of this batch's.
+
+### (a) Files
+
+- `git diff --name-only overhaul...HEAD` lists 5 files: `css/modes.css`, `modes.js`, `tests/browser/modes-bar.mjs`, `docs/redesign/results/M1-mode-bar.md` and `docs/redesign/changes/M1-mode-bar.md`. All five are under "You own". Nothing else changed.
+
+### (b) Commands
+
+- `node tests/browser/modes-bar.mjs`: 47 ok, exit 0.
+- `node tests/browser/modes-bar.mjs phone`: 50 ok, exit 0.
+- `node tests/run.mjs`: `6 passed, 0 failed` (foundation, harness and modes-bar, each at both sizes).
+- Extra: a trial merge with today's `overhaul` (`git merge-tree`, exported outside the repository) merges cleanly. Its `node tests/run.mjs` gives `8 passed, 0 failed`, stage-column included.
+
+### (c) Done when, one item at a time
+
+- **The commands pass.** Yes, see (b).
+- **Only the files under "You own" changed.** Yes, see (a). The build commit's message is the brief's, "Add the send modes bar".
+- **`css/modes.css` has no raw colours or sizes that a token covers.** Yes. It has no hex, `rgb` or named colour. Every colour, space, radius and the control height is a token. The raw values left are `1px` (the line), `18px` and `1.8` (the icon size and stroke, set by bible section 4), `100%`, the `1000px` breakpoint (a media query cannot read a token) and `order: 24`. No token covers any of them.
+- **Every selector starts with `body.forge-ui.forge-modes`.** Yes, all 8 rules, the 2 inside the phone media query included.
+- **Brief build steps 1 to 6:**
+  - `defaults` is `{ modes: false, modesActive: '' }`, and `lookKeys` is `{}`, as bible section 7 says (neither key is a look key).
+  - The "Message box" `<h4>` has the one checkbox with the brief's exact label. It sits between Panels and Keyboard.
+  - The bar is a `role="radiogroup"` labelled "How to send". It holds four `button type="button" role="radio"` in the order Do, Say, Story, See. Each has its title from the brief, `aria-checked`, and an 18px DOM-built line icon on a 24 by 24 grid (`fill: none`, `currentColor`, 1.8, round caps and joins).
+  - A click selects and a second click clears. Left and Right move between the buttons, and Space and Enter select. The placeholder questions match bible section 5.3 word for word.
+- **Bible section 3:**
+  - Rule 1: no native control is copied or rebuilt. The bar is new; the placeholder is SillyTavern's own attribute, written while a mode is picked and given back after. Keeping SillyTavern's last placeholder text to give back is what section 5.3 asks for, the same as section 5.2's remembered pins. I do not count it as keeping a copy of SillyTavern's state.
+  - Rule 2: see (d). With the switch off, no element, class, inline style or placeholder change is left. The listeners live on the bar, and the placeholder watch is disconnected.
+  - Rule 3: the one new look gets its switch (`modes`). Section 7 lists no other setting for the bar. The labels use `--mainFontSize`, which measured 17px.
+  - Rule 4: the test passes at phone size. The brief asks for no TauriTavern stand-in.
+  - Rule 5: see the CSS item above.
+  - Rule 6: see (a).
+  - Rule 7: 191 lines of plain module, with no dependency.
+- **Bible section 9:**
+  - The contract holds: `modes.js` exports exactly `id`, `defaults`, `lookKeys`, `settingsHtml`, `bindSettings` and `apply`. `apply` checks `s.enabled && s.modes`, and it alone adds and removes the bar and `body.forge-modes`. A click changes only which mode is picked.
+  - The only element added is `#forge-modes`. Its children's classes start with `forge-modes-`. The CSS styles no other feature's elements.
+  - There is no `!important`, `innerHTML`, `localStorage` or network request. Labels go in with `textContent`. Everything saved is in `extension_settings.arcaneForgeUi`, through `saveSettingsDebounced`, which bible section 8 lists. No SillyTavern setting is changed.
+  - The one `MutationObserver` watches only the `placeholder` attribute of `#send_textarea`, not `#chat`.
+  - Functions are small, with comments that say why, and there are no classes.
+
+### (d) Trying to break it
+
+This was a scratch script outside the repository, using the test helper, so only the Forge Tester chat was open, saves were answered locally and no model was called. It ran at 1440px, at phone size (390px, touch) and in a 320px window. Every check passed at every size unless noted.
+
+- **Main switch off directly while Say is picked, then on again with the bar off:** the page matched the snapshot taken before the bar was ever on. The snapshot covered the bar, the class, the inline styles and classes of `#send_form`, `#nonQRFormItems`, `#send_textarea`, `#form_sheld` and both side forms, the placeholder, and `#send_form`'s children in order. A placeholder written afterwards stayed as written, so the watch was gone.
+- **Ten applies in a row:** one bar, Say still picked. Turned off after that: the page matched the snapshot again.
+- **Reset with the bar on and Say picked:** the bar and the class were gone, the placeholder was SillyTavern's, and `modes` and `modesActive` were back to `false` and `''`.
+- **What a click saves:** the settings save after a click on Story carries `modesActive: "story"`.
+- **A real reload with See saved:** the page was reloaded with the modes on and `modesActive: 'see'` served in the settings. The bar came back with See picked. "What do you look at?" stayed after SillyTavern wrote its own placeholder on load. Clearing See gave back "Not connected to API!".
+- **Crossing the boundary:** at 1000px the bar spans the form (982px in 1000px, no sideways scroll). At 1001px it is content-wide again (323px, at the left).
+- **Phone and narrow:** four equal buttons at 390px (88px each) and at 320px (70px each). All are 44px tall, with no sideways scroll, and no label is cut off sideways or vertically, even with Story picked in bold.
+- **Look:** the gap to the message box row (`#nonQRFormItems`, not only the textarea) is 8px. Hover gives `--forge-text`, and a hovered selected button keeps `--forge-bg` text. The ember focus ring (2px) shows on a button reached by keyboard. Up and Down do nothing in the bar. A screenshot of the bar alone (no chat area) at both sizes matches bible section 5.3.
+- **With S1's stage layout on (the trial merge):** the bar is the row before `#nonQRFormItems`, 9px from the left of the chat column's form, 8px above the message box, with no sideways scroll.
+
+### Problems found (none makes it FAIL)
+
+1. The test's "the choice is saved" only counts that a save request was made. It reads neither what was saved nor the result of a reload. Both work (see (d)), but the test would not catch a save that left `modesActive` out.
+2. While a mode is picked, the question replaces SillyTavern's "Not connected to API!" in the message box. The builder says so, and section 5.3 makes no exception. SillyTavern still hides the send button when not connected, so a cue remains. It is a choice for the owner to see.
+3. The placeholder watch keeps hold of `#send_textarea` between calls, while a mode is picked (section 9: "Never hold on to an element across calls"). SillyTavern never replaces that element, and the watch is disconnected when the mode is cleared or the bar goes. The risk is small.
+4. `order: 24` depends on SillyTavern's `order: 25` on `#nonQRFormItems`. It is commented, and the test's on-screen order check would catch a change.
+5. The changelog line ("Pick one to shape what you type") only becomes true with M2. The brief dictates it, so integration should fold it in with M2 and M3.
+6. On a desktop the bar grows by 1px when a mode is picked (322px to 323px). The builder says so; it is negligible.
+7. Not from this batch: on a page reload in the sandbox, RPG Companion throws `infoBoxData.trim is not a function`, with the modes on or off. It does not happen in the normal test runs.
