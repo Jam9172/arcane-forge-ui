@@ -130,3 +130,87 @@ None.
 ## Not done
 
 Nothing.
+
+## Check
+
+**PASS.** Checked by a second agent that did not write the code, on `batch/S1-chat-column` at `2d4fe7e`, against the brief, bible sections 3 and 9, and the page itself. Nothing was fixed. The problems found are listed at the end; none of them fails the batch.
+
+### (a) Files
+
+`git diff --name-only overhaul...HEAD` lists `css/stage.css`, `docs/redesign/changes/S1-chat-column.md`, `docs/redesign/results/S1-chat-column.md`, `stage.js` and `tests/browser/stage-column.mjs`. Those are the five files under "You own". `index.js`, `style.css` and `css/tokens.css` are untouched. **Pass.**
+
+### (b) Commands
+
+The sandbox was down during the first attempt, so nothing loaded. After the lead restarted it, everything was run again, and that run is the one counted:
+
+- `node tests/browser/stage-column.mjs`: 35 ok, 0 FAIL, exit 0.
+- `node tests/browser/stage-column.mjs phone`: 10 ok, 0 FAIL, exit 0.
+- `node tests/run.mjs`: foundation (18), foundation phone (15), harness (8), harness phone (8), stage-column (35), stage-column phone (10); "6 passed, 0 failed".
+
+Each line matches the output the builder recorded above. **Pass.**
+
+### (c) The diff, item by item
+
+Brief, Build:
+
+1. **Settings.** `defaults` is exactly `{ layout: 'classic', stageChat: 46 }`. `settingsHtml` returns one `<h4>Layout</h4>` section with one select labelled "Forge layout". It offers "Classic (SillyTavern's own)" and "Stage (art on the left, chat on the right)", in that order, with the note in the brief's exact words. The ids are `forge-ui-layout` and `forge-ui-layout-note`, both with the `forge-` prefix. The note uses `<small>`, the same markup as the existing note under Text. The test checks all of this at both sizes. **Pass.**
+2. **`apply(s)`.** The layout is active when `s.enabled`, `s.layout === 'stage'` and `(min-width: 1001px)` all hold. That is the bible's desktop query, and `index.js` re-applies on the same one. When active, it adds `body.forge-stage`, sets `--forge-stage-chat` on `body` to the bible 5.1 clamp built from `stageChat`, and appends one `#forge-stage` with `aria-hidden="true"` to `body` if none is there. When not active, it removes all three. It keeps no element between calls. **Pass.**
+3. **`css/stage.css`.**
+   - `#sheld` sets only `left: auto; right: 0; width: var(--forge-stage-chat)`. In a full computed-style diff, the only `#sheld` properties that change are `left`, `width`, the margins and the origin properties that follow from those two. Its `top`, `height` and `max-height` do not change: at 1440 by 900 the column runs from 35px (the top bar's bottom) to 900px.
+   - `#bg1` and `#bg_custom` get `width: calc(100% - var(--forge-stage-chat))`, `background-attachment: scroll` and `background-position: center`. The art box ends exactly where the column begins, at 1001, 1040, 1280, 1440 and 2560 wide.
+   - Behind the column: `html` is transparent and `body` paints `rgb(18, 9, 8)`, which is what `--forge-bg` resolves to. `#bg1` is not in the hit stack under the column.
+   - `#forge-stage` takes the art's box and `pointer-events: none`. With pointer events briefly turned on for the measurement, `elementsFromPoint` at five points on the stage gives `… > body > #forge-stage > #bg1 > html`. So it is drawn just above the art and below everything else, including `#expression-wrapper` and the top bar.
+
+   **Pass.**
+4. **Top bar.** With the stage on, every computed property of `#top-bar` and `#top-settings-holder` is unchanged. The only difference is the inherited `--forge-stage-chat`. **Pass.**
+
+Brief, Leave alone: `--sheldWidth` stays `50vw` with the stage on. Turning the stage on and off posts no settings save. The phone layout is unchanged (see (d)). `index.js` and `style.css` are untouched. **Pass.**
+
+Brief, Test: all ten steps are in `tests/browser/stage-column.mjs`, with the `// Usage: … [phone]` line, plus the extra checks the result file lists. Step 9 compares the four boxes for exact equality. **Pass.**
+
+Brief, Done when:
+
+- **The commands pass.** See (b). **Pass.**
+- **A top-bar menu opens in the stage layout.** The test keeps the Extensions drawer comparison. I also opened AI response, Characters, Backgrounds and User Settings in both layouts at 1440 by 900. Each one opened and was on top at its own centre, with the same box in both layouts: 0,0,360,900; 1080,0,1440,900; 360,35,1080,621; 360,35,1080,866. These match the builder's table. The result file says what was seen. **Pass.**
+- **Only owned files changed, and every selector in `css/stage.css` starts with `body.forge-ui.forge-stage`.** The file has four selectors, in three rules, and all four start that way. **Pass.**
+
+Changelog line and commit message are word for word the brief's. **Pass.**
+
+Bible section 3:
+
+1. **Native controls underneath.** Nothing is rebuilt or copied. The page's own `#sheld` and `#bg1` are restyled. **Pass.**
+2. **One switch back.** No element, class, inline style or SillyTavern setting is left behind. `apply` adds no listener; the only listener is the settings select's `change`, which lives in the settings screen. See (d). **Pass.**
+3. **Every look choice gets a setting.** The layout has its select. `stageChat` exists as a setting with no control yet; the S1 brief asks for one select only, and the S2 brief (item 4) adds the "Chat width" range and the look key. Centring SillyTavern's "Classic" background fitting on the stage follows bible 5.1 ("the art is centred on the stage") and is disclosed. **Pass.**
+4. **Phone counts.** The phone run passes, and the brief asks for no TauriTavern stand-in. **Pass.**
+5. **One list of values.** There is no hex. Sizes come from `--forge-chat-min` and `--forge-stage-min`. One raw layer value remains, `z-index: -1` (problem 1 below). **Pass, with a note.**
+6. **Stay in your lane.** See (a). **Pass.**
+7. **Small and plain.** About 60 lines of JS and 3 CSS rules, with no new dependencies. **Pass.**
+
+Bible section 9:
+
+- **File ownership.** Only lane S's and this batch's files. **Pass.**
+- **Feature contract.** The module exports `id`, `defaults`, `lookKeys`, `settingsHtml`, `bindSettings` and `apply`. `lookKeys` is `{}`; `stageChat` joins it in S2 (that brief, item 4). `apply` can be called any number of times: 30 applies in a row, alternating, leave one `#forge-stage`. It is the only place the layout is added or removed. The layout needs the main switch, its own setting and a desktop window. **Pass.**
+- **Shared names.** The module uses only `body.forge-stage`, `--forge-stage-chat` on `body` and `#forge-stage`, and styles no other feature's elements. **Pass.**
+- **Rules for the code.** Plain ES module with no classes. No `!important`, `transform`, `filter` or `contain` on `#sheld` or `#top-settings-holder`. No network, no `localStorage`, no `MutationObserver`, and no SillyTavern setting changed. No element is kept between calls, and new ids start with `forge-`. No chat text reaches the page. **Pass.**
+
+### (d) Trying to break it
+
+A scratch script, kept outside the repository and using the same test helper and Forge Tester chat, compared every computed property of `body`, `#sheld`, `#bg1`, `#top-bar`, `#top-settings-holder`, `#chat`, `#form_sheld`, `#send_form` and `#send_textarea`. It also compared `body`'s class set, `style` attribute, attributes and child list, plus `--sheldWidth`. Focus was cleared, and transitions allowed to settle, before each snapshot.
+
+- **Layout Classic again** (after stage on, four drawers opened and closed, Classic): identical to the start in every compared property. **Pass.**
+- **Main switch off while Stage is chosen:** identical to main switch off from Classic. **Pass.**
+- **Reset with the stage on:** `layout` returns to `classic` and `stageChat` to 46. The stage is gone and the select shows Classic. **Pass.**
+- **Window widths:** at 1001 by 700 the column is 480px and the stage 521px. At 1000 by 700 the stage is off and `#forge-stage` is gone. At 1280 by 720 and 2560 by 1440 the column is 46%, meets the art, and reaches the right edge. There is no sideways scroll at any width. **Pass.**
+- **Odd `stageChat` values:** 10 gives 35%, 99 gives 70%, `'60'` gives 60%, `'abc'` and `undefined` give 46%. `null` and `''` give 35% (problem 2). **Pass.**
+- **Phone (390 by 800, touch):** with Stage chosen, no compared property, class, attribute or child differs from Classic. Turned to 1100 by 390 and back, the page is again identical to Classic. **Pass.**
+- **Saves:** the stage posts none. SillyTavern itself posts settings saves when a drawer is clicked or a phone-sized window is resized across 1000px. A control run with the layout left on Classic posted the same saves. **Pass.**
+- **Screenshot** of the Forge Tester chat in the stage layout: the column is docked right under the top bar, and the art fills the stage on the left. RPG Companion's open panel covers the right part of the column, as the builder recorded.
+
+### Problems found (none fails the batch)
+
+1. **Raw layer value.** `css/stage.css` has `z-index: -1` on `#forge-stage`. Bible section 3, rule 5 says layers come from the tokens, and there is no token for "the art's layer". The value has to match SillyTavern's own `#bg1` layer, and the file's comment says so. The paint order was verified above. However, the builder should have asked for a token under "Asked of other files" (rule 6) and wrote "None" there. Suggestion for integration: add a token such as `--forge-z-stage: -1` to `css/tokens.css`. Does not fail the batch.
+2. **`stageChat` of `null` or `''` gives 35, not 46.** `Number(null)` and `Number('')` are 0, which is then clamped up to 35. Neither value can be reached from the UI, and S2 adds the look-file check for `stageChat`. Nit.
+3. **The layout check accepts inherited keys.** `bindSettings` tests `this.value in LAYOUTS`, which also accepts keys such as `toString`. The select only offers the two values, so this cannot be reached. `Object.hasOwn` would close it. Nit.
+4. **MovingUI positions win.** If the user has dragged `#sheld` with MovingUI, SillyTavern's inline `left`, `top`, `width` and `height` beat the stage, and the column does not dock. This is disclosed and was not tested by either agent. It is an open risk for later batches, not a brief item.
+5. **RPG Companion covers the column.** With its panel open at the right, it covers the right 360px of the column (seen in the screenshot). I1's brief, item 3, owns making room for it. Not this batch's.
+6. **Wide touch screens get the stage.** A touch screen wider than 1000px, such as a tablet in landscape (tested at 1100 by 390), gets the stage. This follows the bible's own boundary (`(min-width: 1001px)` is desktop), so it is information, not a fault.
