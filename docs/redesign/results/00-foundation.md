@@ -97,3 +97,65 @@ None.
 ## Not done
 
 Nothing.
+
+## Check
+
+**PASS.** Checked on `batch/00-foundation` at `37c1e50`, against `overhaul` at `d0803eb` (`overhaul` has not moved since the batch was cut).
+
+### (a) Files
+
+- `git diff --name-only overhaul...HEAD` lists 11 files: the 10 under "You own" plus `docs/redesign/results/00-foundation.md`, which bible section 9 gives to the batch. Nothing else.
+- `style.css`: 4 lines added, 0 removed, all at the very top, tokens first. `aiTab.js`, `deleteMode.js`, `fonts/`, `manifest.json` and `CHANGELOG.md` are untouched.
+
+### (b) Commands
+
+- `node tests/browser/foundation.mjs`: 18 ok, exit 0.
+- `node tests/browser/foundation.mjs phone`: 15 ok, exit 0.
+- `node tests/run.mjs`: `4 passed, 0 failed` (foundation, foundation phone, harness, harness phone).
+
+### (c) Done when, one item at a time
+
+- **All three commands pass.** Yes, see (b).
+- **The diff has only owned files, and `style.css` gains only the four lines.** Yes, see (a).
+- **A feature reaches the settings screen, the look file and Reset through its own module alone.** I tested this myself, without relying on the builder's probe. A scratch script outside the repository served a stand-in `modes.js` from memory through a Playwright route, so no file in the checkout changed. The stand-in had one look key of each of the five types, a default that is not a look key, a default that collides with Forge UI's own `aiLayout`, an `<h4>` section with a checkbox, and an `apply` that records each call and toggles `body.forge-modes`. All 25 checks passed at both sizes, with no script error:
+  - The stand-in's defaults were filled in on load, and Forge UI's own `aiLayout` won the collision.
+  - The headings read `Text, Panels, Probe, Keyboard, Colours, Share`.
+  - Ticking the checkbox saved the setting and ran `apply` again. The `arcane-forge-ui:apply` event ran `apply` exactly once.
+  - Main switch off: the feature's `apply` received `enabled: false` and removed its class.
+  - Export look wrote all five look keys and left out the other keys.
+  - Import look accepted an `enum` and a `boolean`, clamped a `number` at both ends, and accepted a `string` within `max`. For `strings` it merged the named keys and dropped unknown and over-long ones. It ignored keys that are not look keys.
+  - Import look changed nothing when given wrong types (`"7"`, `"yes"`, an over-long string, a string for `strings`) or `NaN`, an array or `null`.
+  - The settings screen was redrawn after import with its controls still wired.
+  - Reset put every stand-in key back to its default. It called `apply` first with `enabled: false` and the old values, then with the defaults. It left no class behind, and the redrawn screen saved to the new settings object.
+- **Bible section 3:**
+  - Rule 1: no native control is copied or rebuilt.
+  - Rule 2: the three stubs add nothing.
+  - Rule 3: there is no new look, so no new setting is needed.
+  - Rule 4: the test runs at phone size. The brief asks for no TauriTavern stand-in.
+  - Rule 5: `css/tokens.css` matches every value in section 4 exactly, including the 44px override under `(pointer: coarse), (max-width: 1000px)` and 0ms under `prefers-reduced-motion`. No token name collides with anything in `style.css`, `aiTab.js` or `deleteMode.js`, and the diff contains no raw hex.
+  - Rule 6: see (a).
+  - Rule 7: no new dependency or framework.
+- **Bible section 9:**
+  - Each of the three modules exports exactly the six contract names, with its real `id`.
+  - `index.js` holds the modules in `FEATURES = [stage, menu, modes]` and calls every feature's `apply` on load, on save (which covers import and Reset), on the event and on the `(min-width: 1001px)` media query.
+  - The diff has no `!important`, `innerHTML` for chat text, `localStorage`, `MutationObserver`, network request or held element.
+  - The three feature stylesheets contain only a header comment. With them, the page has exactly three style rules from our imports, all on `body.forge-ui`.
+  - No personal details appear in the diff or the commit.
+
+### (d) Trying to break it
+
+- **Nothing changes on screen.** A scratch script recorded the box and 28 computed style properties for each of the roughly 17,400 elements in the page, plus body classes, inline styles, ids and classes starting `forge`, the fonts link and sideways scroll. It ran once for an export of `overhaul` and once for this branch, at desktop and phone size, in four states: on, after opening the settings, main switch off, and on again.
+  - The only differences are the 5 elements of one animated background layer, which differ the same way between two runs of `overhaul` alone.
+  - The settings screen's headings and controls are identical, so no new setting appears.
+  - No page scrolls sideways at either size.
+- **Main switch off:** the new tokens compute to empty and none of `#forge-stage`, `#forge-spine`, `#forge-menu`, `#forge-menu-buttons`, `#forge-modes` or the four feature body classes exist. Turned on again, everything matches the first run.
+- **Phone size:** `--forge-control` and `--forge-round` are 44px. Every comparison and probe check above also passed at 390 by 800 with touch.
+- **A feature that throws:** a stand-in `stage.js` whose `apply` throws did not stop `modes.js` from being applied. The re-apply listener was still installed, and the error still showed as a page error.
+
+### Notes for later batches (none of them fails this one)
+
+- **Leftovers when the main switch is off (already on `overhaul`):** with the main switch off, `body` still carries `forge-user-layout`, `forge-menu-cards`, `forge-ext-cards`, `forge-icons`, `forge-swipes-right`, `forge-phone-compact` and `forge-ai-hide-help`. It also keeps the inline `--forge-*` properties, and the fonts link stays in the page. This is identical on `overhaul` and was not added here, but it does not meet CLAUDE.md rule 6 or bible section 10 ("nothing of ours is in the page"). The new event and media listeners stay registered too, like the existing `eventSource` ones, but do nothing visible. Worth a look in integration.
+- **Reset is less guarded than `apply()`:** Reset's first pass (`feature.apply({ ...s, enabled: false })`) is not inside the `try` that `apply()` uses, so a feature that throws there would stop Reset.
+- **Import differs slightly between Forge UI's keys and feature keys:** Forge UI's own numbers accept a numeric string (`Number(look[key])`), but feature numbers do not. The builder wrote this down, and it is within the brief's "ignores anything invalid".
+- **Reset turns feature switches off:** Reset sets the feature switches (`layout`, `menuPanel`, `modes`) back to off, while it keeps Forge UI's own switches. The brief and I3 ("every new key back to its default") both ask for this, so it is correct as built.
+- **SillyTavern's own Reduced Motion setting:** bible section 4 wants `--forge-fast` at 0ms when this setting is on too. `tokens.css` handles only the media query. P4's brief (item 6, test 9) owns the setting, so leaving it to P4 is consistent with the plan.
