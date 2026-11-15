@@ -1,0 +1,1 @@
+- New **Stage** layout for desktop (off by default; choose it under Layout): the chat is one column on the right and the background art gets the rest of the window, centred on its own area.
