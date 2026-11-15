@@ -1,0 +1,5 @@
+/* Arcane Forge UI: the Stage layout (desktop). The art on the left, the chat as one column on the right.
+   Owned by stage.js; see docs/redesign/BIBLE.md, section 5.1.
+
+   Every rule in this file starts with body.forge-ui.forge-stage, so with the layout off (or the main
+   switch off) none of it reaches the page. Values come from css/tokens.css. */

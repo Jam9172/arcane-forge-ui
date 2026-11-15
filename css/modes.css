@@ -1,0 +1,5 @@
+/* Arcane Forge UI: the send modes bar (every screen size). Do, Say, Story and See, right above the
+   message box. Owned by modes.js; see docs/redesign/BIBLE.md, sections 5.3 and 6.
+
+   Every rule in this file starts with body.forge-ui.forge-modes, so with the send modes off (or the main
+   switch off) none of it reaches the page. Values come from css/tokens.css. */
