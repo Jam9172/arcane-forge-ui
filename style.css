@@ -591,12 +591,21 @@ body.forge-ui input:focus {
 }
 
 /* Keyboard focus: a clear ember ring on whatever Tab lands on (setting: "Keyboard"). :focus-visible keeps
-   it off mouse clicks; text boxes already show focus with their ember border. */
-body.forge-ui:not(.forge-no-focus-ring) :is(.interactable, .menu_button, .right_menu_button, .drawer-toggle, .mes_button, button, a, summary, [tabindex], input[type="checkbox"], input[type="radio"], input[type="range"], input[type="color"], select):focus-visible,
+   it off mouse clicks; text boxes already show focus with their ember border. A negative tabindex means
+   only scripts can focus the element, not Tab (TauriTavern does that to every message), so on its own it
+   gets no ring; a real control (button, link, checkbox) keeps it however the focus got there. */
+body.forge-ui:not(.forge-no-focus-ring) :is(.interactable, .menu_button, .right_menu_button, .drawer-toggle, .mes_button, button, a, summary, [tabindex]:not([tabindex^="-"]), input[type="checkbox"], input[type="radio"], input[type="range"], input[type="color"], select):focus-visible,
 body.forge-ui:not(.forge-no-focus-ring) #forge-ai-layout input[type="checkbox"]:focus-visible,
 body.forge-ui:not(.forge-no-focus-ring) #user-settings-block-content input[type="checkbox"]:focus-visible {
     outline: 2px solid var(--forge-ember);
     outline-offset: 2px;
+}
+
+/* A chat message is not a control. TauriTavern makes every message focusable so its own code can put the
+   focus back after a redraw; without this, the browser's own focus ring goes around the whole message
+   after a click on it and a key press. */
+body.forge-ui #chat > .mes:focus-visible {
+    outline: none;
 }
 
 body.forge-ui #send_textarea,

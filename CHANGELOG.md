@@ -4,6 +4,7 @@ Newest first. The version number is in `manifest.json`. Changes collect under "U
 
 ## Unreleased
 
+- TauriTavern: clicking a message and then pressing a key no longer puts the ember focus ring around the whole message. TauriTavern makes every message focusable for its own code (not with Tab), and the ring matched anything focusable. The ring is now only for what Tab can land on, plus real controls (buttons, links, checkboxes) however they get the focus.
 - TauriTavern: choosing **Delete messages** no longer throws the chat back to the first loaded message. TauriTavern puts the keyboard focus on that message's checkbox when delete mode opens, and some of its webviews (iPhone and iPad among them) scroll to it. The focus now goes to a checkbox that is on screen and the chat is held where it was, until you scroll. Only while Arcane Forge UI is on; SillyTavern itself never jumped.
 - Fixed TauriTavern's per-preset "leave out" lists being lost. With the Forge AI layout on, a preset's list is set aside; if you saved or renamed the preset in the meantime, the list never came back when the layout was turned off. It is now written back into the saved preset too, and a renamed preset takes its list along.
 - Fixed **Import look** doing nothing, with no message, for a file whose look is empty (`"look": null`). It now says the file is not an Arcane Forge UI look.
