@@ -3,3 +3,83 @@
 
    Every rule in this file starts with body.forge-ui.forge-modes, so with the send modes off (or the main
    switch off) none of it reaches the page. Values come from css/tokens.css. */
+
+/* The track. #send_form is a wrapping flex row that places its rows by `order`: Quick Reply's bar is 1 and
+   SillyTavern's message box row (#nonQRFormItems) is 25. One less than the message box row keeps the bar
+   right above it, below every other row, whatever order the rows were added in. On a desktop it is as wide
+   as its buttons and sits at the left. */
+body.forge-ui.forge-modes #forge-modes {
+    order: 24;
+    display: flex;
+    align-items: center;
+    gap: var(--forge-space-1);
+    max-width: calc(100% - 2 * var(--forge-space-2));
+    margin: var(--forge-space-2);
+    padding: var(--forge-space-1);
+    background: var(--forge-inset);
+    border: 1px solid var(--forge-border);
+    border-radius: var(--forge-radius-pill);
+    font-family: var(--forge-body-font);
+    font-size: var(--mainFontSize);
+}
+
+body.forge-ui.forge-modes #forge-modes > .forge-modes-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--forge-space-2);
+    min-width: 0;
+    min-height: var(--forge-control);
+    margin: 0;
+    padding: 0 var(--forge-space-3);
+    background: transparent;
+    border: 0;
+    border-radius: var(--forge-radius-md);
+    color: var(--forge-muted);
+    font: inherit;
+    font-weight: 400;
+    cursor: pointer;
+}
+
+body.forge-ui.forge-modes #forge-modes > .forge-modes-button:hover {
+    color: var(--forge-text);
+}
+
+/* Selected: the one ember fill, and bold, so it is never shown by colour alone */
+body.forge-ui.forge-modes #forge-modes > .forge-modes-button[aria-checked="true"] {
+    background: var(--forge-ember);
+    color: var(--forge-bg);
+    font-weight: 700;
+}
+
+/* Line icons drawn at 18px (bible section 4; no token covers the icon size or the stroke) */
+body.forge-ui.forge-modes #forge-modes .forge-modes-icon {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* The message box keeps its text on one line (white-space: nowrap on #form_sheld); a label that cannot fit
+   on a very narrow screen ends in an ellipsis instead of pushing the page sideways */
+body.forge-ui.forge-modes #forge-modes .forge-modes-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Phones: the bar spans the form and the four buttons share its width */
+@media (max-width: 1000px) {
+    body.forge-ui.forge-modes #forge-modes {
+        flex: 1 1 100%;
+    }
+
+    body.forge-ui.forge-modes #forge-modes > .forge-modes-button {
+        flex: 1 1 0;
+        padding: 0 var(--forge-space-1);
+    }
+}
