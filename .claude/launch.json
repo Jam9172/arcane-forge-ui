@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "sillytavern-sandbox",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "../SillyTavern", "start", "--", "--browserLaunchEnabled=false"],
+      "port": 8000
+    }
+  ]
+}
