@@ -163,3 +163,85 @@ Step 9 (`menuLast`) is checked straight after step 5, as the brief says, because
 ## Not done
 
 Nothing.
+
+## Check
+
+**PASS.** Checked on `batch/P1-menu-frame` at `a9dee17`, against `overhaul...HEAD` (merge base `9eee05a`). `overhaul` moved on while this was checked (S1 and M1 merged, now `6316dc0`); the branch still merges into it without conflicts, and `node tests/run.mjs` on that merge passes too (10 of 10, `menu-frame`, `modes-bar` and `stage-column` included).
+
+### (a) Only owned files changed
+
+`git diff --name-only overhaul...HEAD`: `css/menu.css`, `docs/redesign/changes/P1-menu-frame.md`, `docs/redesign/results/P1-menu-frame.md`, `menu.js`, `tests/browser/menu-frame.mjs`. Exactly the brief's "You own" list. No personal details in the diff or the commit message.
+
+### (b) The commands
+
+- `node tests/browser/menu-frame.mjs`: 49 ok, 0 FAIL.
+- `node tests/browser/menu-frame.mjs phone`: 5 ok, 0 FAIL.
+- `node tests/run.mjs`: 6 passed, 0 failed (foundation, harness and menu-frame, each desktop and phone).
+
+### (c) The brief, the "Done when" list, and bible sections 3 and 9
+
+Brief, Build:
+
+1. Settings: `defaults = { menuPanel: false, menuLast: 'ai-config-button' }`; `settingsHtml` gives an `<h4>Menus</h4>` and one checkbox with the brief's label. `lookKeys = {}`, which matches bible section 7 (neither key goes in the look file). Met.
+2. `apply(s)`: active on `s.enabled && s.menuPanel` and `(min-width: 1001px)`. On: `body.forge-menu`, `#forge-menu` appended to `body`, one observer on `#top-settings-holder` (class changes). Off: observer disconnected, timer cleared, frame removed, class removed. Met.
+3. The frame: backdrop and panel. The panel holds the nav and a head with the title and a close button, all built with `createElement`/`createElementNS`. Met.
+4. Showing and hiding: worked out from `#top-settings-holder > .drawer > .drawer-content.openDrawer:not(.pinnedOpen)` on each change. One deviation: a close that does not come from the frame hides it only after twice SillyTavern's animation duration (250ms by default). I read `doNavbarIconClick` in SillyTavern's `script.js`. It closes the open drawer, `await delay(animation_duration)`, then opens the next one, so for 125ms at every change of section no drawer is open, and a strict rule would make the frame blink. The timer holds no copy of SillyTavern's state and reads the page again when it fires. I accept it as within the bible's intent; see problem 1.
+5. The nav: the nine drawers in the bible's order and labels, then unknown ones labelled from their icon's `title` (falling back to the toggle's `title`, because Backgrounds keeps it there; the builder noted this). Each button has the top bar's Forge icon (the same mask, read from `--forge-top-icon`) and the native title, and `aria-current="page"` is on the open one. The list is rebuilt whenever the frame goes from hidden to shown. Met.
+6. Changing section: clicks the drawer's own `.drawer-toggle` unless it is already open. `menuLast` is written for every drawer except `rightNavHolder`, and only while the panel is active. Met.
+7. Placing: `position: fixed` from the geometry tokens. The drawer stays inside `#top-settings-holder` and scrolls with SillyTavern's own `overflow-y: auto`. Nothing in `css/menu.css` puts `transform`, `filter`, `backdrop-filter` or `contain` on `#top-settings-holder` or `#sheld`. Met.
+8. Closing: the close button and the backdrop click the open drawer's toggle. Met.
+9. `mousedown` and `touchstart` stop at `#forge-menu`. Met.
+
+Leave alone: the top bar is untouched. Pinned drawers are excluded by `:not(.pinnedOpen)`. Escape and focus are not done (P4). The floating panels are untouched, because every selector, in the CSS and in `menu.js`, needs `#top-settings-holder > .drawer > .drawer-content`.
+
+Test: the brief's twelve steps are all present, in substance and in order. Step 9 is checked straight after step 5, as the brief asks. The `// Usage: … [phone]` line is there, and `finish()` checks for script errors.
+
+Done when:
+
+- The commands pass: yes, see (b).
+- The result file gives the exact CSS: yes. I compared the block in "How the open menu is placed" with `css/menu.css` declaration by declaration, and it is the same, comments aside. It also says which elements had to lose a property: none. I checked that claim myself: walking up from `#user-settings-block` with the panel on, the only ancestor with a containing-block property is `<html>` (`transform: matrix(1, 0, 0, 1, 0, 0)`, `perspective: 1000px`, from SillyTavern's own `style.css`, "fix for chrome flickering on blurred divs"). SillyTavern's blur rules (`backdrop-filter`) sit on `.drawer-content`, `#top-bar`, `#chat` and others, never on `#top-settings-holder`, `.drawer` or `body`, so turning blur on does not change this. Forge's own `filter` and `transform` rules are on icons and buttons only.
+- Only the owned files changed: yes, see (a).
+
+Bible section 3:
+
+1. Native controls stay underneath: every action clicks SillyTavern's own toggle. The drawers are never moved or copied. Met.
+2. One switch back: met; see (d).
+3. Every look choice gets a setting: no new setting besides the switch. The panel's look follows the bible's own spec (5.2) and the tokens, so the owner's colour and font settings drive it, and the brief asks for one checkbox only. Met, with problem 3 noted. Text: nav buttons are 17px (body size) and the title is 1.15em (19.55px) Cinzel 700.
+4. Phone: the phone run passes, and the brief asks for no TauriTavern stand-in. Met.
+5. One list of values: one raw colour, the backdrop's `rgb(0 0 0 / 55%)` (see problem 2). The other literals are figures the bible itself gives: 18px icons, stroke 1.8, 1px lines. Met, with a note.
+6. Stay in your lane: met.
+7. Small and plain: one module, small functions, no classes, no new dependencies. Met.
+
+Bible section 9:
+
+- Contract: `id`, `defaults`, `lookKeys`, `settingsHtml`, `bindSettings` and `apply` are exported in the shape given. `apply` is safe to repeat: five `arcane-forge-ui:apply` events in a row leave exactly one `#forge-menu`. Met.
+- Shared names: only `body.forge-menu` and `#forge-menu`. Every other new class and id starts `forge-menu-`, and the data attribute is `data-forge-drawer`. Met.
+- Every selector starts `body.forge-ui.forge-menu`. Met.
+- `!important` only on `top`, `left`, `right`, `bottom`, `width`, `height` and `margin`, with a comment naming MovingUI. I confirmed that `dragElement` (`RossAscends-mods.js`) and `loadMovingUIState` (`power-user.js`) do write those inline. Met.
+- `textContent` for labels and the title, never `innerHTML` (the settings HTML holds only our own fixed text). No network requests, no `localStorage`. No observer on `#chat`. No SillyTavern setting changed. Met.
+- Nothing kept across calls except the observer and a timer id; drawers are looked up each time. Met.
+
+### (d) Trying to break it (scratch scripts outside the repository, against the sandbox)
+
+All of these passed:
+
+- **Off with a menu open in the panel:** `menuPanel` off while Settings is open in the frame. Nothing of ours is left: no `#forge-menu`, no `body.forge-menu`, no `forge-menu-*` element, no `aria-owns`, no `data-forge-drawer`, and `--forge-menu-top` is undefined. Settings stays open at SillyTavern's own box (360,35 720x831, the same as before the panel was ever on). Lorebooks then opens at its own box too (360,35 720x255).
+- **No watcher left:** with the panel off, opening a menu no longer changes `menuLast`.
+- **Attributes as before:** every attribute on `html`, `body`, `#top-settings-holder` and its drawers and toggles (open and close classes aside) is the same after on and off as before the panel was ever turned on. No inline style is left on any drawer.
+- **Main switch off with a menu open:** nothing of the panel is left. Turned back on, the frame shows that menu again.
+- **Crossing 1000px with a menu open:** at 1001 by 700 the panel is active, centred (905 by 604), and the menu sits right of the nav and below the head. At exactly 1000px nothing of ours is in the page and the menu stays open where SillyTavern puts it. Back at 1440 the frame shows it again.
+- **Every section scrolls inside itself:** AI response, Connection, Formatting, Lorebooks, Personas, Backgrounds and Extensions each sit at 390,116 879x723. None of their inner scroll areas reaches past the drawer's bottom or right edge, nothing is cut off, nothing scrolls sideways, and the page does not scroll. Characters was not opened.
+- **The drawer's look in the panel:** transparent background, no gradient, no border, no shadow, no transition. The panel is flat `--forge-card` with a 14px corner, a 1px `--forge-bar-line` edge and `--forge-shadow`. Nav buttons are 36px tall.
+- **Closing from the top bar's own icon:** the frame is still up 80ms later and gone by 500ms (problem 1).
+- **Floating panels:** Author's Note (`#floatingPrompt`) opens at the same box with the panel on as with it off, and the frame does not show.
+- **A pinned panel** (Lorebooks pinned with its own pin): it keeps its own box with the panel on, and the frame stays hidden while only the pin is open. Opening Settings beside it shows the frame and leaves the pin in place. Closing the frame leaves the pin open. P3 decides the rest.
+- **Phone:** the brief's phone run passes. With `menuPanel: true` there is no class and no frame, and the drawer opens at SillyTavern's own box.
+- **With the stage layout** (merged with the current `overhaul`, `layout: 'stage'`): the menu still lands right of the nav and below the head.
+- **Contrast (default colours):** nav text on the panel 11.5:1, the current section's text on ember 5.8:1, the title on the panel 8.2:1.
+
+### Problems found (none makes it FAIL)
+
+1. **The frame lingers after an outside close.** When a menu is closed from outside the frame (the top bar icon), the frame stays up for twice SillyTavern's animation duration (250ms by default), showing an empty content area. A click on the backdrop in that window does nothing but hide it. Strictly, the frame then shows when no drawer is open, against "exactly when" in brief step 4 and bible 5.2. This is accepted because SillyTavern's own change of section leaves no drawer open for one animation duration, and the delay is the plainest way to avoid a blink. Once P2 hides the top bar, the main way to cause it is gone while the round buttons are on.
+2. **One raw colour in `css/menu.css`:** `rgb(0 0 0 / 55%)` for the backdrop. It is not hex, and it is the bible's own "55% black", but bible 3.5 wants values from tokens. Integration should add the `--forge-menu-dim` token the builder asked for.
+3. **Drawer opacity does nothing in the panel.** The Drawer opacity setting (`--forge-drawer-fill`) no longer affects a menu while it is in the panel, because the drawer is transparent over the panel's flat `--forge-card`. This follows bible 5.2 and 4 (flat fill, one shadow), but the owner may notice a setting that seems to do nothing there.
+4. **Nav icons can go stale.** The nav icons are copied only when the frame opens. If the connection drops or comes back while the frame is open, the Connection button keeps its old icon until the next opening. The top bar's own icon is right.
