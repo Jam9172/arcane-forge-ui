@@ -2,4 +2,38 @@
    Owned by stage.js; see docs/redesign/BIBLE.md, section 5.1.
 
    Every rule in this file starts with body.forge-ui.forge-stage, so with the layout off (or the main
-   switch off) none of it reaches the page. Values come from css/tokens.css. */
+   switch off) none of it reaches the page. Values come from css/tokens.css; the chat column's width,
+   --forge-stage-chat, is set on body by stage.js. */
+
+/* The chat column docks to the right edge. SillyTavern centres #sheld (left: 0, right: 0, auto margins,
+   width: var(--sheldWidth)); with its left side freed it sits against the right edge instead. Only the side and
+   the width change: its top and height still follow --topBarBlockSize, so the column starts below the top bar
+   and ends at the bottom of the window. --sheldWidth itself is left alone, as are the top bar and its drawers. */
+body.forge-ui.forge-stage #sheld {
+    left: auto;
+    right: 0;
+    width: var(--forge-stage-chat);
+}
+
+/* The art covers only the stage, the area left of the chat column, and is sized and centred on that area.
+   SillyTavern pins the art to the window (background-attachment: fixed), which would size and centre it on
+   the window whatever its box; scroll ties it to the box. The page's own --forge-bg shows behind the chat. */
+body.forge-ui.forge-stage #bg1,
+body.forge-ui.forge-stage #bg_custom {
+    width: calc(100% - var(--forge-stage-chat));
+    background-attachment: scroll;
+    background-position: center;
+}
+
+/* Our layer over the stage, the same box as the art. It takes no clicks. It shares the art's layer (-1, from
+   SillyTavern's #bg1) and comes after it in the page, so it is drawn just above the art and below everything
+   else. */
+body.forge-ui.forge-stage #forge-stage {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: calc(100% - var(--forge-stage-chat));
+    height: 100%;
+    z-index: -1;
+    pointer-events: none;
+}
