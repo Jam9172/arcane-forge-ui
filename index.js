@@ -3,8 +3,16 @@ import { saveSettingsDebounced, eventSource, event_types } from '../../../../scr
 import { download } from '../../../utils.js';
 import { buildAiTab, restoreAiTab, refreshModelLine, clearOmittedParams, restoreOmittedParams, renameOmittedParamsBackup } from './aiTab.js';
 import { installDeleteModeScrollGuard } from './deleteMode.js';
+import * as stage from './stage.js';
+import * as menu from './menu.js';
+import * as modes from './modes.js';
 
 const MODULE = 'arcaneForgeUi';
+
+// The redesign's features (docs/redesign/BIBLE.md, section 9). Each module brings its own defaults, look keys,
+// settings section and apply(), so a feature reaches the settings, the look file and Reset through its own
+// file alone; nothing here changes when a feature grows.
+const FEATURES = [stage, menu, modes];
 const FONT_LINK_ID = 'arcane-forge-ui-fonts';
 
 const HEADING_FONTS = {
@@ -68,10 +76,20 @@ const defaults = {
     colors: Object.fromEntries(Object.entries(COLORS).map(([key, c]) => [key, c.value])),
 };
 
+// Every feature's defaults in one object (a key in Forge UI's own defaults is never overridden)
+function featureDefaults() {
+    return Object.assign({}, ...FEATURES.map((feature) => feature.defaults));
+}
+
+// Every feature's look keys in one object: what Export look writes and Import look accepts for them
+function featureLookKeys() {
+    return Object.assign({}, ...FEATURES.map((feature) => feature.lookKeys));
+}
+
 // Fills in missing keys in place, so handlers holding this object keep writing to the saved one.
 function settings() {
     const current = extension_settings[MODULE] ??= {};
-    for (const [key, value] of Object.entries(defaults)) {
+    for (const [key, value] of Object.entries({ ...featureDefaults(), ...defaults })) {
         if (current[key] === undefined) current[key] = structuredClone(value);
     }
     for (const [key, value] of Object.entries(defaults.colors)) {
@@ -116,6 +134,19 @@ function apply() {
         body.style.setProperty(c.variable, s.colors[key]);
     }
     applyAiLayout();
+    applyFeatures(s);
+}
+
+// Each feature decides for itself whether it is active. One that fails must not stop the others or the
+// rest of the extension; its error is still reported.
+function applyFeatures(s) {
+    for (const feature of FEATURES) {
+        try {
+            feature.apply(s);
+        } catch (error) {
+            setTimeout(() => { throw error; });
+        }
+    }
 }
 
 // The Forge ledger AI tab only covers Chat Completion; other APIs keep SillyTavern's layout.
@@ -160,7 +191,34 @@ function exportLook() {
         headingFont: s.headingFont, bodyFont: s.bodyFont, aiLabelFont: s.aiLabelFont, aiDescriptions: s.aiDescriptions,
         aiHelp: s.aiHelp, focusRing: s.focusRing, colors: s.colors, savedPalettes: s.savedPalettes,
     };
+    for (const key of Object.keys(featureLookKeys())) look[key] = s[key];
     download(JSON.stringify({ format: LOOK_FORMAT, version: 1, look }, null, 4), 'arcane-forge-ui-look.json', 'application/json');
+}
+
+// The one check for a feature's look key, by the type its lookKeys entry names (bible section 9). Returns the
+// value to keep, or undefined to ignore it. Numbers are clamped into range, as Forge UI's own are.
+function validLookValue(rule, value) {
+    switch (rule?.type) {
+        case 'enum':
+            return rule.values.includes(value) ? value : undefined;
+        case 'boolean':
+            return typeof value === 'boolean' ? value : undefined;
+        case 'number':
+            return typeof value === 'number' && Number.isFinite(value) ? Math.min(rule.max, Math.max(rule.min, value)) : undefined;
+        case 'string':
+            return typeof value === 'string' && value.length <= rule.max ? value : undefined;
+        case 'strings': {
+            // An object with some of the named keys, each a short enough string; the others are left as they are
+            if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+            const out = {};
+            for (const key of rule.keys) {
+                if (typeof value[key] === 'string' && value[key].length <= rule.max) out[key] = value[key];
+            }
+            return Object.keys(out).length ? out : undefined;
+        }
+        default:
+            return undefined;
+    }
 }
 
 // Copies only known keys with sane values, so a hand-edited or foreign file can't break the settings.
@@ -194,6 +252,11 @@ function importLook(text) {
             const valid = validColors(colors);
             if (valid && name.trim()) s.savedPalettes[name.trim().slice(0, 40)] = valid;
         }
+    }
+    for (const [key, rule] of Object.entries(featureLookKeys())) {
+        const value = validLookValue(rule, look[key]);
+        if (value === undefined) continue;
+        s[key] = rule.type === 'strings' ? { ...s[key], ...value } : value;
     }
     save();
     mountSettings();
@@ -300,7 +363,7 @@ function renderSettings() {
                     <span>Drawer opacity <output id="forge-ui-drawer-opacity-value">${s.drawerOpacity ?? 100}%</output></span>
                     <input type="range" id="forge-ui-drawer-opacity" min="50" max="100" step="2" value="${s.drawerOpacity ?? 100}">
                 </label>
-
+${FEATURES.map((feature) => feature.settingsHtml(s)).join('')}
                 <h4>Keyboard</h4>
                 <label class="checkbox_label" for="forge-ui-focus-ring">
                     <input type="checkbox" id="forge-ui-focus-ring"${s.focusRing ? ' checked' : ''}>
@@ -462,10 +525,14 @@ function bindSettings($root) {
         if (file) importLook(await file.text());
     });
     $root.find('#forge-ui-reset').on('click', () => {
-        extension_settings[MODULE] = structuredClone({ ...defaults, enabled: s.enabled, aiLayout: s.aiLayout, userLayout: s.userLayout, menuCards: s.menuCards, extCards: s.extCards, icons: s.icons, swipesRight: s.swipesRight, aiHelp: s.aiHelp, aiDescriptions: s.aiDescriptions, omitParamsBackup: s.omitParamsBackup ?? {}, savedPalettes: s.savedPalettes ?? {} });
+        // Each feature first takes itself off with the settings it had, so it can undo what only they record
+        // (the menu panel's pins); then every feature setting goes back to its default with the rest.
+        applyFeatures({ ...s, enabled: false });
+        extension_settings[MODULE] = structuredClone({ ...featureDefaults(), ...defaults, enabled: s.enabled, aiLayout: s.aiLayout, userLayout: s.userLayout, menuCards: s.menuCards, extCards: s.extCards, icons: s.icons, swipesRight: s.swipesRight, aiHelp: s.aiHelp, aiDescriptions: s.aiDescriptions, omitParamsBackup: s.omitParamsBackup ?? {}, savedPalettes: s.savedPalettes ?? {} });
         save();
         mountSettings();
     });
+    for (const feature of FEATURES) feature.bindSettings($root, s, save);
 }
 
 function mountSettings() {
@@ -483,6 +550,10 @@ function mountSettings() {
 jQuery(() => {
     mountSettings();
     apply();
+    // A test (or anything else) can ask for the settings to be applied again
+    document.addEventListener('arcane-forge-ui:apply', () => apply());
+    // Stage and the menu panel are desktop only, so crossing SillyTavern's phone boundary changes what is active
+    window.matchMedia('(min-width: 1001px)').addEventListener('change', () => apply());
     $('#main_api').on('change', applyAiLayout);
     for (const name of ['CHATCOMPLETION_SOURCE_CHANGED', 'CHATCOMPLETION_MODEL_CHANGED', 'SETTINGS_LOADED']) {
         if (event_types[name]) eventSource.on(event_types[name], refreshModelLine);

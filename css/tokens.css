@@ -1,0 +1,57 @@
+/* Arcane Forge UI: the shared sizes, spacing, layers and timing for the redesign's features
+   (docs/redesign/BIBLE.md, section 4). Feature CSS takes every value from here, never a raw number.
+   The colours stay in style.css, where the settings set them. */
+
+body.forge-ui {
+    --forge-space-1: 4px;
+    --forge-space-2: 8px;
+    --forge-space-3: 12px;
+    --forge-space-4: 16px;
+    --forge-space-5: 24px;
+    --forge-space-6: 32px;
+    --forge-space-7: 48px;
+
+    --forge-radius-sm: 6px;
+    --forge-radius-md: 10px;
+    --forge-radius-lg: 14px;
+    --forge-radius-pill: 999px;
+
+    /* Height of buttons and rows, and the width of the round buttons; both grow to 44px on touch screens */
+    --forge-control: 36px;
+    --forge-round: 40px;
+
+    /* Only the menu panel casts a shadow */
+    --forge-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+    /* Every transition */
+    --forge-fast: 160ms;
+
+    /* The stage never gets narrower than this, nor the chat column */
+    --forge-stage-min: 320px;
+    --forge-chat-min: 480px;
+
+    --forge-menu-w: min(1100px, calc(100vw - 96px));
+    --forge-menu-h: min(780px, calc(100dvh - 96px));
+    --forge-menu-nav: 220px;
+    --forge-menu-head: 56px;
+
+    /* Layers. SillyTavern's top bar holder is 3005 and its popups 9999; these sit between the chat and those. */
+    --forge-z-buttons: 3002;
+    --forge-z-backdrop: 3003;
+    --forge-z-frame: 3004;
+}
+
+/* Touch screens and phones: every target at least 44px */
+@media (pointer: coarse), (max-width: 1000px) {
+    body.forge-ui {
+        --forge-control: 44px;
+        --forge-round: 44px;
+    }
+}
+
+/* Nothing moves for someone who asked for less motion. (SillyTavern's own Reduced Motion setting puts no
+   class on body; the feature that animates handles that one.) */
+@media (prefers-reduced-motion: reduce) {
+    body.forge-ui {
+        --forge-fast: 0ms;
+    }
+}
