@@ -6,7 +6,7 @@ States: `todo`, `doing`, `checked` (a second agent passed it), `merged`, `blocke
 
 | Batch | State | Commit on `overhaul` | Note |
 |---|---|---|---|
-| `00-foundation` | todo | | |
+| `00-foundation` | merged | `bc524f3` | Checked PASS. Main switch off still leaves Forge UI's older body classes, inline properties and fonts link (true before this batch); left for integration. |
 | `M1-mode-bar` | todo | | |
 | `M2-do-and-say` | todo | | |
 | `M3-story-and-see` | todo | | |
