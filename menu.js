@@ -11,17 +11,264 @@
 //   apply         puts the page in the state the settings ask for. Called on load, after every settings
 //                 change, when the window crosses 1000px, and on the arcane-forge-ui:apply event; safe to
 //                 call any number of times, and the only place that adds or removes the panel.
+//
+// The frame (#forge-menu) only follows SillyTavern: it shows while a top-level drawer is open and not
+// pinned, and every way of changing or closing a menu clicks that drawer's own toggle. The drawer itself
+// never moves in the page; css/menu.css places it over the frame's content area.
+import { saveSettingsDebounced } from '../../../../script.js';
+import { extension_settings } from '../../../extensions.js';
 
 export const id = 'menu';
 
-export const defaults = {};
+export const defaults = { menuPanel: false, menuLast: 'ai-config-button' };
 
 export const lookKeys = {};
 
+const MODULE = 'arcaneForgeUi';
+const DESKTOP = '(min-width: 1001px)';
+const FRAME_ID = 'forge-menu';
+const TITLE_ID = 'forge-menu-title';
+const CHARACTERS = 'rightNavHolder';
+const DRAWERS = '#top-settings-holder > .drawer';
+const OPEN_MENU = '#top-settings-holder > .drawer > .drawer-content.openDrawer:not(.pinnedOpen)';
+const SVG = 'http://www.w3.org/2000/svg';
+
+// The sections in the order the nav lists them, with their short labels (bible section 5.2). A drawer that
+// another extension adds comes after these, under its own icon's title.
+const SECTIONS = new Map([
+    ['rightNavHolder', 'Characters'],
+    ['ai-config-button', 'AI response'],
+    ['sys-settings-button', 'Connection'],
+    ['advanced-formatting-button', 'Formatting'],
+    ['WI-SP-button', 'Lorebooks'],
+    ['persona-management-button', 'Personas'],
+    ['backgrounds-button', 'Backgrounds'],
+    ['extensions-settings-button', 'Extensions'],
+    ['user-settings-button', 'Settings'],
+]);
+
+// Only what is needed to undo the feature: the watcher on the top bar, and a pending hide
+let observer = null;
+let hideTimer = 0;
+
 export function settingsHtml(s) {
-    return '';
+    return `
+                <h4>Menus</h4>
+                <label class="checkbox_label" for="forge-ui-menu-panel">
+                    <input type="checkbox" id="forge-ui-menu-panel"${s.menuPanel ? ' checked' : ''}>
+                    <span>Menus open in one centred panel (desktop)</span>
+                </label>
+`;
 }
 
-export function bindSettings($root, s, save) {}
+export function bindSettings($root, s, save) {
+    $root.find('#forge-ui-menu-panel').on('change', function () {
+        s.menuPanel = this.checked;
+        save();
+    });
+}
 
-export function apply(s) {}
+export function apply(s) {
+    const active = Boolean(s.enabled && s.menuPanel) && window.matchMedia(DESKTOP).matches;
+    if (active) turnOn();
+    else turnOff();
+}
+
+function turnOn() {
+    document.body.classList.add('forge-menu');
+    if (!document.getElementById(FRAME_ID)) document.body.append(buildFrame());
+    const holder = document.getElementById('top-settings-holder');
+    if (!observer && holder) {
+        // SillyTavern opens and closes a menu by switching classes on its .drawer-content
+        observer = new MutationObserver((records) => {
+            if (records.some((r) => r.target.matches?.('#top-settings-holder > .drawer > .drawer-content'))) sync();
+        });
+        observer.observe(holder, { subtree: true, attributes: true, attributeFilter: ['class'] });
+    }
+    sync();
+}
+
+function turnOff() {
+    observer?.disconnect();
+    observer = null;
+    clearTimeout(hideTimer);
+    document.getElementById(FRAME_ID)?.remove();
+    document.body.classList.remove('forge-menu');
+}
+
+// Shows the frame while a menu is open and hides it when none is. Worked out from the page every time.
+function sync(now = false) {
+    const frame = document.getElementById(FRAME_ID);
+    if (!frame) return;
+    clearTimeout(hideTimer);
+    const drawer = openDrawer();
+    if (drawer) {
+        show(frame, drawer);
+        return;
+    }
+    if (frame.hidden) return;
+    // Moving to another menu, SillyTavern closes the open one, waits its animation duration, then opens the
+    // next. Hiding at once would make the frame blink between sections, so a close it did not come from the
+    // frame is given twice that long to turn out to be a change of section.
+    if (now) frame.hidden = true;
+    else hideTimer = setTimeout(() => sync(true), animationMs() * 2);
+}
+
+function show(frame, drawer) {
+    const nav = frame.querySelector('.forge-menu-nav');
+    const key = keyOf(drawer);
+    // Rebuilt each time the frame opens, so a drawer another extension added since is listed too
+    if (frame.hidden || ![...nav.children].some((b) => b.dataset.forgeDrawer === key)) {
+        nav.replaceChildren(...sections().map(sectionButton));
+    }
+    for (const button of nav.children) {
+        if (button.dataset.forgeDrawer === key) button.setAttribute('aria-current', 'page');
+        else button.removeAttribute('aria-current');
+    }
+    frame.querySelector('.forge-menu-title').textContent = label(drawer);
+    // The menu stays where it is in the page, outside the dialog; this hands it to the dialog for screen readers
+    const panel = frame.querySelector('.forge-menu-panel');
+    const menuId = drawer.querySelector(':scope > .drawer-content')?.id;
+    if (menuId) panel.setAttribute('aria-owns', menuId);
+    else panel.removeAttribute('aria-owns');
+    frame.hidden = false;
+    remember(drawer);
+}
+
+// The section the Menu button opens next time (bible section 7). Characters has a button of its own.
+function remember(drawer) {
+    const s = extension_settings[MODULE];
+    if (!s || !drawer.id || drawer.id === CHARACTERS || s.menuLast === drawer.id) return;
+    s.menuLast = drawer.id;
+    saveSettingsDebounced();
+}
+
+function buildFrame() {
+    const frame = el('div', { id: FRAME_ID });
+    frame.hidden = true;
+    const backdrop = el('div', { class: 'forge-menu-backdrop' });
+    const panel = el('div', { class: 'forge-menu-panel', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': TITLE_ID });
+    const nav = el('nav', { class: 'forge-menu-nav', 'aria-label': 'Menus' });
+    const head = el('div', { class: 'forge-menu-head' });
+    const title = el('h2', { id: TITLE_ID, class: 'forge-menu-title' });
+    const close = el('button', { type: 'button', class: 'forge-menu-close', 'aria-label': 'Close', title: 'Close' });
+    close.append(lineIcon('M6 6l12 12 M18 6L6 18'));
+    head.append(title, close);
+    panel.append(nav, head);
+    frame.append(backdrop, panel);
+
+    // SillyTavern closes an unpinned drawer on any press outside it (the handler in script.js commented
+    // "This autocloses open drawers"). The frame is outside the drawer, so its presses go no further.
+    for (const type of ['mousedown', 'touchstart']) {
+        frame.addEventListener(type, (event) => event.stopPropagation(), { passive: true });
+    }
+    backdrop.addEventListener('click', closeMenu);
+    close.addEventListener('click', closeMenu);
+    nav.addEventListener('click', (event) => {
+        const button = event.target.closest('.forge-menu-section');
+        if (button) openSection(button.dataset.forgeDrawer);
+    });
+    return frame;
+}
+
+// The close button and the backdrop close the menu with its own toggle; the frame then goes at once
+function closeMenu() {
+    toggleOf(openDrawer())?.click();
+    sync(true);
+}
+
+// A nav button opens its menu with that drawer's own toggle; SillyTavern closes the other one itself
+function openSection(key) {
+    const drawer = drawerByKey(key);
+    if (!drawer || drawer.querySelector(':scope > .drawer-content')?.classList.contains('openDrawer')) return;
+    toggleOf(drawer)?.click();
+}
+
+function sectionButton(drawer) {
+    const button = el('button', { type: 'button', class: 'forge-menu-section', 'data-forge-drawer': keyOf(drawer) });
+    const title = nativeTitle(drawer);
+    if (title) button.title = title;
+    const text = el('span', { class: 'forge-menu-label' });
+    text.textContent = label(drawer);
+    button.append(sectionIcon(drawer), text);
+    return button;
+}
+
+// The icon the top bar shows for the drawer: Forge's line icon, which style.css draws as a mask from
+// --forge-top-icon, or, for a drawer Forge has no icon for, the drawer's own icon classes.
+function sectionIcon(drawer) {
+    const native = iconOf(drawer);
+    const icon = el('span', { class: 'forge-menu-icon', 'aria-hidden': 'true' });
+    const mask = native ? getComputedStyle(native).getPropertyValue('--forge-top-icon').trim() : '';
+    if (mask) {
+        icon.classList.add('forge-menu-mask');
+        icon.style.setProperty('--forge-menu-icon', mask);
+    } else if (native) {
+        icon.classList.add('forge-menu-glyph', ...[...native.classList].filter((name) => /^fa(-|$)/.test(name)));
+    }
+    return icon;
+}
+
+function lineIcon(path) {
+    const svg = document.createElementNS(SVG, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+    svg.classList.add('forge-menu-svg');
+    const line = document.createElementNS(SVG, 'path');
+    line.setAttribute('d', path);
+    svg.append(line);
+    return svg;
+}
+
+function el(tag, attributes) {
+    const element = document.createElement(tag);
+    for (const [name, value] of Object.entries(attributes)) element.setAttribute(name, value);
+    return element;
+}
+
+// ---------- Reading SillyTavern's drawers (looked up each time, never kept) ----------
+
+// The drawer whose menu the frame shows: open and not pinned
+function openDrawer() {
+    return document.querySelector(OPEN_MENU)?.parentElement ?? null;
+}
+
+// Every drawer, the ones the bible names first and in its order, then any others in page order
+function sections() {
+    const all = [...document.querySelectorAll(DRAWERS)];
+    const known = [...SECTIONS.keys()].map((drawerId) => all.find((d) => d.id === drawerId)).filter(Boolean);
+    return [...known, ...all.filter((d) => !SECTIONS.has(d.id))];
+}
+
+// A drawer is found again by its id, or by its place among the drawers when it has none
+function keyOf(drawer) {
+    return drawer.id || `#${[...document.querySelectorAll(DRAWERS)].indexOf(drawer)}`;
+}
+
+function drawerByKey(key) {
+    const all = [...document.querySelectorAll(DRAWERS)];
+    return key?.startsWith('#') ? all[Number(key.slice(1))] : all.find((d) => d.id === key);
+}
+
+function toggleOf(drawer) {
+    return drawer?.querySelector(':scope > .drawer-toggle') ?? null;
+}
+
+function iconOf(drawer) {
+    return drawer.querySelector(':scope > .drawer-toggle .drawer-icon');
+}
+
+// SillyTavern's own (translated) name for the drawer. Backgrounds keeps it on the toggle, not the icon.
+function nativeTitle(drawer) {
+    return iconOf(drawer)?.title || toggleOf(drawer)?.title || '';
+}
+
+function label(drawer) {
+    return SECTIONS.get(drawer.id) ?? (nativeTitle(drawer) || drawer.id);
+}
+
+// SillyTavern's animation duration in ms (0 when its Reduced Motion setting is on)
+function animationMs() {
+    return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--animation-duration')) || 0;
+}

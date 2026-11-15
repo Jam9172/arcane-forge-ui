@@ -5,3 +5,207 @@
    Every rule in this file starts with body.forge-ui.forge-menu (or body.forge-ui.forge-menu-buttons for
    the round buttons), so with the panel off (or the main switch off) none of it reaches the page.
    Values come from css/tokens.css. */
+
+/* Where the panel sits: centred in the window at the size the tokens give. The open menu is placed from
+   the same two figures, so the menu and the panel always line up. */
+body.forge-ui.forge-menu {
+    --forge-menu-top: calc((100dvh - var(--forge-menu-h)) / 2);
+    --forge-menu-left: calc((100vw - var(--forge-menu-w)) / 2);
+}
+
+/* ---------- The frame: a backdrop and the panel ---------- */
+
+/* The page under the panel, dimmed to 55% black (bible section 5.2) */
+body.forge-ui.forge-menu #forge-menu .forge-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: var(--forge-z-backdrop);
+    background: rgb(0 0 0 / 55%);
+}
+
+/* The nav runs down the left, the head across the top right, and the open menu fills the rest. The
+   1px is the panel's edge: taking it off the first column and row makes the nav --forge-menu-nav wide and
+   the head --forge-menu-head tall, measured from the panel's outside, as the menu's place below assumes. */
+body.forge-ui.forge-menu #forge-menu .forge-menu-panel {
+    position: fixed;
+    top: var(--forge-menu-top);
+    left: var(--forge-menu-left);
+    z-index: var(--forge-z-frame);
+    box-sizing: border-box;
+    width: var(--forge-menu-w);
+    height: var(--forge-menu-h);
+    display: grid;
+    grid-template-columns: calc(var(--forge-menu-nav) - 1px) minmax(0, 1fr);
+    grid-template-rows: calc(var(--forge-menu-head) - 1px) minmax(0, 1fr);
+    overflow: hidden;
+    background: var(--forge-card);
+    border: 1px solid var(--forge-bar-line);
+    border-radius: var(--forge-radius-lg);
+    box-shadow: var(--forge-shadow);
+    color: var(--forge-text);
+}
+
+body.forge-ui.forge-menu #forge-menu .forge-menu-nav {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--forge-space-1);
+    box-sizing: border-box;
+    min-height: 0;
+    padding: var(--forge-space-3) var(--forge-space-2);
+    overflow-y: auto;
+    border-right: 1px solid var(--forge-border);
+}
+
+body.forge-ui.forge-menu #forge-menu .forge-menu-section {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: var(--forge-space-3);
+    box-sizing: border-box;
+    width: 100%;
+    min-height: var(--forge-control);
+    margin: 0;
+    padding: 0 var(--forge-space-3);
+    border: 0;
+    border-radius: var(--forge-radius-sm);
+    background: transparent;
+    color: var(--forge-soft);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+body.forge-ui.forge-menu #forge-menu .forge-menu-section:hover {
+    background: var(--forge-active);
+    color: var(--forge-text);
+}
+
+body.forge-ui.forge-menu #forge-menu .forge-menu-section[aria-current="page"] {
+    background: var(--forge-ember);
+    color: var(--forge-bg);
+}
+
+body.forge-ui.forge-menu #forge-menu .forge-menu-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Icons are drawn at 18px (bible section 4, Icons), brass, and take the text colour on the current section */
+body.forge-ui.forge-menu #forge-menu .forge-menu-icon {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    color: var(--forge-brass);
+}
+
+body.forge-ui.forge-menu #forge-menu .forge-menu-section[aria-current="page"] .forge-menu-icon {
+    color: inherit;
+}
+
+/* The top bar's own Forge icon, from the mask menu.js copies off it */
+body.forge-ui.forge-menu #forge-menu .forge-menu-icon.forge-menu-mask {
+    background-color: currentColor;
+    -webkit-mask: var(--forge-menu-icon) center / contain no-repeat;
+    mask: var(--forge-menu-icon) center / contain no-repeat;
+}
+
+/* A drawer Forge has no icon for keeps its own icon-font glyph */
+body.forge-ui.forge-menu #forge-menu .forge-menu-icon.forge-menu-glyph {
+    font-size: 18px;
+    line-height: 18px;
+    text-align: center;
+}
+
+body.forge-ui.forge-menu #forge-menu .forge-menu-head {
+    grid-column: 2;
+    grid-row: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--forge-space-3);
+    box-sizing: border-box;
+    min-width: 0;
+    padding: 0 var(--forge-space-3) 0 var(--forge-space-5);
+    border-bottom: 1px solid var(--forge-border);
+}
+
+body.forge-ui.forge-menu #forge-menu .forge-menu-title {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--forge-heading);
+    font-size: 1.15em;
+    font-weight: 700;
+    color: var(--forge-brass);
+}
+
+body.forge-ui.forge-menu #forge-menu .forge-menu-close {
+    flex: none;
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    width: var(--forge-control);
+    height: var(--forge-control);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--forge-radius-sm);
+    background: transparent;
+    color: var(--forge-brass);
+    cursor: pointer;
+}
+
+body.forge-ui.forge-menu #forge-menu .forge-menu-close:hover {
+    background: var(--forge-active);
+    color: var(--forge-text);
+}
+
+/* Line icons: 24 by 24, stroke 1.8, round caps and joins, drawn at 18px (bible section 4, Icons) */
+body.forge-ui.forge-menu #forge-menu .forge-menu-svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* ---------- The open menu, placed over the frame's content area ----------
+   SillyTavern's own drawer stays where it is in the page (inside #top-settings-holder, whose stacking layer
+   is above the frame) and is fixed over the area right of the nav and below the head, scrolling inside
+   itself. Nothing between it and the window establishes a containing block for fixed elements except
+   <html>, which SillyTavern gives translateZ(0) and which is exactly the window. Pinned panels keep
+   their own place. The panel supplies the fill, edge, corners and shadow, so the drawer drops its own;
+   its bottom right corner follows the panel's, inside the 1px edge. It neither animates nor can be
+   dragged or resized here. */
+body.forge-ui.forge-menu #top-settings-holder > .drawer > .drawer-content:not(.pinnedOpen) {
+    position: fixed;
+    /* !important on the place and size: with MovingUI on, SillyTavern writes a dragged panel's top, left,
+       right, bottom, margin, width and height inline (dragElement and loadMovingUIState) */
+    top: calc(var(--forge-menu-top) + var(--forge-menu-head)) !important;
+    left: calc(var(--forge-menu-left) + var(--forge-menu-nav)) !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: calc(var(--forge-menu-w) - var(--forge-menu-nav) - 1px) !important;
+    height: calc(var(--forge-menu-h) - var(--forge-menu-head) - 1px) !important;
+    min-width: 0;
+    max-height: none;
+    margin: 0 !important;
+    border: 0;
+    border-radius: 0 0 calc(var(--forge-radius-lg) - 1px) 0;
+    background: transparent;
+    box-shadow: none;
+    resize: none;
+    transition: none;
+}
+
+body.forge-ui.forge-menu #top-settings-holder > .drawer > .drawer-content:not(.pinnedOpen) > .drag-grabber {
+    display: none;
+}
