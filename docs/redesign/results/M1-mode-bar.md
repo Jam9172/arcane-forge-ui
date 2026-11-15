@@ -18,11 +18,58 @@
 
 ## Test output
 
-**The sandbox stopped answering partway through the last `node tests/run.mjs`** (`curl` to http://localhost:8000/ was refused). It was still down after two five-minute waits. Helpers may not start it, so the full run has to be repeated once it is back.
-
-The current version of the test passed at phone size:
+The final run, on the committed code from `4a2f173`:
 
 ```
+$ node tests/browser/modes-bar.mjs
+ok   off: no #forge-modes and no forge-modes class
+ok   on: #forge-modes and body.forge-modes are there
+ok   four buttons whose text is Do, Say, Story, See, in that order (Do, Say, Story, See)
+ok   a radio group labelled "How to send" of type="button" role="radio" buttons (radiogroup, How to send)
+ok   each button has its title (Do: what you do | Say: what you say out loud | Story: what happens next, as narration | See: look at something)
+ok   each button has an 18px line icon on a 24 by 24 grid (0 0 24 24|18x18|none|1.8px|true)
+ok   nothing is selected at first (false,false,false,false)
+ok   the bar is inside #send_form and its next element sibling is #nonQRFormItems
+ok   with Quick Reply's bar at the start of #send_form, the bar is still right before #nonQRFormItems (stand-in)
+ok   on screen, Quick Reply's bar is above ours (ours at 809, Quick Reply ends at 801, its order 1)
+ok   a row added after ours goes above it on the next apply
+ok   the bar's bottom edge is above the message box and within 16px of it (8px)
+ok   every button is at least 36px tall (36, 36, 36, 36)
+ok   the bar is as wide as its buttons and sits at the left (bar 322px at 9px in)
+ok   the labels are at least 4.5 to 1 against the track, selected or not (7.68 and 5.82)
+ok   a click on Do checks Do and only Do (true,false,false,false)
+ok   the setting is "do" ("do")
+ok   the selected button is bold on an ember fill (700, rgb(232, 98, 44))
+ok   the message box asks "What do you do?" (What do you do?)
+ok   the choice is saved
+ok   a second click on Do clears it (false,false,false,false)
+ok   the setting is "" ("")
+ok   the message box has SillyTavern's own placeholder again (Not connected to API!)
+ok   with Say selected, a re-apply keeps Say selected (false,true,false,false)
+ok   the message box asks "What do you say?" (What do you say?)
+ok   a placeholder SillyTavern writes while a mode is picked gives way to ours (What do you say?)
+ok   clearing the mode gives back what SillyTavern wrote last (Written by SillyTavern)
+ok   the selected button is the one Tab stop (say)
+ok   Right moves to the next button (story)
+ok   Left moves back (do)
+ok   Left from Do goes round to See (see)
+ok   Space picks the focused mode (false,false,false,true)
+ok   Enter on the selected mode clears it (false,false,false,false)
+ok   the arrow keys stop at the bar, so they swipe nothing (0 reached the page)
+ok   with nothing selected, Do is the Tab stop
+ok   off again: the element and the class are gone
+ok   the placeholder is what it was before the bar was turned on (Not connected to API!)
+ok   the message box row is where it was (send_form > file_form + #nonQRFormItems)
+ok   the choice is kept for next time
+ok   off, nothing of ours rewrites the placeholder (Written by SillyTavern)
+ok   main switch off with the modes on: no bar and no class
+ok   main switch off: the placeholder is SillyTavern's (Not connected to API!)
+ok   the settings have a Message box section between Panels and Keyboard (Text, Panels, Message box, Keyboard, Colours, Share)
+ok   its checkbox reads "Do, Say, Story and See buttons above the message box", unticked (Message box: Do, Say, Story and See buttons above the message box)
+ok   ticking it turns the bar on and saves the switch
+ok   unticking it takes the bar away
+ok   no script errors
+
 $ node tests/browser/modes-bar.mjs phone
 ok   off: no #forge-modes and no forge-modes class
 ok   on: #forge-modes and body.forge-modes are there
@@ -74,74 +121,17 @@ ok   its checkbox reads "Do, Say, Story and See buttons above the message box", 
 ok   ticking it turns the bar on and saves the switch
 ok   unticking it takes the bar away
 ok   no script errors
-```
 
-The desktop run below used the test as it stood just before two small test-only edits, which are in the phone run above. Those edits added the check "clearing the mode gives back what SillyTavern wrote last" and made the Quick Reply check stricter (it now fails if the stand-in is not drawn, and it prints the stand-in's `order`). No code in `modes.js` or `css/modes.css` changed after this run, and the current test could not be run at desktop size before the sandbox went down.
-
-```
-$ node tests/browser/modes-bar.mjs
-ok   off: no #forge-modes and no forge-modes class
-ok   on: #forge-modes and body.forge-modes are there
-ok   four buttons whose text is Do, Say, Story, See, in that order (Do, Say, Story, See)
-ok   a radio group labelled "How to send" of type="button" role="radio" buttons (radiogroup, How to send)
-ok   each button has its title (Do: what you do | Say: what you say out loud | Story: what happens next, as narration | See: look at something)
-ok   each button has an 18px line icon on a 24 by 24 grid (0 0 24 24|18x18|none|1.8px|true)
-ok   nothing is selected at first (false,false,false,false)
-ok   the bar is inside #send_form and its next element sibling is #nonQRFormItems
-ok   with Quick Reply's bar at the start of #send_form, the bar is still right before #nonQRFormItems (stand-in)
-ok   on screen, Quick Reply's bar is above ours (ours at 809, Quick Reply ends at 801)
-ok   a row added after ours goes above it on the next apply
-ok   the bar's bottom edge is above the message box and within 16px of it (8px)
-ok   every button is at least 36px tall (36, 36, 36, 36)
-ok   the bar is as wide as its buttons and sits at the left (bar 322px at 9px in)
-ok   the labels are at least 4.5 to 1 against the track, selected or not (7.68 and 5.82)
-ok   a click on Do checks Do and only Do (true,false,false,false)
-ok   the setting is "do" ("do")
-ok   the selected button is bold on an ember fill (700, rgb(232, 98, 44))
-ok   the message box asks "What do you do?" (What do you do?)
-ok   the choice is saved
-ok   a second click on Do clears it (false,false,false,false)
-ok   the setting is "" ("")
-ok   the message box has SillyTavern's own placeholder again (Not connected to API!)
-ok   with Say selected, a re-apply keeps Say selected (false,true,false,false)
-ok   the message box asks "What do you say?" (What do you say?)
-ok   a placeholder SillyTavern writes while a mode is picked gives way to ours (What do you say?)
-ok   the selected button is the one Tab stop (say)
-ok   Right moves to the next button (story)
-ok   Left moves back (do)
-ok   Left from Do goes round to See (see)
-ok   Space picks the focused mode (false,false,false,true)
-ok   Enter on the selected mode clears it (false,false,false,false)
-ok   the arrow keys stop at the bar, so they swipe nothing (0 reached the page)
-ok   with nothing selected, Do is the Tab stop
-ok   off again: the element and the class are gone
-ok   the placeholder is what it was before the bar was turned on (Not connected to API!)
-ok   the message box row is where it was (send_form > file_form + #nonQRFormItems)
-ok   the choice is kept for next time
-ok   off, nothing of ours rewrites the placeholder (Written by SillyTavern)
-ok   main switch off with the modes on: no bar and no class
-ok   main switch off: the placeholder is SillyTavern's (Not connected to API!)
-ok   the settings have a Message box section between Panels and Keyboard (Text, Panels, Message box, Keyboard, Colours, Share)
-ok   its checkbox reads "Do, Say, Story and See buttons above the message box", unticked (Message box: Do, Say, Story and See buttons above the message box)
-ok   ticking it turns the bar on and saves the switch
-ok   unticking it takes the bar away
-ok   no script errors
-```
-
-The full run was cut short by the sandbox:
-
-```
 $ node tests/run.mjs
-(foundation and foundation phone passed, then the sandbox went down)
-FAIL     modes-bar  stopped with an error or printed no checks (exit 1), 1s
-               ... navigating to "http://localhost:8000/", waiting until "load"
-FAIL     modes-bar phone  stopped with an error or printed no checks (exit 1), 1s
-               ... navigating to "http://localhost:8000/", waiting until "load"
+ok       foundation  18 checks, 14s
+ok       foundation phone  15 checks, 13s
+ok       harness  8 checks, 11s
+ok       harness phone  8 checks, 11s
+ok       modes-bar  47 checks, 19s
+ok       modes-bar phone  50 checks, 19s
 
-2 passed, 4 failed: harness, harness phone, modes-bar, modes-bar phone
+6 passed, 0 failed
 ```
-
-`harness` failed as well, which shows the set-up was broken and not this batch: every failure was the page not loading from the sandbox.
 
 A screenshot of the message box at both sizes, taken from a scratch script outside the repository with the Forge Tester chat, showed the bar under RPG Companion's row of plot buttons and right above the message box. Say was shown bold on ember, and the placeholder read "What do you say?".
 
@@ -192,5 +182,5 @@ None.
 
 ## Not done
 
-- **The check commands have not all passed in one go.** The sandbox stopped answering during the final `node tests/run.mjs`. Still to run once it is back: `node tests/browser/modes-bar.mjs` (the current test, at desktop size) and `node tests/run.mjs`. Everything else in the brief is built.
+- Nothing from the brief.
 - TauriTavern's expanded message editor (`tt-chat-input`, bible section 8) was not looked at. This brief does not change what is sent, so how the modes behave while that editor is open is left to M2.
