@@ -7,8 +7,8 @@ States: `todo`, `doing`, `checked` (a second agent passed it), `merged`, `blocke
 | Batch | State | Commit on `overhaul` | Note |
 |---|---|---|---|
 | `00-foundation` | merged | `bc524f3` | Checked PASS. Main switch off still leaves Forge UI's older body classes, inline properties and fonts link (true before this batch); left for integration. |
-| `M1-mode-bar` | doing | | |
-| `M2-do-and-say` | todo | | |
+| `M1-mode-bar` | merged | `6316dc0` | Checked PASS. A mode's question hides "Not connected to API!" in the message box (owner to see). |
+| `M2-do-and-say` | doing | | |
 | `M3-story-and-see` | todo | | |
 | `S1-chat-column` | merged | `708247d` | Checked PASS. For I1: a layer token for `#forge-stage` (raw `z-index: -1`); RPG Companion panel covers the column. |
 | `S2-spine-and-width` | doing | | |
