@@ -134,8 +134,12 @@ function apply() {
         body.style.setProperty(c.variable, s.colors[key]);
     }
     applyAiLayout();
-    // Each feature decides for itself whether it is active. One that fails must not stop the others or the
-    // rest of the extension; its error is still reported.
+    applyFeatures(s);
+}
+
+// Each feature decides for itself whether it is active. One that fails must not stop the others or the
+// rest of the extension; its error is still reported.
+function applyFeatures(s) {
     for (const feature of FEATURES) {
         try {
             feature.apply(s);
@@ -523,7 +527,7 @@ function bindSettings($root) {
     $root.find('#forge-ui-reset').on('click', () => {
         // Each feature first takes itself off with the settings it had, so it can undo what only they record
         // (the menu panel's pins); then every feature setting goes back to its default with the rest.
-        for (const feature of FEATURES) feature.apply({ ...s, enabled: false });
+        applyFeatures({ ...s, enabled: false });
         extension_settings[MODULE] = structuredClone({ ...featureDefaults(), ...defaults, enabled: s.enabled, aiLayout: s.aiLayout, userLayout: s.userLayout, menuCards: s.menuCards, extCards: s.extCards, icons: s.icons, swipesRight: s.swipesRight, aiHelp: s.aiHelp, aiDescriptions: s.aiDescriptions, omitParamsBackup: s.omitParamsBackup ?? {}, savedPalettes: s.savedPalettes ?? {} });
         save();
         mountSettings();

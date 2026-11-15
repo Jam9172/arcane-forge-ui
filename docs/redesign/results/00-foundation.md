@@ -159,3 +159,9 @@ Nothing.
 - **Import differs slightly between Forge UI's keys and feature keys:** Forge UI's own numbers accept a numeric string (`Number(look[key])`), but feature numbers do not. The builder wrote this down, and it is within the brief's "ignores anything invalid".
 - **Reset turns feature switches off:** Reset sets the feature switches (`layout`, `menuPanel`, `modes`) back to off, while it keeps Forge UI's own switches. The brief and I3 ("every new key back to its default") both ask for this, so it is correct as built.
 - **SillyTavern's own Reduced Motion setting:** bible section 4 wants `--forge-fast` at 0ms when this setting is on too. `tokens.css` handles only the media query. P4's brief (item 6, test 9) owns the setting, so leaving it to P4 is consistent with the plan.
+
+## After the check
+
+The lead acted on the checker's second note before merging: Reset's first pass now goes through the same guarded `applyFeatures(s)` as `apply()`, so a feature that throws there no longer stops Reset. Nothing else changed. `node tests/run.mjs` passed again (4 passed, 0 failed), and the temporary probe from "Built" passed all 12 checks again, Reset ordering included.
+
+The checker's first note (Forge UI's own classes, inline `--forge-*` properties and the fonts link stay on the page with the main switch off) was already true on `overhaul` before this batch and is left for integration.
