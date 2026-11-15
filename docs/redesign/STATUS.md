@@ -7,13 +7,13 @@ States: `todo`, `doing`, `checked` (a second agent passed it), `merged`, `blocke
 | Batch | State | Commit on `overhaul` | Note |
 |---|---|---|---|
 | `00-foundation` | merged | `bc524f3` | Checked PASS. Main switch off still leaves Forge UI's older body classes, inline properties and fonts link (true before this batch); left for integration. |
-| `M1-mode-bar` | todo | | |
+| `M1-mode-bar` | doing | | |
 | `M2-do-and-say` | todo | | |
 | `M3-story-and-see` | todo | | |
-| `S1-chat-column` | todo | | |
-| `S2-spine-and-width` | todo | | |
+| `S1-chat-column` | merged | `708247d` | Checked PASS. For I1: a layer token for `#forge-stage` (raw `z-index: -1`); RPG Companion panel covers the column. |
+| `S2-spine-and-width` | doing | | |
 | `S3-stage-content` | todo | | |
-| `P1-menu-frame` | todo | | |
+| `P1-menu-frame` | doing | | |
 | `P2-buttons-and-top-bar` | todo | | |
 | `P3-characters-and-pins` | todo | | |
 | `P4-keys-and-motion` | todo | | |
