@@ -209,3 +209,87 @@ body.forge-ui.forge-menu #top-settings-holder > .drawer > .drawer-content:not(.p
 body.forge-ui.forge-menu #top-settings-holder > .drawer > .drawer-content:not(.pinnedOpen) > .drag-grabber {
     display: none;
 }
+
+/* ---------- The two round buttons, in place of the top bar ----------
+   menu.js sets forge-menu-buttons on body only while the panel is active and the buttons are on. */
+
+/* The top bar gives its space back. SillyTavern sizes the icon holder, the chat column's top and height,
+   the docked side panels, the toasts and several popups from --topBarBlockSize, so at 0 they all start at
+   the top of the window. The strip behind the icons is sized separately (by --bottomFormBlockSize) and is
+   hidden instead. */
+body.forge-ui.forge-menu-buttons {
+    --topBarBlockSize: 0px;
+}
+
+body.forge-ui.forge-menu-buttons #top-bar {
+    display: none;
+}
+
+/* The icons are hidden but stay in the page, so the buttons and the panel can still click them. The holder
+   (now 0px tall) catches no clicks; the menus inside it still do, in the panel. */
+body.forge-ui.forge-menu-buttons #top-settings-holder {
+    pointer-events: none;
+}
+
+body.forge-ui.forge-menu-buttons #top-settings-holder > .drawer > .drawer-toggle {
+    display: none;
+}
+
+body.forge-ui.forge-menu-buttons #top-settings-holder > .drawer > .drawer-content {
+    pointer-events: auto;
+}
+
+/* Top right of the window, below the panel's backdrop (bible section 5.2) */
+body.forge-ui.forge-menu-buttons #forge-menu-buttons {
+    position: fixed;
+    top: var(--forge-space-3);
+    right: var(--forge-space-3);
+    z-index: var(--forge-z-buttons);
+    display: flex;
+    gap: var(--forge-space-2);
+}
+
+body.forge-ui.forge-menu-buttons #forge-menu-buttons .forge-menu-round {
+    position: relative;
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    width: var(--forge-round);
+    height: var(--forge-round);
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--forge-border);
+    border-radius: var(--forge-radius-pill);
+    background: var(--forge-card);
+    color: var(--forge-brass);
+    cursor: pointer;
+}
+
+/* The same hover as the panel's close button */
+body.forge-ui.forge-menu-buttons #forge-menu-buttons .forge-menu-round:hover {
+    background: var(--forge-active);
+    color: var(--forge-text);
+}
+
+/* Line icons: 24 by 24, stroke 1.8, round caps and joins, drawn at 18px (bible section 4, Icons) */
+body.forge-ui.forge-menu-buttons #forge-menu-buttons .forge-menu-svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* No API connection: an 8px dot (bible section 5.2) on the Menu button's top right, over its edge */
+body.forge-ui.forge-menu-buttons #forge-menu-buttons .forge-menu-dot {
+    position: absolute;
+    top: var(--forge-space-1);
+    right: var(--forge-space-1);
+    width: 8px;
+    height: 8px;
+    border-radius: var(--forge-radius-pill);
+    background: var(--forge-danger);
+    pointer-events: none;
+}
