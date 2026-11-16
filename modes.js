@@ -100,7 +100,7 @@ export function settingsHtml(s) {
                 </label>
                 <details id="forge-ui-modes-wording">
                     <summary>Advanced: my own wording</summary>${fields}
-                    <small>{{input}} is what you typed (tidied, when tidying is on). Leave a box empty to use the wording shown in it.</small>
+                    <small>{{input}} is what you typed (tidied, when tidying is on). Leave a box empty to use the wording shown in it. A wording without {{input}} is ignored, and the one shown is used instead.</small>
                 </details>
 `;
 }
@@ -280,29 +280,61 @@ function generating() {
 }
 
 // Both listeners sit on document in the capture phase, so they run before SillyTavern's own (its Enter
-// handler is on document and its click handler on #send_but). They hold no element: the message box and
-// the send button are looked up from each event. On when the modes are active, off when not; adding or
-// removing the same function twice does nothing, so apply() can call this every time.
+// handlers, scripts/keyboard.js's included, are on document and its click handler on #send_but). They hold
+// no element: the message box and the send button are looked up from each event. On when the modes are
+// active, off when not; adding or removing the same function twice does nothing, so apply() can call this
+// every time.
 function listen(on) {
     const method = on ? 'addEventListener' : 'removeEventListener';
     document[method]('keydown', onSendKey, true);
     document[method]('click', onSendClick, true);
 }
 
-// Enter in the message box, by SillyTavern's own rule. A key pressed by a script (not trusted) is left
-// alone. TauriTavern also ignores keyCode 229 (some WebKit versions send the key that ends an IME
-// composition after compositionend); it is skipped here too, so the box is never rewritten by a key that
-// does not send.
+// A key the person pressed (trusted) in the message box or on the send button. A key pressed by a script is
+// left alone.
 function onSendKey(event) {
-    if (!event.isTrusted || event.key !== 'Enter') return;
+    if (!event.isTrusted || !(event.target instanceof Element)) return;
+    if (event.target.id === 'send_textarea') onBoxKey(event);
+    else {
+        const button = event.target.closest('#send_but');
+        if (button) onSendButtonKey(event, button);
+    }
+}
+
+// Enter in the message box, by SillyTavern's own rule. TauriTavern also ignores keyCode 229 (some WebKit
+// versions send the key that ends an IME composition after compositionend); it is skipped here too, so the
+// box is never rewritten by a key that does not send.
+function onBoxKey(event) {
+    if (event.key !== 'Enter') return;
     if (event.isComposing || event.keyCode === 229 || event.shiftKey || event.ctrlKey || event.altKey) return;
-    if (!(event.target instanceof Element) || event.target.id !== 'send_textarea') return;
     if (!sendsOnEnter()) return;
     shapeMessage();
 }
 
+// The send button from the keyboard (Tab from the message box lands on it).
+//  - Enter: SillyTavern's scripts/keyboard.js turns it into a click() from code, which onSendClick cannot
+//    tell from a script's. So the box is shaped here, on the person's own key, just before; keyboard.js's
+//    own test decides (no Alt, Ctrl or Shift, and the button not .disabled), so it is shaped only when that
+//    click follows.
+//  - Space: SillyTavern gives the button nothing for it. While the modes are on, Space sends as Enter does,
+//    as it would on any button: the box is shaped, then the button is clicked, as keyboard.js does for
+//    Enter. The page does not scroll, and a held key sends once.
+function onSendButtonKey(event, button) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    if (event.altKey || event.ctrlKey || event.shiftKey || button.classList.contains('disabled')) return;
+    if (event.key === 'Enter') {
+        shapeMessage();
+        return;
+    }
+    event.preventDefault();
+    if (event.repeat) return;
+    shapeMessage();
+    button.click();
+}
+
 // A click or tap on the send button. Quick Reply and other scripts click it from code (not trusted); what
-// they send is never touched.
+// they send is never touched. The click keyboard.js makes for Enter is not trusted either; onSendButtonKey
+// has shaped the box by then.
 function onSendClick(event) {
     if (!event.isTrusted || !(event.target instanceof Element) || !event.target.closest('#send_but')) return;
     shapeMessage();

@@ -358,3 +358,178 @@ Scratch scripts outside the repository, run through the test helper. Only the Fo
 4. **A wording without `{{input}}` is ignored silently.** The settings note does not say so.
 
 Only problem 1 makes it FAIL.
+
+## Fixes after the check
+
+### What failed
+
+Check problem 1. With Do or Say picked, a send made from the send button by keyboard went out as typed.
+
+- Tab from the message box lands on `#send_but`. SillyTavern makes it an `.interactable` with `tabindex="0"`.
+- Enter there is turned into a `click()` from code by `handleGlobalKeyDown` in SillyTavern's `scripts/keyboard.js`. That click is not trusted, and `onSendClick` skipped untrusted clicks, so the text was not shaped.
+- Space there did nothing at all.
+
+### What SillyTavern does
+
+From its source in `public/scripts/keyboard.js`, `public/script.js`, `public/style.css` and `public/index.html`:
+
+- `keyboard.js` listens for `keydown` on `document`, in the bubble phase. For Enter with no Alt, Ctrl or Shift, it walks up from the target to the nearest interactable and calls `click()` on it, unless that has the class `disabled`. It does not look at `isTrusted`, and it does nothing for Space.
+- `#send_but` is a `<div>`, so the browser gives it no Space either.
+- Quick Reply, commands and scripts send with `#send_but.click()` or `sendTextareaMessage()` from code. No key or click of the person's own (a trusted event) is behind either.
+
+### What changed
+
+**`modes.js`**
+
+- The capture-phase `keydown` listener now also takes a trusted key whose target is the send button (`onSendButtonKey`). It uses `keyboard.js`'s own test: no Alt, Ctrl or Shift, and the button not `.disabled`.
+  - **Enter:** the box is shaped right there, before `keyboard.js` turns the key into its click. Ours is a capture listener on `document` and `keyboard.js`'s a bubble listener on `document`, so ours always runs first. The untrusted click that follows is still skipped by `onSendClick`. `lastRewrite` would stop a second rewrite anyway.
+  - **Space:** the page is kept from scrolling, the box is shaped, and the button is clicked, which is what `keyboard.js` does for Enter. A held key sends once.
+- Left alone, as before: a key fired by a script (not trusted), on the box or on the button; a `#send_but.click()` from code (Quick Reply); commands; a send while SillyTavern is generating.
+- Enter in the message box is unchanged. It moved into its own function, `onBoxKey`.
+- **Check item 4.** The Advanced wording note now ends "A wording without {{input}} is ignored, and the one shown is used instead."
+- **Check item 2** (the owner's wording dropped for text that starts with you or I) is unchanged, for the owner.
+
+**A choice the bible does not cover: Space.** SillyTavern's send button has no Space, so shaping a Space send means making Space send.
+
+- While the send modes are on, Space on the send button sends, with or without a mode picked. That way the button behaves the same whichever mode is picked. Commands are sent too, as typed, as Enter sends them.
+- With the send modes off, the listener is gone, and Space does nothing again, as in SillyTavern. The test checks this.
+- `docs/redesign/changes/M2-do-and-say.md` has a line for it.
+
+**`tests/browser/modes-send.mjs`.** New checks:
+
+- Do and Say: Tab from the message box to the send button, then Enter, and then Space. Each sends the shaped text (4 checks). Each also checks that Tab put the focus on `#send_but`.
+- No mode: Tab, then Space, sends the text as typed.
+- An Enter `keydown` fired by a script on the send button is not rewritten. `keyboard.js` still clicks the button, and the text goes out as typed.
+- The `#send_but.click()` from code (as Quick Reply does) is still not rewritten. That check was already there and is kept.
+- Modes off: Tab, then Enter, sends the text unchanged. Space on the send button sends nothing, as in SillyTavern.
+- The note says a wording without `{{input}}` is ignored.
+
+Two changes keep the test steady:
+
+- **The send button after a reply.** SillyTavern's `style.css` hides the send button while `body[data-generating]` is set, and that can outlast `isGenerating()` by a moment. Tab then skipped the button. The wait after a send now also waits for that attribute to clear, and the keyboard sends wait for the button to show.
+- **A late welcome notice.** RPG Companion's welcome notice comes up once per fresh browser. While the sandbox was busy with other agents' tests, it came up after the helper had clicked its "Got it" (2.5 seconds after load). It then took the test's mouse clicks: Playwright reported `#rpg-welcome-modal … intercepts pointer events` once, and an earlier run stopped on a click the same way. The test now clicks a showing "Got it" button before each mouse click and each send, found by its text the way the helper finds it. Nothing in `modes.js` touches it.
+
+### Asked of other files
+
+- **`tests/browser/_harness.mjs` (the lead).** The helper clicks "Got it" once, 2.5 seconds after load. When the sandbox is busy, RPG Companion's welcome notice can come up later than that and take every later click, in any test. Waiting for the notice, or clicking it again just before `openForge` returns, would fix that for every test.
+
+### The new checks on the old code
+
+The new `modes-send.mjs`, run with `modes.js` as it was at `bc8454b`:
+
+```
+FAIL Do, Tab to the send button then Enter: the newest user message is You open the door. (focus on send_but; ["open the door"])
+FAIL Do, Tab to the send button then Space: the newest user message is You open the door. (focus on send_but; [])
+FAIL Say, Tab to the send button then Enter: the newest user message is You say, "Hello there." (focus on send_but; ["hello there"])
+FAIL Say, Tab to the send button then Space: the newest user message is You say, "Hello there." (focus on send_but; [])
+FAIL no mode: Tab to the send button then Space sends it as typed ([])
+ok   a send clicked by a script (as Quick Reply does) is not rewritten (["open the door"])
+ok   an Enter fired by a script on the send button is not rewritten (["open the door"])
+ok   modes off: Tab to the send button then Enter sends it unchanged (["open the door"])
+ok   modes off: Space on the send button sends nothing, as in SillyTavern ("open the door")
+FAIL its note says a wording without {{input}} is ignored ({{input}} is what you typed (tidied, when tidying is on). Leave a box empty to use the wording shown in it.)
+ok   no script errors
+
+(67 ok and 6 FAIL in all, exit 1. Shown: the failures, the kept script-click check, the other new checks, and the script-error check.)
+```
+
+### Test output
+
+Final runs, on the code as committed:
+
+```
+$ node tests/browser/modes-send.mjs
+ok   Do, You: "open the door" gives "You open the door." ("You open the door.")
+ok   Do, I: "open the door" gives "I open the door." ("I open the door.")
+ok   Do, You: "Open the door!" gives "You open the door!" ("You open the door!")
+ok   Do, I: "Open the door!" gives "I open the door!" ("I open the door!")
+ok   Do, You: "you open the door" gives "You open the door." ("You open the door.")
+ok   Do, I: "you open the door" gives "You open the door." ("You open the door.")
+ok   Do, You: "I'm leaving" gives "I'm leaving." ("I'm leaving.")
+ok   Do, I: "I'm leaving" gives "I'm leaving." ("I'm leaving.")
+ok   Do, You: "NASA badge out, walk in" gives "You NASA badge out, walk in." ("You NASA badge out, walk in.")
+ok   Do, I: "NASA badge out, walk in" gives "I NASA badge out, walk in." ("I NASA badge out, walk in.")
+ok   Say, You: "hello there" gives "You say, \"Hello there.\"" ("You say, \"Hello there.\"")
+ok   Say, I: "hello there" gives "I say, \"Hello there.\"" ("I say, \"Hello there.\"")
+ok   Say, You: "\"Who goes there?\"" gives "You say, \"Who goes there?\"" ("You say, \"Who goes there?\"")
+ok   Say, I: "\"Who goes there?\"" gives "I say, \"Who goes there?\"" ("I say, \"Who goes there?\"")
+ok   Say, You: "You say hi" gives "You say hi." ("You say hi.")
+ok   Say, I: "You say hi" gives "You say hi." ("You say hi.")
+ok   tidy off: Do "open the door" gives "You open the door" ("You open the door")
+ok   tidy off: Say "hello there" gives You say, "hello there" ("You say, \"hello there\"")
+ok   a Do wording of *{{input}}* gives "*open the door.*" ("*open the door.*")
+ok   the own wording is used in the I voice too ("*open the door.*")
+ok   SillyTavern's own macros in the wording are left for SillyTavern ("{{user}}: \"Hello.\"")
+ok   a wording without {{input}} is not used (the text would be lost) ("You open the door.")
+ok   the ends are trimmed and a line break inside is kept ("You open the door\nslowly.")
+ok   Say takes off curly quotes round the whole text ("You say, \"Hi there.\"")
+ok   Say takes off single quotes round the whole text ("You say, \"Hi there.\"")
+ok   nothing in the text is read as a replacement pattern ("You pay $& go.")
+ok   a word that only starts with "I" is not the word I ("You ice the cake.")
+ok   Story and See come back unchanged for now (["the door","The rain stops"])
+ok   Do, Enter: the newest user message is "You open the door." (["You open the door."])
+ok   the message box is empty after the send ("")
+ok   the send went on to SillyTavern, which asked for a reply (answered in the page) (1 asked)
+ok   Do, Tab to the send button then Enter: the newest user message is You open the door. (focus on send_but; ["You open the door."])
+ok   Do, Tab to the send button then Space: the newest user message is You open the door. (focus on send_but; ["You open the door."])
+ok   Say, send button: the newest user message is You say, "Hello there." (["You say, \"Hello there.\""])
+ok   Say, Tab to the send button then Enter: the newest user message is You say, "Hello there." (focus on send_but; ["You say, \"Hello there.\""])
+ok   Say, Tab to the send button then Space: the newest user message is You say, "Hello there." (focus on send_but; ["You say, \"Hello there.\""])
+ok   clicking Say again leaves no mode picked
+ok   no mode: the newest user message is "open the door" (["open the door"])
+ok   no mode: Tab to the send button then Space sends it as typed (["open the door"])
+ok   Do, "/echo test": no user message is added ([])
+ok   and the text was not rewritten before SillyTavern ran it (["/echo test",""])
+ok   a send clicked by a script (as Quick Reply does) is not rewritten (["open the door"])
+ok   an Enter fired by a script on the send button is not rewritten (["open the door"])
+ok   Shift+Enter (a new line) does not rewrite the box ("open the door\n")
+ok   with SillyTavern's "send on Enter" off, Enter (a new line) does not rewrite the box ("open the door\n")
+ok   while SillyTavern is generating, Enter leaves the box as typed ("open the door")
+ok   a send that did not go through leaves the rewrite in the box ("*open the door.*")
+ok   pressing Enter again does not rewrite it a second time ("*open the door.*")
+ok   once connected, it is sent as it is (["*open the door.*"])
+ok   with TauriTavern's expanded editor open, the bar is hidden (stand-in)
+ok   closing the editor brings the bar back
+ok   I voice, Do, Enter: the newest user message is "I open the door." (["I open the door."])
+ok   modes off: the bar is gone and Do is still the saved choice
+ok   modes off: "open the door" with Enter is sent unchanged (["open the door"])
+ok   modes off: "hello there" with the send button is sent unchanged (["hello there"])
+ok   modes off: Tab to the send button then Enter sends it unchanged (["open the door"])
+ok   modes off: Space on the send button sends nothing, as in SillyTavern ("open the door")
+ok   main switch off with the modes on: sent unchanged (["open the door"])
+ok   the Message box section has "Write my actions as" with You … and I … (Message box: Write my actions as (second=You …, first=I …))
+ok   and "Tidy what I type (first letter, full stop, quotes)", ticked (Tidy what I type (first letter, full stop, quotes))
+ok   and a closed fold "Advanced: my own wording" (Advanced: my own wording)
+ok   its note says a wording without {{input}} is ignored ({{input}} is what you typed (tidied, when tidying is on). Leave a box empty to use the wording shown in it. A wording without {{input}} is ignored, and the one shown is used instead.)
+ok   its three fields show the default wording, are empty, and take 200 characters (You {{input}} | You say, "{{input}}" | You look at {{input}})
+ok   with the modes off, all five are greyed out (disabled) (true,true,true,true,true)
+ok   ticking the modes on makes them usable (false,false,false,false,false)
+ok   choosing "I …" saves the I voice and the fields show the I wording (I {{input}} | I say, "{{input}}" | I look at {{input}})
+ok   unticking Tidy saves it off
+ok   typing a Do wording saves it, and leaves the others empty ({"do":"*{{input}}*","say":"","see":""})
+ok   the changes are saved
+ok   lookKeys: modesVoice (second or first), modesTidy, modesTemplates (do, say, see; 200 at most) ({"modesVoice":{"type":"enum","values":["second","first"]},"modesTidy":{"type":"boolean"},"modesTemplates":{"type":"strings","keys":["do","say","see"],"max":200}})
+ok   Import look sets the voice, the tidying and the Say wording, and keeps the Do wording ({"do":"*{{input}}*","say":"{{user}}: \"{{input}}\"","see":""})
+ok   the redrawn settings show what was imported, the wording as plain text (second, true, *{{input}}* | {{user}}: "{{input}}" | )
+ok   no script errors
+
+$ node tests/run.mjs modes
+ok       modes-bar  47 checks, 19s
+ok       modes-bar phone  50 checks, 19s
+ok       modes-send  73 checks, 36s
+
+3 passed, 0 failed
+
+$ node tests/run.mjs
+ok       foundation  18 checks, 14s
+ok       foundation phone  15 checks, 13s
+ok       harness  8 checks, 11s
+ok       harness phone  8 checks, 11s
+ok       modes-bar  47 checks, 19s
+ok       modes-bar phone  50 checks, 19s
+ok       modes-send  73 checks, 36s
+ok       stage-column  35 checks, 19s
+ok       stage-column phone  10 checks, 14s
+
+9 passed, 0 failed
+```

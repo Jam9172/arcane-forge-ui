@@ -75,21 +75,46 @@ await page.evaluate(() => {
 });
 const chatLength = () => page.evaluate(() => SillyTavern.getContext().chat.length);
 const box = () => page.evaluate(() => document.getElementById('send_textarea').value);
+// A welcome notice that comes up after the helper clicked its "Got it" (another extension's, late when the
+// sandbox is busy) would take the clicks and keys below, so a showing "Got it" is clicked first, the helper's way
+const dismissNotice = async () => {
+    const dismissed = await page.evaluate(() => {
+        const button = [...document.querySelectorAll('button, .menu_button')].find((b) => /Got it/i.test(b.textContent) && b.getClientRects().length);
+        button?.click();
+        return !!button;
+    });
+    if (dismissed) await page.waitForTimeout(400);
+};
+const click = async (selector) => {
+    await dismissNotice();
+    await page.click(selector);
+};
 const pick = async (mode) => {
-    await page.click(`#forge-modes [data-mode="${mode}"]`);
+    await click(`#forge-modes [data-mode="${mode}"]`);
     await page.waitForTimeout(150);
 };
 // Waits until SillyTavern has added a message and finished the (fake) reply, or until it is clear nothing came
 const settle = async (before) => {
     await page.waitForFunction(async (before) => {
         const st = await import('/script.js');
-        return SillyTavern.getContext().chat.length > before && !st.isGenerating();
+        return SillyTavern.getContext().chat.length > before && !st.isGenerating() && !document.body.dataset.generating;
     }, before, { timeout: 8000, polling: 100 }).catch(() => {});
     await page.waitForTimeout(400);
 };
-// Types into the message box and sends it with Enter, the send button, or a script (as Quick Reply does).
+// Where the focus was when the last 'Tab …' send pressed its key
+let tabbedTo = '';
+// SillyTavern hides the send button while body[data-generating] is set, which can outlast isGenerating() by
+// a moment; Tab only reaches it once it is showing again
+const sendButtonShown = () => page.waitForSelector('#send_but', { state: 'visible', timeout: 5000 }).catch(() => {});
+// Types into the message box and sends it, how:
+//   'enter'        Enter in the message box
+//   'button'       a mouse click on the send button
+//   'Tab Enter'    Tab from the message box to the send button, then Enter (or 'Tab Space')
+//   'script'       a script clicks the send button from code (as Quick Reply does)
+//   'script Enter' a script fires an Enter keydown on the send button (SillyTavern's keyboard.js clicks it)
 // Returns the text of the user messages that send added (only messages this test typed are read).
 const send = async (text, how = 'enter') => {
+    await dismissNotice();
     const before = await chatLength();
     await page.evaluate(() => { globalThis.testBoxValues = []; });
     if (how === 'script') {
@@ -97,15 +122,36 @@ const send = async (text, how = 'enter') => {
             document.getElementById('send_textarea').value = text;
             document.getElementById('send_but').click();
         }, text);
+    } else if (how === 'script Enter') {
+        await sendButtonShown();
+        await page.evaluate((text) => {
+            document.getElementById('send_textarea').value = text;
+            const button = document.getElementById('send_but');
+            button.focus();
+            button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true }));
+        }, text);
     } else {
         await page.fill('#send_textarea', text);
         if (how === 'enter') await page.press('#send_textarea', 'Enter');
-        else await page.click('#send_but');
+        else if (how === 'button') await click('#send_but');
+        else {
+            await sendButtonShown();
+            await page.keyboard.press('Tab');
+            tabbedTo = await page.evaluate(() => document.activeElement?.id ?? '');
+            await page.keyboard.press(how.split(' ')[1]);
+        }
     }
     await settle(before);
     return page.evaluate((before) => SillyTavern.getContext().chat.slice(before).filter((m) => m.is_user).map((m) => m.mes), before);
 };
 const only = (list, text) => list.length === 1 && list[0] === text;
+// Sends with Tab then Enter, and with Tab then Space, from the message box to the send button, and checks each
+const sendByKeyboard = async (label, typed, expected) => {
+    for (const key of ['Enter', 'Space']) {
+        const sent = await send(typed, `Tab ${key}`);
+        check(`${label}, Tab to the send button then ${key}: the newest user message is ${expected}`, tabbedTo === 'send_but' && only(sent, expected), `focus on ${tabbedTo}; ${JSON.stringify(sent)}`);
+    }
+};
 
 // The sandbox's test seed answers SillyTavern's generate requests in the page with an error, so that no real
 // model is ever called. A send would then end in a script error, so this test answers them in the page with
@@ -134,17 +180,23 @@ let sent = await send('open the door');
 check('Do, Enter: the newest user message is "You open the door."', only(sent, 'You open the door.'), JSON.stringify(sent));
 check('the message box is empty after the send', (await box()) === '', JSON.stringify(await box()));
 check('the send went on to SillyTavern, which asked for a reply (answered in the page)', (await replies()) === 1, `${await replies()} asked`);
+// The send button used from the keyboard is the person's own send too (bible sections 6 and 11). SillyTavern
+// turns Enter on it into a click from code; Space is ours.
+await sendByKeyboard('Do', 'open the door', 'You open the door.');
 
 // 5. Say, the send button
 await pick('say');
 sent = await send('hello there', 'button');
 check('Say, send button: the newest user message is You say, "Hello there."', only(sent, 'You say, "Hello there."'), JSON.stringify(sent));
+await sendByKeyboard('Say', 'hello there', 'You say, "Hello there."');
 
 // 6. No mode
 await pick('say');
 check('clicking Say again leaves no mode picked', (await page.evaluate(() => document.querySelectorAll('#forge-modes [aria-checked="true"]').length)) === 0);
 sent = await send('open the door');
 check('no mode: the newest user message is "open the door"', only(sent, 'open the door'), JSON.stringify(sent));
+sent = await send('open the door', 'Tab Space');
+check('no mode: Tab to the send button then Space sends it as typed', tabbedTo === 'send_but' && only(sent, 'open the door'), JSON.stringify(sent));
 
 // 7. A command is never touched
 await pick('do');
@@ -156,6 +208,9 @@ check('and the text was not rewritten before SillyTavern ran it', seen.every((v)
 // Quick Reply puts its text in the box and clicks the send button from code: that is never touched
 sent = await send('open the door', 'script');
 check('a send clicked by a script (as Quick Reply does) is not rewritten', only(sent, 'open the door'), JSON.stringify(sent));
+// Nor is an Enter that a script fires on the send button (SillyTavern's keyboard.js still clicks it)
+sent = await send('open the door', 'script Enter');
+check('an Enter fired by a script on the send button is not rewritten', only(sent, 'open the door'), JSON.stringify(sent));
 
 // Shift+Enter is a new line, not a send
 await page.fill('#send_textarea', 'open the door');
@@ -242,6 +297,19 @@ sent = await send('open the door');
 check('modes off: "open the door" with Enter is sent unchanged', only(sent, 'open the door'), JSON.stringify(sent));
 sent = await send('hello there', 'button');
 check('modes off: "hello there" with the send button is sent unchanged', only(sent, 'hello there'), JSON.stringify(sent));
+sent = await send('open the door', 'Tab Enter');
+check('modes off: Tab to the send button then Enter sends it unchanged', tabbedTo === 'send_but' && only(sent, 'open the door'), JSON.stringify(sent));
+// Space on the send button is SillyTavern's again: it does nothing
+await dismissNotice();
+before = await chatLength();
+await page.fill('#send_textarea', 'open the door');
+await sendButtonShown();
+await page.keyboard.press('Tab');
+tabbedTo = await page.evaluate(() => document.activeElement?.id ?? '');
+await page.keyboard.press('Space');
+await page.waitForTimeout(1200);
+check('modes off: Space on the send button sends nothing, as in SillyTavern', tabbedTo === 'send_but' && (await chatLength()) === before && (await box()) === 'open the door', JSON.stringify(await box()));
+await page.fill('#send_textarea', '');
 await setForge(page, { enabled: false, modes: true });
 sent = await send('open the door');
 check('main switch off with the modes on: sent unchanged', only(sent, 'open the door'), JSON.stringify(sent));
@@ -249,9 +317,9 @@ await setForge(page, { enabled: true, modes: false, modesActive: '' });
 
 // ---------- Settings ----------
 
-await page.click('#extensions-settings-button .drawer-toggle');
+await click('#extensions-settings-button .drawer-toggle');
 await page.waitForTimeout(600);
-await page.click('.arcane-forge-ui-settings .inline-drawer-toggle');
+await click('.arcane-forge-ui-settings .inline-drawer-toggle');
 await page.waitForTimeout(600);
 const controls = () => page.evaluate(() => {
     const voice = document.getElementById('forge-ui-modes-voice');
@@ -269,6 +337,7 @@ const controls = () => page.evaluate(() => {
         tidy: tidy?.checked,
         foldTitle: fold?.querySelector('summary')?.textContent.trim(),
         foldOpen: fold?.open,
+        note: fold?.querySelector('small')?.textContent.trim(),
         placeholders: fields.map((f) => f?.placeholder),
         values: fields.map((f) => f?.value),
         maxLengths: fields.map((f) => f?.maxLength),
@@ -279,9 +348,10 @@ let ui = await controls();
 check('the Message box section has "Write my actions as" with You … and I …', ui.under === 'Message box' && ui.voiceLabel === 'Write my actions as' && ui.voiceOptions === 'second=You …, first=I …' && ui.voice === 'second', `${ui.under}: ${ui.voiceLabel} (${ui.voiceOptions})`);
 check('and "Tidy what I type (first letter, full stop, quotes)", ticked', ui.tidyLabel === 'Tidy what I type (first letter, full stop, quotes)' && ui.tidy === true, ui.tidyLabel);
 check('and a closed fold "Advanced: my own wording"', ui.foldTitle === 'Advanced: my own wording' && ui.foldOpen === false, ui.foldTitle);
+check('its note says a wording without {{input}} is ignored', /wording without \{\{input\}\} is ignored/.test(ui.note ?? ''), ui.note);
 check('its three fields show the default wording, are empty, and take 200 characters', ui.placeholders.join(' | ') === 'You {{input}} | You say, "{{input}}" | You look at {{input}}' && ui.values.every((v) => v === '') && ui.maxLengths.every((n) => n === 200), ui.placeholders.join(' | '));
 check('with the modes off, all five are greyed out (disabled)', ui.disabled.every(Boolean), ui.disabled.join(','));
-await page.click('#forge-ui-modes');
+await click('#forge-ui-modes');
 await page.waitForTimeout(300);
 ui = await controls();
 check('ticking the modes on makes them usable', ui.disabled.every((d) => !d), ui.disabled.join(','));
@@ -292,10 +362,10 @@ await page.selectOption('#forge-ui-modes-voice', 'first');
 await page.waitForTimeout(300);
 ui = await controls();
 check('choosing "I …" saves the I voice and the fields show the I wording', (await setting('modesVoice')) === 'first' && ui.placeholders.join(' | ') === 'I {{input}} | I say, "{{input}}" | I look at {{input}}', ui.placeholders.join(' | '));
-await page.click('#forge-ui-modes-tidy');
+await click('#forge-ui-modes-tidy');
 await page.waitForTimeout(300);
 check('unticking Tidy saves it off', (await setting('modesTidy')) === false);
-await page.click('#forge-ui-modes-wording summary');
+await click('#forge-ui-modes-wording summary');
 await page.fill('#forge-ui-modes-template-do', '*{{input}}*');
 await page.waitForTimeout(300);
 const templates = await setting('modesTemplates');
@@ -314,11 +384,11 @@ check('Import look sets the voice, the tidying and the Say wording, and keeps th
 check('the redrawn settings show what was imported, the wording as plain text', ui.voice === 'second' && ui.tidy === true && ui.values.join(' | ') === '*{{input}}* | {{user}}: "{{input}}" | ', `${ui.voice}, ${ui.tidy}, ${ui.values.join(' | ')}`);
 
 // Back to the defaults, and the settings closed
-await page.click('#forge-ui-modes');
+await click('#forge-ui-modes');
 await page.waitForTimeout(300);
 await setForge(page, { modes: false, modesActive: '', modesVoice: 'second', modesTidy: true, modesTemplates: { ...NO_TEMPLATES } });
-await page.click('.arcane-forge-ui-settings .inline-drawer-toggle');
-await page.click('#extensions-settings-button .drawer-toggle');
+await click('.arcane-forge-ui-settings .inline-drawer-toggle');
+await click('#extensions-settings-button .drawer-toggle');
 await page.waitForTimeout(400);
 
 await finish();
