@@ -14,8 +14,8 @@ States: `todo`, `doing`, `checked` (a second agent passed it), `merged`, `blocke
 | `S2-spine-and-width` | merged | `267290f` | Checked PASS. For I1: tokens for the spine's raw sizes and layer. For I3: Import clamps `stageChat` where I3's test expects it ignored. |
 | `S3-stage-content` | doing | | |
 | `P1-menu-frame` | merged | `f1b534d` | Checked PASS. For I1: a `--forge-menu-dim` token for the backdrop's raw colour. |
-| `P2-buttons-and-top-bar` | doing | | |
-| `P3-characters-and-pins` | todo | | |
+| `P2-buttons-and-top-bar` | merged | `bc7235f` | Checked PASS. For I1: toasts touch the top edge; maximised Author's Note and CFG cover the buttons; the buttons overlap RPG Companion's panel top. |
+| `P3-characters-and-pins` | doing | | |
 | `P4-keys-and-motion` | todo | | |
 | `I1-together` | todo | | |
 | `I2-phone` | todo | | |
