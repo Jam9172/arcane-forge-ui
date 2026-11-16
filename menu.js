@@ -19,12 +19,18 @@
 // The two round buttons (#forge-menu-buttons) take the top bar's place: with them, body has
 // forge-menu-buttons and css/menu.css hides the top bar and gives its space back. They open the panel the
 // same way, through the drawers' own toggles, which stay in the page (hidden) for that.
-import { saveSettingsDebounced } from '../../../../script.js';
+//
+// SillyTavern can pin three panels open beside the chat, which cannot go with the menu panel. While the menu
+// panel is active their pins are off and hidden: the ones that were on are recorded in menuPins and turned
+// off with their own checkboxes, and turned on again the same way when the menu panel stops being active.
+// None of that happens before SillyTavern's pin checkboxes answer clicks (see pinsReady).
+import { saveSettingsDebounced, eventSource, event_types } from '../../../../script.js';
 import { extension_settings } from '../../../extensions.js';
+import { accountStorage } from '../../../util/AccountStorage.js';
 
 export const id = 'menu';
 
-export const defaults = { menuPanel: false, menuButtons: true, menuLast: 'ai-config-button' };
+export const defaults = { menuPanel: false, menuButtons: true, menuLast: 'ai-config-button', menuPins: {} };
 
 export const lookKeys = {};
 
@@ -36,7 +42,11 @@ const BUTTONS_CLASS = 'forge-menu-buttons';
 const TITLE_ID = 'forge-menu-title';
 const CHARACTERS = 'rightNavHolder';
 const DRAWERS = '#top-settings-holder > .drawer';
-const OPEN_MENU = '#top-settings-holder > .drawer > .drawer-content.openDrawer:not(.pinnedOpen)';
+const MENUS = '#top-settings-holder > .drawer > .drawer-content';
+const OPEN_MENU = `${MENUS}.openDrawer:not(.pinnedOpen)`;
+// SillyTavern's pin checkboxes: AI response, Characters and Lorebooks (bible section 8), each with the account
+// setting its click handler writes (initRossMods in RossAscends-mods.js)
+const PINS = new Map([['lm_button_panel_pin', 'LNavLockOn'], ['rm_button_panel_pin', 'NavLockOn'], ['WI_panel_pin', 'WINavLockOn']]);
 // SillyTavern marks "no API connection" on the top bar's plug: RA_checkOnlineStatus (RossAscends-mods.js)
 // swaps its fa-plug for fa-plug-circle-exclamation, which is also what the page starts with.
 const STATUS_ICON = 'API-status-top';
@@ -64,6 +74,9 @@ const SECTIONS = new Map([
 // Only what is needed to undo the feature: the watcher on the top bar, and a pending hide
 let observer = null;
 let hideTimer = 0;
+// Whether SillyTavern's pin checkboxes answer clicks yet, and whether something waits for that
+let pinsAnswer = false;
+let pinsWait = false;
 
 // The buttons' switch only means something with the panel on, so it is greyed out (disabled) while the
 // panel is off
@@ -99,12 +112,12 @@ export function bindSettings($root, s, save) {
 
 export function apply(s) {
     const active = Boolean(s.enabled && s.menuPanel) && window.matchMedia(DESKTOP).matches;
-    if (active) turnOn();
-    else turnOff();
+    if (active) turnOn(s);
+    else turnOff(s);
     setButtons(active && Boolean(s.menuButtons));
 }
 
-function turnOn() {
+function turnOn(s) {
     document.body.classList.add('forge-menu');
     if (!document.getElementById(FRAME_ID)) document.body.append(buildFrame());
     const holder = document.getElementById('top-settings-holder');
@@ -113,19 +126,80 @@ function turnOn() {
         // connection on the plug icon in the same holder
         observer = new MutationObserver((records) => {
             if (records.some((r) => r.target.id === STATUS_ICON)) syncDot();
-            if (records.some((r) => r.target.matches?.('#top-settings-holder > .drawer > .drawer-content'))) sync();
+            const menus = records.filter((r) => r.target.matches?.(MENUS));
+            // A panel pinned while the panel is on is put away too. The pins SillyTavern saved come back in
+            // initRossMods, after Forge UI has started; unpin waits for that (see pinsReady).
+            if (menus.some((r) => r.target.classList.contains('pinnedOpen'))) unpin(extension_settings[MODULE]);
+            if (menus.length) sync();
         });
         observer.observe(holder, { subtree: true, attributes: true, attributeFilter: ['class'] });
     }
+    unpin(s);
     sync();
 }
 
-function turnOff() {
+function turnOff(s) {
     observer?.disconnect();
     observer = null;
     clearTimeout(hideTimer);
     document.getElementById(FRAME_ID)?.remove();
     document.body.classList.remove('forge-menu');
+    repin(s);
+}
+
+// ---------- SillyTavern's pinned panels ----------
+
+// Records each pin that is on, then turns it off with its own checkbox, so SillyTavern does the unpinning.
+// A pin already recorded stays recorded, so applying again (or a reload, after which the pins are off)
+// never loses the pins to put back.
+function unpin(s) {
+    if (!s || !pinsReady()) return;
+    const on = [...PINS.keys()].filter((pin) => document.getElementById(pin)?.checked);
+    if (!on.length) return;
+    s.menuPins = { ...s.menuPins, ...Object.fromEntries(on.map((pin) => [pin, true])) };
+    saveSettingsDebounced();
+    for (const pin of on) document.getElementById(pin).click();
+}
+
+// Turns the recorded pins on again with their own checkboxes. A pin is forgotten only once SillyTavern has
+// it on: its box is ticked and SillyTavern's own setting says so; any other stays recorded for next time.
+// A new object, not the old one changed: Reset hands features a copy of the settings that shares it.
+function repin(s) {
+    const recorded = s?.menuPins || {};
+    if (!Object.keys(recorded).length || !pinsReady()) return;
+    for (const pin of PINS.keys()) {
+        const box = document.getElementById(pin);
+        if (recorded[pin] && box && !box.checked) box.click();
+    }
+    const left = [...PINS.keys()].filter((pin) => recorded[pin] && !pinnedBySillyTavern(pin));
+    s.menuPins = Object.fromEntries(left.map((pin) => [pin, true]));
+    saveSettingsDebounced();
+}
+
+function pinnedBySillyTavern(pin) {
+    return Boolean(document.getElementById(pin)?.checked) && accountStorage.getItem(PINS.get(pin)) === 'true';
+}
+
+// Extensions start before SillyTavern's initRossMods (RossAscends-mods.js), which binds the pin checkboxes'
+// click handlers and then sets each box from the pin it saved. A click before that changes the box alone,
+// and initRossMods then sets it back, so a pin put back that early is lost. SillyTavern emits
+// APP_INITIALIZED right after initRossMods, and hands that event at once to a listener added later. Until
+// then this says no, and has the panel applied again when it comes. (APP_READY comes too late: by then
+// SillyTavern may have reopened a pinned panel that was open, 300ms after initRossMods.)
+function pinsReady() {
+    const event = event_types.APP_INITIALIZED;
+    if (pinsAnswer || !event) return true;
+    if (!pinsWait) {
+        pinsWait = true;
+        // Inside once() when the event has already come; only a later call applies the panel again
+        let later = false;
+        eventSource.once(event, () => {
+            pinsAnswer = true;
+            if (later && extension_settings[MODULE]) apply(extension_settings[MODULE]);
+        });
+        later = true;
+    }
+    return pinsAnswer;
 }
 
 // ---------- The two round buttons ----------

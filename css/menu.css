@@ -19,7 +19,8 @@ body.forge-ui.forge-menu {
 body.forge-ui.forge-menu #forge-menu .forge-menu-backdrop {
     position: fixed;
     inset: 0;
-    z-index: var(--forge-z-backdrop);
+    /* --forge-menu-lift: see "Windows over the panel" below */
+    z-index: calc(var(--forge-z-backdrop) + var(--forge-menu-lift, 0));
     background: rgb(0 0 0 / 55%);
 }
 
@@ -30,7 +31,7 @@ body.forge-ui.forge-menu #forge-menu .forge-menu-panel {
     position: fixed;
     top: var(--forge-menu-top);
     left: var(--forge-menu-left);
-    z-index: var(--forge-z-frame);
+    z-index: calc(var(--forge-z-frame) + var(--forge-menu-lift, 0));
     box-sizing: border-box;
     width: var(--forge-menu-w);
     height: var(--forge-menu-h);
@@ -208,6 +209,33 @@ body.forge-ui.forge-menu #top-settings-holder > .drawer > .drawer-content:not(.p
 
 body.forge-ui.forge-menu #top-settings-holder > .drawer > .drawer-content:not(.pinnedOpen) > .drag-grabber {
     display: none;
+}
+
+/* ---------- Pinned panels ----------
+   menu.js turns SillyTavern's pins off while the panel is active, so their controls are hidden. The AI
+   response one keeps its row: Forge's style.css gives that row the height of the panel's header strip, and
+   the panel's tips and buttons sit in that strip. So its lock (the label) goes, and the row stays as an
+   unseen spacer that shows no tooltip. The other two go entirely. display: none rather than visibility
+   for the locks themselves: SillyTavern transitions "all" on them, which kept a hovered lock drawn. */
+body.forge-ui.forge-menu #top-settings-holder #lm_button_panel_pin_div {
+    visibility: hidden;
+}
+
+body.forge-ui.forge-menu #top-settings-holder :is(#lm_button_panel_pin_div > label, #rm_button_panel_pin_div, #WI_panel_pin_div) {
+    display: none;
+}
+
+/* ---------- Windows over the panel ----------
+   SillyTavern lifts the menus' holder from its layer (3005) to 4005 while a floating panel is maximised, a
+   drawer is .open, or the advanced definitions window (#character_popup) is open, so that a menu opened then
+   is drawn over them. It does that only for a menu that is not a side panel (.fillLeft, .fillRight). These
+   are the three halves of that rule in SillyTavern's style.css; the frame goes up with the holder, by the
+   same 1000, so no window can sit between the open menu and its panel. Characters is a side panel, so the
+   advanced definitions window it opens stays above the frame. */
+body.forge-ui.forge-menu:has(.drawer-content.maximized):has(#top-settings-holder .drawer-content.openDrawer:not(.fillLeft):not(.fillRight)),
+body.forge-ui.forge-menu:has(.drawer-content.open):has(#top-settings-holder .drawer-content.openDrawer:not(.fillLeft):not(.fillRight)),
+body.forge-ui.forge-menu:has(#character_popup.open):has(#top-settings-holder .drawer-content.openDrawer:not(.fillLeft):not(.fillRight)) {
+    --forge-menu-lift: 1000;
 }
 
 /* ---------- The two round buttons, in place of the top bar ----------
