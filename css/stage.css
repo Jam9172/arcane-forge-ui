@@ -26,17 +26,91 @@ body.forge-ui.forge-stage #bg_custom {
     background-position: center;
 }
 
-/* Our layer over the stage, the same box as the art. It takes no clicks. It shares the art's layer (-1, from
-   SillyTavern's #bg1) and comes after it in the page, so it is drawn just above the art and below everything
-   else. */
+/* Our layer over the stage, the same box as the art. It takes no clicks. It has no layer of its own, so the
+   shade and the name plate inside it can each sit at their own height (below). */
 body.forge-ui.forge-stage #forge-stage {
     position: absolute;
     top: 0;
     left: 0;
     width: calc(100% - var(--forge-stage-chat));
     height: 100%;
-    z-index: -1;
     pointer-events: none;
+}
+
+/* The shade: a flat black layer over the whole stage, at the Darken setting (stage.js sets
+   --forge-stage-shade on it, and leaves it out at 0). It shares the art's layer (-1, from SillyTavern's #bg1)
+   and comes after it in the page, so it darkens the art and nothing drawn over the art, such as the sprite.
+   Black is not one of the theme's colours: the bible asks for a black layer, and the setting is its darkness. */
+body.forge-ui.forge-stage #forge-stage > .forge-stage-shade {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: -1;
+    background: rgb(0 0 0 / var(--forge-stage-shade));
+}
+
+/* The name plate: bottom left of the stage, --forge-space-5 in from both edges (bible section 5.1). It is
+   drawn over the sprite (SillyTavern's #expression-holder is at 2, so 3 is the next layer up) and below the
+   chat column (30) and everything over it. 28px and the 10px padding are the bible's own measurements. A name
+   too long for the stage wraps. */
+body.forge-ui.forge-stage #forge-stage > .forge-stage-plate {
+    position: absolute;
+    left: var(--forge-space-5);
+    bottom: var(--forge-space-5);
+    z-index: 3;
+    box-sizing: border-box;
+    max-width: calc(100% - 2 * var(--forge-space-5));
+    padding: 10px var(--forge-space-4);
+    border: 1px solid var(--forge-border);
+    border-radius: var(--forge-radius-md);
+    background: var(--forge-card);
+    color: var(--forge-brass);
+    font-family: var(--forge-heading);
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.2;
+    overflow-wrap: break-word;
+}
+
+/* The sprite: while the setting is on (stage.js puts forge-stage-sprite on body), Character Expressions' own
+   sprite holder stands on the stage, bottom centre, never taller than 92% of the stage, never wider than the
+   stage, so never over the chat column. Like #forge-stage, the holder is placed against the page, so its
+   percentages are the window's and the stage is the window less --forge-stage-chat.
+   SillyTavern's MovingUI writes inline positions and sizes on #expression-holder: a drag writes left, top,
+   margin, width and height, and its saved places come back as top, left, right, bottom, margin, width and
+   height. Each !important below beats one of those inline properties. With the setting off, none of this
+   applies and the sprite is wherever SillyTavern puts it. Whether it shows at all stays SillyTavern's (its
+   inline display is left alone). */
+body.forge-ui.forge-stage.forge-stage-sprite #expression-holder {
+    /* SillyTavern's own value too; said again so the placing does not hang on its stylesheet */
+    position: absolute;
+    top: auto !important;                                         /* beats MovingUI's inline top */
+    right: auto !important;                                       /* beats MovingUI's inline right */
+    bottom: 0 !important;                                         /* beats MovingUI's inline bottom */
+    left: calc((100% - var(--forge-stage-chat)) / 2) !important;  /* beats MovingUI's inline left */
+    margin: 0 !important;                                         /* beats MovingUI's inline margin */
+    width: auto !important;                                       /* beats MovingUI's inline width */
+    height: auto !important;                                      /* beats MovingUI's inline height */
+    max-width: calc(100% - var(--forge-stage-chat));
+    max-height: 92%;
+    /* Its middle is the stage's middle */
+    transform: translateX(-50%);
+}
+
+/* The picture itself is scaled down to fit those limits instead of being cut off by the holder (the stage is
+   as tall as the window and as wide as the window less the chat column) */
+body.forge-ui.forge-stage.forge-stage-sprite #expression-holder img.expression {
+    max-width: calc(100vw - var(--forge-stage-chat));
+    max-height: 92vh;
+}
+
+/* The message box's first button stays clear of the spine's grab area, which reaches 6px into the column
+   (below): SillyTavern's 2px inset becomes --forge-space-2, so the options button starts 9px in, past the
+   form's 1px edge. Without this, the spine took presses on the button's left 3px. */
+body.forge-ui.forge-stage #leftSendForm {
+    padding-left: var(--forge-space-2);
 }
 
 /* The spine: the chat column's left edge, which can be dragged (stage.js). A 1px brass line on the column's
