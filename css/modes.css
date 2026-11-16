@@ -72,6 +72,14 @@ body.forge-ui.forge-modes #forge-modes .forge-modes-label {
     text-overflow: ellipsis;
 }
 
+/* TauriTavern's expanded message editor (a modal <dialog> it adds to body) has its own Send, which hands
+   the text straight to SillyTavern's send code, so the modes do not shape what is sent from there. While
+   it is open the bar steps aside, so a picked mode does not look as if it applies. Only body's own children
+   are checked (">"), so messages coming into the chat never make the browser look for it. */
+body.forge-ui.forge-modes:has(> #tt-chat-input-editor[open]) #forge-modes {
+    display: none;
+}
+
 /* Phones: the bar spans the form and the four buttons share its width */
 @media (max-width: 1000px) {
     body.forge-ui.forge-modes #forge-modes {
