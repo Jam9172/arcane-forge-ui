@@ -233,3 +233,104 @@ ok       stage-spine phone  12 checks, 14s
   - group chats, since only the Forge Tester chat may be opened;
   - real TauriTavern (its expanded editor still hides the bar, from M2, so neither Story nor See applies to a send made from there);
   - the fallback when `sendNarratorMessage` cannot be loaded, since making SillyTavern's `slash-commands.js` fail to load would break SillyTavern itself.
+
+## Check
+
+**FAIL.** Checked on `batch/M3-story-and-see` at `c186ea6`. The batch was cut from `overhaul` at `a7bf109`. `overhaul` has since moved to `c428dc2` (P3 merged). That merge changes only `menu.js`, `css/menu.css`, `tests/browser/menu-characters.mjs` and P3's documents, none of this batch's files, and `git merge-tree` with it merges without a conflict.
+
+One problem makes it FAIL: problem 1 below. With See set to a picture, a second Enter or tap while the picture is being made sends "You look around." and asks the model for a reply. Everything else checked out, apart from the smaller problems listed at the end.
+
+### (a) Files
+
+- `git diff --name-only overhaul...HEAD` lists 5 files: `docs/redesign/changes/M3-story-and-see.md`, `docs/redesign/results/M3-story-and-see.md`, `modes.js`, `tests/browser/modes-send.mjs` and `tests/browser/modes-story-see.mjs`.
+- Four are under "You own". `tests/browser/modes-send.mjs` is not, but the lead asked for its two fixes and bible section 9 gives lane M every `tests/browser/modes-*.mjs`. `css/modes.css` is unchanged.
+- The changes file holds the brief's changelog line word for word. The commit message is the brief's.
+- The diff and the commit hold no names, user names or local folder paths.
+
+### (b) Commands
+
+- `node tests/browser/modes-story-see.mjs`: 54 ok, exit 0.
+- `node tests/run.mjs modes`: `6 passed, 0 failed` (modes-bar, modes-send and modes-story-see, each at both sizes).
+- `node tests/run.mjs`: `20 passed, 0 failed`.
+
+### (c) Done when, the brief, and bible sections 3, 6 and 9
+
+**Done when:**
+
+- **The commands pass.** Yes, see (b).
+- **The result file says exactly how the typed text is passed to `imagine` and why that is safe.** Mostly. It says exactly how: `imagine.callback({}, typed)`, found at `SillyTavern.getContext().SlashCommandParser.commands.imagine`. That matches `SlashCommandClosure.executeStep`, which calls `executor.command.callback(args, value)` after parsing. The reason it is safe holds: no parser or macro step of ours sees the text. But one sentence is wrong, see problem 3.
+- **Only the files under "You own" changed.** Yes, with the lead's one allowed exception, see (a).
+
+**The brief's build steps:**
+
+1. **Settings.** `defaults` and `lookKeys` have `modesStoryAs` (`narration` / `message`) and `modesSeeAs` (`describe` / `picture`), with the types and defaults of bible section 7. The Message box section has "Story goes in as" (narration / my own message) and "See asks for" (a description / a picture). Both are greyed out while the modes are off. A value that is not one of the two falls back to the default. The test checks all of this, and an Import look round trip with good and bad values.
+2. **Story as narration.** The send is stopped in the capture phase, and the box is emptied with an `input` event. A narrator message is then added with SillyTavern's own `sendNarratorMessage`, the code behind `/sys`. Then it waits until `isGenerating()` is false (the same `is_send_press` and `is_group_generating` as `/trigger`) and calls `Generate('normal')`. Nothing is taken over while generating or with no chat open. See problems 2 and 4 for what was left out of "the way `/trigger` does".
+3. **Story as my own message.** A plain send of the trimmed text.
+4. **See as a description.** `transform` follows rule 3 and the end mark, as Do does. An empty box gives `You look around.` or `I look around.`.
+5. **See as a picture.** The send is stopped, the box is emptied, and `imagine`'s callback gets the typed text. Without the command there is one toast with the brief's words, and the description form is sent.
+6. **Off.** Turning off removes the listeners and the bar, and clears `storyPending`, see (d).
+
+**The two brief test steps the builder changed:**
+
+- **Step 3 (`held` should show `/generate`).** The change is justified. The sandbox's `forge-seed.js` (`blockRealGeneration`) answers `/api/backends/*/generate` inside the page with a 500, so the helper's route never sees a generate call. The test's replacement counts the replies in the page and checks one `GENERATION_STARTED` of type `normal` after the narration. That proves the same thing.
+- **Step 8 (a recorder for `executeSlashCommandsWithOptions`).** The change is justified, judged against bible section 6: "run that command with the text passed so that no part of it can be read as a command". Calling the registered command's own callback with the text as its unnamed argument runs that command, and no command line is ever built. The test also keeps the brief's recorder for `executeSlashCommandsWithOptions` and checks that it was called 0 times. My own hostile texts, through a stand-in `imagine` (the real one never ran), each arrived once, exactly as typed, with no named arguments, and with the box emptied and nothing added: `a door | /echo PWN {{user}}`, `{{setvar::k::v}} door`, `door {{pipe}} \| x`, `name=evil door`, `{: /echo IN :}()` and ``` `code` <b>bold</b> ```. No command line ran, no `/echo` toast appeared, and the variable `k` was not set. This was the same at phone size.
+
+**Bible section 6, Story and See in every setting.** I checked these myself, with scratch scripts outside the repository run through the test helper. Only the Forge Tester chat was open. Replies were answered in the page and `imagine` was always a stand-in. Only the messages the scripts made were read.
+
+- **A `/` command with Story or See picked** is left to SillyTavern: `/echo …` with Story, with See as a description, with See as a picture, and after three leading spaces. Each ran as a command. Nothing was added, and `imagine` was not called.
+- **Tidy off.** Story `  The sun sets.  ` became the narration `The sun sets.` (`sendNarratorMessage` trims). Story as my own message gave a user message `The moon rises.`. See with the own wording `*studies {{input}}*` gave `*studies the door*`.
+- **An own See wording, the I voice, and an empty box.** `I look around.`, as the result file says.
+- **See as a picture with an own wording and tidy off.** `imagine` got `  The Door  ` as typed. That is what bible section 6 asks ("run that command with the text").
+- **An empty box.** See gives `You look around.`. Story is left to SillyTavern, which starts a reply as it does with no mode.
+- **Story with `The rain | /echo PWN2 {{user}}`** gave one narration. `/echo` did not run, and `{{user}}` was filled by SillyTavern, as `/sys` does. That fits "SillyTavern's own macros … are left in for SillyTavern to fill".
+- **A double Enter, and a double tap on the phone.**
+  - Story: one narration, one reply, at both sizes. The `storyPending` guard works.
+  - See as a description: one message and two replies on the desktop. The same happens with no mode picked and with the modes off (`plain words` gives one message and two replies). That is SillyTavern's own double send, not this batch's.
+  - See as a picture: `imagine` once, then a user message `You look around.` and a reply, at both sizes. This is problem 1.
+
+**The builder's other choices, judged against the bible:**
+
+- Emptying the box before the narrator message, and holding sends back while a Story is added: sound. The double-Enter probe confirms both.
+- "No chat is open" read as `getCurrentChatId()`, with Story then sent as your own message: an acceptable reading of the brief's "do nothing". It matches bible section 6's "Do nothing while SillyTavern is generating", which also means leaving the send to SillyTavern.
+- See as a picture with an empty box sends `You look around.`: this follows the bible's table. But because nothing is held back while `imagine` runs, it is also what turns a second Enter into a message, see problem 1.
+- The empty-box sentence is the same with tidy off and with an own wording: acceptable. It is not a template, and an own wording needs `{{input}}`.
+- One fallback toast per send that falls back, and the typed text passed to `imagine` untidied: both match bible section 6.
+
+**Bible section 3:**
+
+1. **Native controls stay underneath.** It uses SillyTavern's own `sendNarratorMessage`, `Generate`, `isGenerating`, `swipeState` and `isExecutingCommandsFromChatInput`, and Image Generation's own command. `storyPending` is our own flag, not a copy of SillyTavern's state.
+2. **One switch back.** See (d).
+3. **Every look choice gets a setting.** No look was added. The two new behaviours each have a setting.
+4. **Phone.** The test passes at phone size. My probes behave the same on the phone, problem 1 included.
+5. **Tokens.** No CSS.
+6. **Stay in your lane.** See (a).
+7. **Small and plain.** `slash-commands.js` is loaded with a dynamic `import()`, as M2 loads `RossAscends-mods.js`. Nothing new is added.
+
+**Bible section 9:**
+
+- **The contract.** `modes.js` exports the six contract names, plus M2's `transform`. `apply()` is safe to repeat.
+- **The rules for the code.** Selects are built from fixed word lists, and the toast is a fixed string. No `innerHTML` with typed text, no `localStorage`, no `MutationObserver`, and no element is held across calls. New ids start with `forge-ui-modes-`, like M2's. No SillyTavern setting is changed: `imagine` gets `{}`, so `applyCommandArguments` changes nothing.
+
+**`tests/browser/modes-send.mjs`, on its merits.** The changes are sound.
+
+- `settle()` now waits on a plain predicate, and `script.js` is put on a global once.
+- The `[phone]` usage line adds the phone run that bible section 12 asks for: 70 checks at both sizes.
+- The two checks that had to change follow M3 correctly. The old "Story and See come back unchanged" would now be false, and the `lookKeys` check now compares only M2's keys.
+- The 2-second wait for `/echo test` is enough for a check that no message comes.
+
+### (d) Trying to break it
+
+- **Off.** With the modes off and Story or See saved, Story went in as typed, as a user message, and See as a picture asked for no picture. The same with the main switch off: an empty Enter was SillyTavern's own. Each time there was no `#forge-modes` and no `forge-modes` class, and the placeholder was SillyTavern's own. Nothing of this batch stayed in the page.
+- **Phone, 390 by 800 with touch.** The test passes at phone size. My probes there gave the same results as on the desktop: the hostile texts, commands, tidy off, own wording, double tap for Story, and problem 1 for See as a picture.
+- **Problem 1, compared with SillyTavern itself.** On the desktop I typed `/delay 2500` in the box with the modes off, and pressed Enter in the empty box while it ran. Nothing was sent: SillyTavern refuses a send while commands typed in the box are running (`isExecutingCommandsFromChatInput`). On the phone it hides the send button for that time, so the tap only landed once the command was done. Typing `/imagine …` by hand is protected in the same way. With See as a picture and a stand-in `imagine` that takes 2.5 seconds, the same second Enter, or on the phone a tap, gave `You look around.` and a reply straight away.
+
+### Problems
+
+1. **(Makes it FAIL.) See as a picture lets a second send through while the picture is being made.**
+   - `askForPicture` empties the box and calls `imagine` without waiting, and nothing holds sends back meanwhile. A second Enter or tap on the now empty box is therefore See with an empty box, and sends `You look around.` and starts a reply: a message the person did not mean, and a model call. This happens with a quick double Enter, with a second Enter 300 ms later, and at any time during the many seconds a real picture takes.
+   - SillyTavern holds sends back while a typed `/imagine` runs. This batch already holds sends back for Story (`storyPending`) for the same reason, but not for See as a picture.
+   - Seen at desktop size (Enter Enter) and phone size (tap tap): `imagine` was called once, then `You look around.` and one reply were added.
+2. **Story sends what is typed while the narration is being added.** The box is emptied before `sendNarratorMessage`, but not again just before `Generate('normal')`, which `/trigger` does. `Generate` sends whatever is in the box at that moment as a user message, unshaped, and runs it first if it starts with `/`. With the chat save held back 1.5 seconds in the page, `half typed` (no Enter) went in as a user message between the narration and the reply, at both sizes. The result file's "ours is already empty" is only true if nothing is typed meanwhile. The time this takes is short in practice (the save, plus `Generate`'s ping), so this alone would not fail the batch, but it should be fixed in the same round.
+3. **The result file says of `imagine`, "It does not fill macros in the text." That is wrong.** Image Generation's `sendGenerationRequest` (`scripts/extensions/stable-diffusion/index.js`) runs `substituteParams` on the prefixed prompt. So `{{user}}`, and macros such as `{{setvar::…}}`, typed with See as a picture are filled by `imagine` itself when a picture is really made, just as for `/imagine` typed by hand. The way this batch passes the text is still safe, since nothing of ours reads it (the comment on `askForPicture` says "on the way", which is right), but the sentence should say what `imagine` does. On its own this would not fail the batch.
+4. **The reply after a Story gives up quietly** when SillyTavern is still generating after 10 seconds, where `/trigger` shows a warning toast. The narration is in the chat with no reply and no word why. Minor.
+5. **One test line is misworded.** The check "(the helper's held list shows no generate call, as the seed answers it first)" tests the sandbox, not the code. In this test it is the test's own in-page stand-in that answers first, not the seed. Minor.
