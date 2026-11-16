@@ -1,0 +1,1 @@
+- Stage layout: drag the chat's left edge to resize it, or set **Chat width** under Layout. Double-click the edge to reset it.
