@@ -3,7 +3,8 @@
 
    Every rule in this file starts with body.forge-ui.forge-stage, so with the layout off (or the main
    switch off) none of it reaches the page. Values come from css/tokens.css; the chat column's width,
-   --forge-stage-chat, is set on body by stage.js. */
+   --forge-stage-chat, is set on body by stage.js (from the Chat width setting, or live while the spine is
+   dragged). */
 
 /* The chat column docks to the right edge. SillyTavern centres #sheld (left: 0, right: 0, auto margins,
    width: var(--sheldWidth)); with its left side freed it sits against the right edge instead. Only the side and
@@ -36,4 +37,52 @@ body.forge-ui.forge-stage #forge-stage {
     height: 100%;
     z-index: -1;
     pointer-events: none;
+}
+
+/* The spine: the chat column's left edge, which can be dragged (stage.js). A 1px brass line on the column's
+   first pixel, with an 11px grab area centred on it (5px over the stage, the line, 5px over the column).
+   It sits in body beside #sheld, not inside it: #sheld clips whatever crosses its own edge (overflow-x: hidden).
+   It shares #sheld's containing block, top and bottom, so it is exactly as tall as the column and follows the
+   top bar. It shares the column's layer (30, from SillyTavern's #sheld) and comes after it in the page, so it is
+   drawn just above the column and below everything drawn over the chat. */
+body.forge-ui.forge-stage #forge-spine {
+    position: absolute;
+    top: var(--topBarBlockSize);
+    bottom: 0;
+    /* The grab area's right edge is 6px into the column: the line's 1px and the 5px beyond it */
+    right: calc(var(--forge-stage-chat) - 6px);
+    width: 11px;
+    z-index: 30;
+    cursor: col-resize;
+    /* A finger drags the edge instead of scrolling the page */
+    touch-action: none;
+}
+
+body.forge-ui.forge-stage #forge-spine::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 5px;
+    width: 1px;
+    background: var(--forge-bar-line);
+}
+
+/* Touch screens wide enough for the stage: the grab area is a full touch target (bible section 11). The extra
+   width lies over the stage, where there is nothing to tap, so the column's own controls keep their share. */
+@media (pointer: coarse) {
+    body.forge-ui.forge-stage #forge-spine {
+        width: var(--forge-control);
+    }
+}
+
+/* While the spine is being dragged, no text is selected on the way and the pointer keeps its resize shape. No
+   picture can be dragged either: once the chat has widened under the press point, the browser may take the
+   message avatar now there for the thing being dragged (stage.js also cancels the press itself). */
+body.forge-ui.forge-stage.forge-dragging,
+body.forge-ui.forge-stage.forge-dragging * {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-user-drag: none;
+    cursor: col-resize;
 }
