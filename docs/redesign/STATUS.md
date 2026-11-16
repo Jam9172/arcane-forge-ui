@@ -15,8 +15,8 @@ States: `todo`, `doing`, `checked` (a second agent passed it), `merged`, `blocke
 | `S3-stage-content` | merged | `0151f07` | Checked PASS. For I1: `stage.js` exports a seventh name, `setPlateText` (the brief asks for it; bible 9 says exactly six); raw layers and line height. Lane S done. |
 | `P1-menu-frame` | merged | `f1b534d` | Checked PASS. For I1: a `--forge-menu-dim` token for the backdrop's raw colour. |
 | `P2-buttons-and-top-bar` | merged | `bc7235f` | Checked PASS. For I1: toasts touch the top edge; maximised Author's Note and CFG cover the buttons; the buttons overlap RPG Companion's panel top. |
-| `P3-characters-and-pins` | doing | | |
-| `P4-keys-and-motion` | todo | | |
+| `P3-characters-and-pins` | merged | `573150f` | Failed the first check (a load at 1000px or less lost recorded pins), fixed, passed the second. For the owner: pinned panels come back closed; disabling the extension in the manager leaves pins off until it runs again. |
+| `P4-keys-and-motion` | doing | | |
 | `I1-together` | todo | | |
 | `I2-phone` | todo | | |
 | `I3-settings-and-look` | todo | | |
