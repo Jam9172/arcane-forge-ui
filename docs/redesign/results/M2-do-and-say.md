@@ -209,3 +209,152 @@ I read its source, `src/scripts/chat-input-fullscreen-editor.js` and its wiring 
   - the fallback for a missing `shouldSendOnEnter` (see "Choices");
   - real TauriTavern; only the stand-in dialog was tried, and the editor's behaviour comes from reading its source;
   - group chats; only the Forge Tester chat may be opened.
+
+## Check
+
+**FAIL.** Checked on `batch/M2-do-and-say` at `bc8454b`. The batch was cut from `overhaul` at `c2e2808`. `overhaul` has since moved to `bc7235f` (P1, S2 and P2 merged). None of those merges touch this batch's files.
+
+One problem makes it FAIL: problem 1 below. With Do or Say picked, a send made from the keyboard on the send button goes out as typed. Everything else checked out.
+
+### (a) Files
+
+- `git diff --name-only overhaul...HEAD` lists 5 files: `css/modes.css`, `modes.js`, `tests/browser/modes-send.mjs`, `docs/redesign/results/M2-do-and-say.md` and `docs/redesign/changes/M2-do-and-say.md`. All five are under "You own". Nothing else changed.
+- The changes file holds the brief's changelog line word for word. The commit message is the brief's.
+- The diff and the commit hold no names, user names or local folder paths.
+
+### (b) Commands
+
+- `node tests/browser/modes-send.mjs`: 64 ok, exit 0.
+- `node tests/run.mjs modes`: `3 passed, 0 failed` (modes-bar at both sizes, modes-send).
+- `node tests/run.mjs`: `9 passed, 0 failed`.
+- Extra, a trial merge with today's `overhaul` (`bc7235f`): `git merge-tree` merges cleanly. That tree, exported outside the repository, gives `15 passed, 0 failed` on `node tests/run.mjs`. That run includes menu-frame, menu-buttons and stage-spine at both sizes.
+
+### (c) Done when, and bible sections 3, 6 and 9
+
+**Done when:**
+
+- **The commands pass.** Yes, see (b).
+- **Every row of the table for Do and Say is in the test.** Yes. All 5 Do rows and all 3 Say rows are there, each in both voices, compared exactly: 16 checks.
+- **Never rewritten twice, and never while generating, and the result file says how.** Yes. The file explains `lastRewrite` and `generating()`, which is SillyTavern's `isGenerating()` with `is_send_press` as a fallback. My probes confirm both (see "Bible section 6" below).
+- **Only the files under "You own" changed.** Yes, see (a).
+
+**The brief's build steps:**
+
+1. `transform(text, mode, s)` is exported. It covers Do and Say in both voices, and returns Story and See unchanged.
+2. The two listeners are capture-phase listeners on `document`:
+   - Enter uses SillyTavern's own test plus `shouldSendOnEnter()`. That function is loaded with a dynamic `import()`, and the fallback treats a window 1000px wide or less as a phone.
+   - The other listener catches a click on `#send_but`.
+   - Each one sets the value, fires `input` and lets the event carry on.
+3. The box is left alone for:
+   - no mode picked;
+   - empty or blank text;
+   - trimmed text starting with `/`, which is `processCommands`' own test in `script.js`;
+   - generating;
+   - the last rewrite.
+
+   The builder added two more: events that are not trusted, and `keyCode` 229.
+4. Settings:
+   - `defaults` and `lookKeys` have the three keys, with the types in bible section 7.
+   - The labels match: "Write my actions as" (You … / I …), "Tidy what I type (first letter, full stop, quotes)", and a closed fold "Advanced: my own wording".
+   - The placeholders show the default wording in the chosen voice.
+   - All five controls are disabled while the modes are off.
+5. The listeners go on and off with the feature. My probe in (d) watched them being added and removed.
+
+**Bible section 6.** This section is the specification for what is sent. It was checked in the page by my own scratch script, not only by reading the builder's test.
+
+- **The table, end to end.** I typed each of the 8 Do and Say rows into the message box and sent it with Enter, in both voices. All 16 user messages matched the table exactly. Say through the send button in the I voice gave `I say, "Hello there."`.
+- **Commands.** Typed `/send open the door` was sent as the command wrote it, and the box never changed before SillyTavern ran it. The same text with leading spaces was not changed either. `executeSlashCommandsWithOptions('/send …')` was sent unchanged.
+- **Scripts.** Each of these was sent as typed with Do picked:
+  - `#send_but.click()` from code;
+  - `sendTextareaMessage()` called directly;
+  - a synthetic Enter `keydown` on the box.
+- **Quick Reply.** A real Quick Reply was made and run through Quick Reply's own API (`quickReplyApi`) with Do picked. Its text was sent as typed. Saves were answered by the helper.
+- **Ctrl+Enter.** SillyTavern sends it, and it went out as typed, as the bible's Enter test (`!event.ctrlKey`) says. Cmd+Enter is shaped, because SillyTavern's own test ignores Meta. The builder says so.
+- **While generating.** A reply was held for 4 seconds. Enter during that time left "close the door" as typed, and only the first message went in.
+- **Never twice.** I turned tidy off, so that a second pass would show as "You You …", and set the connection to none. Enter, Enter again and a click all left "You open the door" in the box. Once connected, it was sent as it was.
+- **Story and See** are still sent as typed. They belong to M3.
+- **The send button from the keyboard is not shaped.** This is problem 1.
+
+**Bible section 3:**
+
+1. **Native controls stay underneath.** The box, the send button and SillyTavern's own handlers do the sending. `lastRewrite` is our own memory, not a copy of SillyTavern's state.
+2. **One switch back.** See (d).
+3. **Every look choice gets a setting.** The only CSS added hides the bar while TauriTavern's editor is open. Bible section 8 allows that behaviour, and it is not a new look.
+4. **Phone and TauriTavern.** The brief asks for no phone run. My phone probes pass, and the test covers the editor with a stand-in.
+5. **Tokens.** The one new rule is `display: none`.
+6. **Stay in your lane.** See (a).
+7. **Small and plain.** No dependency. `script.js` is imported statically, as `index.js` already does, and `RossAscends-mods.js` dynamically.
+
+**Bible section 9:**
+
+- **The contract.** `modes.js` exports the six contract names plus `transform`, which the brief asks for "so the test can call it". `index.js` reads only the six, so I do not count the extra export against "exactly this".
+- **`apply()`** is safe to repeat: it adds and removes the same two functions. The feature is active only with `enabled` and `modes` both on.
+- **The rules for the code:**
+  - The one new selector starts with `body.forge-ui.forge-modes`.
+  - No `!important` and no `localStorage`.
+  - The wording the owner typed reaches the fields through `.value`, never through markup.
+  - No network request beyond loading SillyTavern's own module.
+  - No `MutationObserver` on `#chat`.
+  - No SillyTavern setting is changed.
+  - New ids and classes start with `forge-`.
+- **"Never hold on to an element across calls."** The listeners look up the box and the button on each event. The placeholder watch's registration on `#send_textarea` still stays while a mode is picked. That was M1's check note 3, and this batch narrows it.
+
+### (d) Trying to break it
+
+Scratch scripts outside the repository, run through the test helper. Only the Forge Tester chat was open, and saves and generate calls were answered in the page. Only messages the scripts typed were read.
+
+**Switched off:**
+
+- **Listeners.** Calls to `document.addEventListener` and `removeEventListener` were recorded:
+  - with the modes on: exactly `onSendKey` (keydown, capture) and `onSendClick` (click, capture);
+  - with the modes off: none;
+  - with the main switch off and the modes on: none.
+- **Sends.** After switching off, Enter and the send button both sent the text unchanged.
+- **The page.** A snapshot was taken before the modes were ever on and again after turning them off. It covered `body`'s `forge-` classes and inline style, `#send_form`'s children and attributes, every attribute of `#send_textarea` except the inline style that SillyTavern's own height code writes (the placeholder included), and every `forge-` id. Both snapshots were identical. `modes.js` itself writes no inline style.
+- **Main switch off.** No class, no bar, and SillyTavern's own placeholder.
+
+**Phone size** (390 by 800, touch):
+
+- A tap on send with Do gave "You open the door.". With Say it gave `You say, "Hello there."`.
+- Enter followed SillyTavern's rule. SillyTavern does not see the helper's phone as mobile (send on Enter is "auto", `isMobile()` is false), so Enter sent the message, and it was shaped.
+- The bar runs from 9 to 381px in 390px, its four buttons are 44px tall, nothing scrolls sideways, and there were no script errors.
+- Switching off at phone size gave the same results as on desktop.
+
+**Other tries:**
+
+- With the TauriTavern stand-in (`likeTauriTavern`), Do still shaped the message.
+- **A send that SillyTavern refuses for its own reasons.** I saw this once, in a long probe where a send came while SillyTavern was still busy from earlier steps. The box showed the rewrite but nothing was sent. The next Enter sends it as it is, thanks to the never-twice check. This matches the method bible section 6 prescribes.
+
+### The builder's choices, judged against the bible
+
+- **Requiring `event.isTrusted`.** The aim is right: Quick Reply calls `click()` from code. But it also drops SillyTavern's own keyboard activation of the send button. That is problem 1.
+- **These choices follow the bible or SillyTavern:**
+  - skipping `keyCode` 229;
+  - not shaping Ctrl+Enter, and shaping Cmd+Enter;
+  - the fallback when `shouldSendOnEnter()` cannot be loaded;
+  - the command test;
+  - "you" and "I" as whole words;
+  - "first letter" meaning the first character;
+  - the exception in rule 3 that can never be reached;
+  - Say trimming inside the quotes.
+- **Tidy off means the template only, not even trimmed.** That is the literal "only the template is applied", so "you open the door" with tidy off becomes "You you open the door", as the bible asks.
+- **Text starting with "you" or "I" gets no wording at all, the owner's own included.** The bible says nothing about the owner's own wording here, and with the default wording the results match the table. But with a wrapping wording such as `*{{input}}*`, "wave" becomes "*wave.*" while "you wave" becomes "You wave." without the stars. A probe confirmed this. It is problem 2.
+- **The settings controls.** The `<details>` fold, `disabled` for greyed out, values set through the DOM, saving on every keystroke and `maxlength` 200 are all fine.
+- **TauriTavern's editor.** Bible section 8 allows hiding the bar. I could not check the id `tt-chat-input-editor` against TauriTavern's source, because no copy is within reach. If the id is wrong, the bar simply stays, and sends from the editor are left as typed either way.
+- **The placeholder watch rework.** It is not in the brief's build steps, but it is in an owned file, it answers M1's check note 3, and modes-bar passes at both sizes. See problem 3.
+- **The test answers generate calls in the page.** The sandbox seed's own comment invites this, and nothing reaches a model or another host.
+- **The builder's note for the lead is right.** The seed answers generate with a 500 inside the page, so the helper's route never sees `/generate`. As written, M3's test step 3 cannot pass.
+
+### Problems found
+
+1. **The send button used from the keyboard is not shaped. This makes it FAIL.**
+   - **What happens.** `#send_but` is a SillyTavern `.interactable` with `tabindex="0"`, and Tab from the message box lands on it. Enter there makes SillyTavern's `scripts/keyboard.js` (`handleGlobalKeyDown`) call `click()` on it from code. That click is not trusted, so `onSendClick` lets it through untouched.
+   - **Probe.** With Do picked I typed "open the door", pressed Tab and then Enter. "open the door" was sent. A mouse click on the same button gives "You open the door.".
+   - **With send on Enter off.** In SillyTavern, this button is then the keyboard's only way to send. Say with "hello there" went out as "hello there".
+   - **Why it fails.** Bible section 6 applies a mode to a send from the send button. Section 11 says everything works by keyboard.
+   - **A possible fix, for the builder to judge.** Also shape on a trusted Enter `keydown` whose target is `#send_but`, in the capture phase. Use the same condition as `keyboard.js`: no Alt, Ctrl or Shift. That runs before `keyboard.js` turns the key into a click. Quick Reply's `click()` from code would still be left alone. The test should then press Enter on the focused send button.
+2. **For the owner: the owner's wording and text that starts with "you" or "I".** A wording such as `*{{input}}*` is dropped for such text (see the builder's choices above). The bible does not settle this.
+3. **Scope.** The placeholder watch rework goes beyond the brief's build steps. It stays within owned files and nothing broke.
+4. **A wording without `{{input}}` is ignored silently.** The settings note does not say so.
+
+Only problem 1 makes it FAIL.
