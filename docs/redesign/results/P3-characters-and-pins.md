@@ -425,3 +425,128 @@ ok       stage-spine phone  12 checks, 14s
 ### For the owner
 
 - Problem 5 of the check is unchanged: if Arcane Forge UI is disabled in SillyTavern's extension manager while the menu panel is on, none of its code runs to put the pins back. They stay off in SillyTavern, and `menuPins` keeps the record until the extension runs again; turning the panel off then, or opening SillyTavern at 1000px or less, puts them back. Without the extension, tick the locks again by hand.
+
+## Check, second round
+
+**PASS.** Checked on `batch/P3-characters-and-pins` at `4c431ae`, against `overhaul...HEAD` (merge base `427c2a7`). `overhaul` has moved on to `a7bf109` (S3 and M2 merged); `git merge-tree` shows the branch still merges into it without conflicts.
+
+The first round's failure is gone. I reproduced it with real page loads on the code as it was at `7e78670`, then ran the same loads on `4c431ae`. At 900px, at 1000px and at phone size the recorded pins come back, and they are forgotten only once they are back. Nothing found in this round makes it FAIL. Problems 1 and 2 below are new, and are notes for the owner.
+
+### (a) Only owned files changed
+
+`git diff --name-only overhaul...HEAD` lists five files: `css/menu.css`, `docs/redesign/changes/P3-characters-and-pins.md`, `docs/redesign/results/P3-characters-and-pins.md`, `menu.js` and `tests/browser/menu-characters.mjs`. All five are on the brief's "You own" list. The fix commit touches three of them (`menu.js`, the test, the result file) and leaves the first "Check" section as it was (additions only). The diff and the commit messages hold no personal details. Met.
+
+### (b) The commands
+
+- `node tests/browser/menu-characters.mjs`: 57 ok, 0 FAIL.
+- `node tests/browser/menu-characters.mjs phone`: 11 ok, 0 FAIL.
+- `node tests/run.mjs menu`: 6 passed, 0 failed.
+- `node tests/run.mjs`: 16 passed, 0 failed.
+
+Met. The test now loads the page for real: at 1440px, at 900px, and at phone size.
+
+### (c) The brief, the "Done when" list, and bible sections 3 and 9
+
+Brief, Build:
+
+1. **Pins.** Met.
+   - `defaults` has `menuPins: {}`; `lookKeys` stays `{}` (section 7).
+   - Turning on: `unpin` records each ticked box, then clicks it. It only adds to `menuPins`, so a second activation never loses an entry (test step 3).
+   - The locks are hidden under `body.forge-ui.forge-menu` (test steps 2 and 6).
+   - Turning off: `repin` clicks each recorded box that is not ticked. It then keeps in `menuPins` every pin that SillyTavern does not have on (box ticked and its own `LNavLockOn`, `NavLockOn` or `WINavLockOn` is `'true'`). SillyTavern's `accountStorage.setItem` stores `String(value)`, so comparing with `'true'` is right.
+   - The new wait (`pinsReady`), read against SillyTavern's source:
+     - `lib/eventemitter.js` makes `APP_INITIALIZED` and `APP_READY` auto-fire events: `on` calls a late listener at once, inside the same call. So `later` is still `false` and nothing is applied a second time. `once` removes its wrapper before calling it.
+     - `firstLoadInit` (`script.js`) emits `APP_INITIALIZED` after `initRossMods`, which binds the pin handlers.
+     - TauriTavern's `script.js` does the same. Its deferred third-party extensions start after `APP_READY`, so there the wait is answered at once.
+2. **Characters section.** Test step 4 passes: the panel fills the content area, the tabs, search and list lie in it, and a long list scrolls inside its own box. Met.
+3. **What opens from it.** Test step 8 passes with the real Advanced definitions button. The lift rule copies SillyTavern's `style.css` (lines 5473 to 5476): the same three selectors, and the 3005 to 4005 layers. Met.
+4. **Floating panels.** With the panel on and a menu open, none of the 32 rules in `css/menu.css` matches any of the 329 elements in the four floating panels. Met.
+
+Test steps 1 to 8 are all there and use the real controls. The phone variant follows bible section 12.
+
+Done when:
+
+- **The commands pass:** yes, see (b).
+- **The result file says what happens to the pins in each way:** the table, together with the load paragraph under "Fixes after the check". What it says matches what I measured in (d). Met.
+- **Only the "You own" files changed:** yes, see (a).
+
+Bible section 3:
+
+1. **Native controls stay underneath.** Pins change only through SillyTavern's own checkboxes. `accountStorage` is only read. Met.
+2. **One switch back.** Met in every way I tried; see (d). The one narrow exception is problem 1.
+3. **Every look choice gets a setting.** Hiding the locks and the lift are behaviour, not look. Met.
+4. **Phone.** The phone run passes, and so does a load at phone size with pins recorded. See problem 2 for a real phone browser. Met.
+5. **One list of values.** `--forge-menu-lift: 1000` is still a raw figure, and a token has been asked of I1 (problem 4). Accepted as a note.
+6. **Stay in your lane.** Met.
+7. **Small and plain.** About 80 lines added to `menu.js` (comments included), one one-shot listener, no new observer. Met.
+
+Bible section 9:
+
+- **Contract.** `apply` is still the only place that adds or removes the feature. The one-shot listener calls this module's own `apply`, which is safe to call again. Met.
+- **Selectors.** Every one of the 32 selector groups in `css/menu.css` starts `body.forge-ui.forge-menu`. Met.
+- **`!important`, `innerHTML`, network, `localStorage`.** None added. `accountStorage` is SillyTavern's own store, the one its pin handlers write, and is only read. Met.
+- **Observers.** Still one, on `#top-settings-holder`. Met.
+- **"Never change SillyTavern's own settings, except the pins in 5.2, which are put back."** The pins were put back every time; see (d). Met.
+- **Nothing held across calls.** The boxes are looked up by id each time. The two module flags (`pinsAnswer`, `pinsWait`) record whether SillyTavern is ready; they hold no elements. Met.
+
+### (d) Trying to break it
+
+I used scratch scripts outside the repository, against the sandbox, with the Forge Tester chat only. They follow the harness's rules: every save is held, no model is called, and other hosts are refused. Each held settings save was read for its pin fields only. For the loads, the settings the page loaded were changed in that page only. The scripts also logged three things: each click on a pin box (and whether SillyTavern's handler was bound then), each listener added for `app_initialized` (and whether it came from `menu.js`), and how many listeners were waiting when the event was emitted.
+
+- **The first round's failure, reproduced on `7e78670`.** The saved settings stood in for a session that ended with the panel on: `menuPanel` `true`, Characters recorded, `NavLockOn` `'false'`.
+  - At 900px, `#rm_button_panel_pin` was clicked once, with no handler bound. After the load the box was off, the panel was not pinned, `NavLockOn` was `'false'` and `menuPins` was `{}`. Both held saves had forgotten the pin while it was still off. The pin was lost.
+  - At phone size: the same.
+  - At 900px with all three recorded: the same for all three.
+- **The same loads on `4c431ae`:** at 900px, 1000px and phone size, with Characters alone and with all three recorded.
+  - Each recorded pin is back exactly: the box ticked, `pinnedOpen`, `drawerPinnedOpen` on its icon, and SillyTavern's setting `'true'`.
+  - Each box was clicked once, after its handler was bound.
+  - `menuPins` is `{}`. No held save forgot a pin while it was still off, and the last save has every setting on and nothing recorded.
+  - `menu.js` added one listener for `APP_INITIALIZED`, before the event was emitted. It ran, and after the load nothing of ours was waiting.
+  - With an iPhone user agent (SillyTavern's `isMobile()` `true`), the pins come back the same way; see problem 2.
+- **Other loads.**
+  - Main switch off, three recorded, 1440px: all three back, as above.
+  - Panel switch off, three recorded, 1440px: all three back.
+  - Panel on, three recorded with their settings off, 1440px: nothing is clicked and the record is kept. Turning the panel off puts all three back and empties `menuPins`.
+  - Panel on, nothing recorded, SillyTavern's settings with all three pinned and open, 1440px:
+    - each pin is put away with one click, after its handler was bound, and all three are recorded;
+    - no menu opens at load, and the frame stays closed;
+    - turning the panel off puts them back.
+  - Panel on, Characters recorded and AI response pinned by SillyTavern, 1440px: AI response is put away and added to the record, and Characters is kept. Turning the panel off puts both back. Lorebooks, never pinned, is untouched.
+  - Panel on, nothing recorded, SillyTavern's pins on, 900px: nothing is clicked. Widening to 1440px puts them away and records them; narrowing to 900px puts them back. Each change clicks each pin once.
+- **No listener left behind, nothing run twice.**
+  - With the panel off, with the main switch off, or at phone size, and nothing recorded, `menu.js` adds no listener at all and clicks nothing.
+  - In every load above, nothing of ours waits on `APP_INITIALIZED` once it has been emitted.
+  - There is never more than one frame or one group of buttons.
+  - No pin box is clicked twice in one change.
+- **Every way the panel can stop, in a live page.** I pinned all three panels by hand and left them open. Then I turned the panel on and off in each way:
+  - its switch through `apply`;
+  - the main switch;
+  - the window at 1000px;
+  - its switch ticked and unticked by hand in the Extensions section;
+  - Reset.
+
+  Each time there was one click per pin to put it away and one to put it back, all with the handler bound. The box, `pinnedOpen`, `drawerPinnedOpen` and the three `...LockOn` settings were as before, and `menuPins` was `{}`. The last held save had all three on and nothing recorded. Nothing of ours was waiting, and the frame and buttons were gone. The only difference was which panels were open (problem 3).
+- **Off leaves nothing behind.** I repeated the first round's snapshot: the landmarks, every drawer part, the three pin blocks, the floating panels, `body`'s children, every `forge-` id and `--forge-menu-lift`. Only `#character_popup`'s `open` class and inline style differ. A control run with the panel never turned on shows that SillyTavern's cross leaves the same two. The lift was `1000` while Lorebooks was over the window.
+- **What reaches the sandbox.** Nothing. A plain load before and after all my runs and the test suite shows the same pin state: no box ticked, the same six pin and opened values in SillyTavern's account storage, `menuPins` `{}`, `menuPanel` `false`.
+- **The first round's note 4.** Reproduced: a press on the advanced definitions window's text closes Characters and hides the frame; the window stays open.
+
+### Problems found
+
+None of these makes it FAIL.
+
+1. **Not a FAIL: a wait that starts while `APP_INITIALIZED` is being handed out is never answered.** SillyTavern's `emit` takes the list of listeners when it starts and awaits them one by one. It remembers the event for late listeners only after the last one has finished. A listener added in between is called by neither. `pinsReady` adds its listener the first time it is called, so if that first call falls inside the emit while another `APP_INITIALIZED` listener is still being awaited, `pinsAnswer` never becomes `true`.
+   - Reproduced with a stand-in: a slow `APP_INITIALIZED` listener (1s), added in the page. The settings had the panel off, nothing recorded, and Characters pinned by SillyTavern. The panel was applied as active 300ms into the emit, as a window widening past 1000px would do.
+   - For the rest of that session, Characters stays pinned beside the chat with the panel on, and its lock is hidden. Turning the panel off and on again clicks nothing. Our listener stays registered after the panel is off.
+   - Nothing is clicked or saved wrongly, `menuPins` is not touched, and the next load behaves normally. Without the stand-in, the same steps behave correctly.
+   - Why it is not a FAIL:
+     - It needs an extension whose `APP_INITIALIZED` listener takes time. SillyTavern has none, and neither do the sandbox's extensions.
+     - The panel's first activation must also fall in that window. In SillyTavern, Forge UI's first `apply` comes long before the emit, so only a resize or a settings change during the loading screen can do it.
+     - Recorded pins always start the wait at load, before the emit, so they cannot be lost this way.
+   - Waiting on `APP_READY` as well, as a second chance, would close it.
+2. **Not a FAIL: on a real phone browser, a pin put back at load is live for that session.** Under a phone user agent, `initRossMods` does not restore pins, so a phone session normally has no pinned panel. When a load there puts back a recorded pin, SillyTavern's own handler pins the panel for that session. Then, with Characters open, opening AI response leaves both open. Without a recorded pin, opening AI response closes Characters. This lasts until the next load. It is what the brief asks for ("drops to phone size: click each recorded checkbox to pin it again"), and SillyTavern's setting ends as it was before. Noted for the owner.
+3. **Not a FAIL (the first round's 2, confirmed): pinned panels come back closed.** In every way above, the pins come back exactly, but panels that were open beside the chat stay closed until clicked. SillyTavern's `NavOpened`, `LNavOpened` and `WINavOpened` are not changed, so those panels reopen on the next desktop load.
+4. **Not a FAIL (the first round's 3): raw `1000` in `css/menu.css`.** A token has been asked of I1.
+5. **Not a FAIL (the first round's 4, reproduced): a press in the advanced definitions window closes Characters behind it.** This is SillyTavern's own behaviour for an unpinned panel.
+6. **Not a FAIL (the first round's 5, from the code): disabling the extension in SillyTavern's extension manager while the panel is on leaves the pins off.** No code of ours runs then. Because a pin is now forgotten only once it is really back, the record survives, and the next run of the extension in a state where the panel is not active puts the pins back.
+
+Not tried: TauriTavern itself (the brief asks for no stand-in). Its `script.js` was read; see (c).
