@@ -200,3 +200,103 @@ The brief's steps are numbered in the check names. Step 9 runs in the phone vari
 ## Not done
 
 Nothing in the brief. Out of scope as the brief says: pinned panels (P3), Escape and focus return (P4), and the chat's padding under the buttons (I1).
+
+## Check
+
+**PASS.** Checked on `batch/P2-buttons-and-top-bar` at `8dacf57`, against `overhaul...HEAD` (merge base `92b7649`). `overhaul` has since moved on to `82d2514` (S2 merged; it touched only lane S files and docs). `git merge-tree` shows the branch still merges into it without conflicts.
+
+### (a) Only owned files changed
+
+`git diff --name-only overhaul...HEAD` lists six files. Five are on the brief's "You own" list: `css/menu.css`, `docs/redesign/changes/P2-buttons-and-top-bar.md`, `docs/redesign/results/P2-buttons-and-top-bar.md`, `menu.js` and `tests/browser/menu-buttons.mjs`.
+
+The sixth is `tests/browser/menu-frame.mjs`. The change is one call, `setForge(page, { menuPanel: false })` becoming `setForge(page, { menuPanel: false, menuButtons: false })`, plus a two-line comment. I accept it, for three reasons:
+
+- **Bible section 9 gives the file to lane P.** Its table assigns `tests/browser/menu-*.mjs` to lane P, and the bible says it wins over a brief. House rule 6 points to section 9 for the files.
+- **The brief's own check cannot pass without it.** I ran `overhaul`'s unchanged `menu-frame.mjs` against this branch's code, from a scratch copy that imports this checkout's harness. It passes 7 checks, then times out at its first click on a top-bar icon (`page.click: Timeout 30000ms exceeded`). The bible and the brief make `menuButtons` default to `true`, and that hides the icon.
+- **P1's test loses no coverage.** It now runs with the top bar, which is the only state it knew before `menuButtons` existed.
+
+The builder states and explains the change in the result file and in the commit body. No personal details are in the diff or the commit message.
+
+### (b) The commands
+
+- `node tests/browser/menu-buttons.mjs`: 55 ok, 0 FAIL.
+- `node tests/browser/menu-buttons.mjs phone`: 4 ok, 0 FAIL.
+- `node tests/run.mjs menu`: 4 passed, 0 failed.
+- `node tests/run.mjs`: 12 passed, 0 failed (foundation, harness, menu-buttons, menu-frame, modes-bar and stage-column, each desktop and phone).
+
+### (c) The brief, the "Done when" list, and bible sections 3 and 9
+
+Brief, Build:
+
+1. **Setting.** `defaults` gains `menuButtons: true`. The Menus section has the checkbox "Two round buttons in place of the top bar" after the panel's. While the panel is off it is `disabled` and its label has a `title`. Ticking the panel enables it at once. `lookKeys` stays `{}`, which matches bible section 7 ("no" in the look file column). Met, with problem 2.
+2. **The buttons.** `#forge-menu-buttons` is `position: fixed` at the top right and holds two `<button type="button">`s, Characters then Menu, each with an `aria-label` and a `title`. They are added only from `apply()` and only when `active && s.menuButtons`, where `active` is P1's rule (main switch, `menuPanel`, desktop). `body.forge-menu-buttons` comes and goes in the same call. Met.
+3. **The clicks.** Characters calls `openSection('rightNavHolder')`, which clicks that drawer's own `:scope > .drawer-toggle`. Menu calls `openSection(menuTarget())`. `menuTarget()` uses `menuLast` only if it names a `#top-settings-holder > .drawer` in the page and is not `rightNavHolder`; otherwise it uses `ai-config-button`. Refusing `rightNavHolder` follows bible 5.2 ("never Characters"). Met.
+4. **Hiding the top bar.** Under `body.forge-ui.forge-menu-buttons`:
+   - `--topBarBlockSize: 0px` is set on `body`;
+   - `#top-bar` gets `display: none`;
+   - the holder gets `pointer-events: none`, and the drawer contents get `pointer-events: auto`;
+   - `#top-settings-holder > .drawer > .drawer-toggle` gets `display: none`.
+
+   I checked the `--topBarBlockSize` table against SillyTavern's source (`public/style.css`, `css/popup.css`, `css/promptmanager.css`, `css/mobile-styles.css`, `scripts/extensions/expressions/style.css`). Every line the builder cites is there with the selector they give. No `:root` variable is derived from it (only line 113 defines it), so the `body` override reaches every use. The `#top-bar` surprise is true: SillyTavern sizes it with `height: var(--bottomFormBlockSize)`. Met, with problem 3.
+5. **The dot.** It follows `#API-status-top.fa-plug-circle-exclamation`. I confirmed in `RossAscends-mods.js` (`RA_checkOnlineStatus`) that the page swaps `fa-plug` and `fa-plug-circle-exclamation`, and in `index.html` that the icon starts with the exclamation class. The dot is updated from P1's existing observer on `#top-settings-holder` (class changes), plus once when the buttons are built. There is no polling and no second observer. Met.
+6. **With `menuButtons` off,** the top bar is back and the panel works from it (test step 8). Met.
+
+Leave alone: nothing pinned, Escape or focus is touched. `#chat` is not styled. Nothing of RPG Companion is selected or styled.
+
+Test: the brief's ten steps are all there and numbered in the check names. Step 9 runs as the `phone` variant. That follows bible section 12 over the brief's "Desktop only", which is right because the bible wins.
+
+Done when:
+
+- The commands pass: yes, see (b).
+- The result file lists what uses `--topBarBlockSize` and how the connection state is read: yes, both sections are there and I verified both against the source (above).
+- Only the "You own" files changed: all but `menu-frame.mjs`, which bible section 9 allows. See (a).
+
+Bible section 3:
+
+1. **Native controls stay underneath.** Both buttons click SillyTavern's own toggles. The toggles are hidden, not removed. The dot reads the plug icon each time and keeps no copy of the connection state. Met.
+2. **One switch back.** Met; see (d).
+3. **Every look choice gets a setting.** Section 7 gives the buttons only their switch. Their colours come from tokens that the owner's colour settings drive. The hover is the same as P1's close button. Met.
+4. **Phone.** The phone run passes, and the brief asks for no TauriTavern stand-in. Met.
+5. **One list of values.** No raw colours. The literals are figures the bible gives: the 18px icon, stroke 1.8, the 8px dot and 1px lines. P1 did the same and passed its check. Met, with problem 4.
+6. **Stay in your lane.** Met; see (a).
+7. **Small and plain.** About 90 lines in `menu.js`, small functions, no classes, no dependencies. Met.
+
+Bible section 9:
+
+- **Contract.** The six exports are unchanged in shape. `setButtons` is called only from `apply`. Met.
+- **Shared names.** `body.forge-menu-buttons` and `#forge-menu-buttons` are used exactly as section 9's table defines them. Every new class starts `forge-menu-`, and the settings id is `forge-ui-menu-buttons`. Met.
+- **Selectors.** Every new selector starts `body.forge-ui.forge-menu-buttons`. I listed every rule in the page's stylesheets that names the buttons, and all of them do, including the one SillyTavern generates (see (d)). Met.
+- **No `!important`.** None is added. Met.
+- **No chat text.** No chat text reaches the page. No network requests, no `localStorage`. No observer on `#chat`. No SillyTavern setting is changed. Met.
+- **Nothing kept between calls.** The click handlers hold drawer ids, not elements, and `syncDot` looks the button up each time. Met.
+
+### (d) Trying to break it (scratch scripts outside the repository, against the sandbox, Forge Tester chat only)
+
+All of these passed:
+
+- **Panel off after use.** I opened menus, moved the buttons on and off, changed the connection state and ran five applies, then turned the panel off. I compared the attributes of `html`, `body`, `#top-bar`, `#top-settings-holder`, `#sheld`, `#chat`, `#form_sheld`, `#send_form`, and every drawer, toggle and drawer content with a snapshot taken before the panel was ever on (class lists compared as sets). I also compared `body`'s child list, the computed `--topBarBlockSize`, every `forge-*` id and the holder's `pointer-events`. All were identical. On a first run with ordered class lists, two diffs showed. Both were order only: SillyTavern re-adding `no-connection` to `#send_form` after my status changes, and `index.js` re-adding `forge-ui` after the main-switch test. Neither comes from this batch.
+- **Main switch off, then on with the panel off.** Identical to before, apart from `index.js`'s own classes while the switch is off.
+- **Buttons switched off with a menu open.** The menu stays open in the frame and the buttons are gone. Switched on again, there is one `#forge-menu-buttons`, placed just before `#forge-menu`, which stays last in `body`.
+- **Five `arcane-forge-ui:apply` events:** one `#forge-menu-buttons`.
+- **The connection changed while the buttons were away.** It changed once with the buttons off and once with the panel off. In both cases the dot was right as soon as the buttons came back.
+- **The buttons' look.** `--forge-card` fill, `--forge-brass` icon, a 1px `--forge-border` line, no shadow, no gradient, no filter. While the panel is open, a click on Menu's spot lands on `.forge-menu-backdrop`, so the buttons are under the backdrop as the layer tokens intend.
+- **The holder.** It holds the nine drawers and nothing else. So `#top-settings-holder > .drawer > .drawer-toggle` and "every `.drawer-toggle` in the holder" are the same nine elements today, and the test asserts the broader form.
+- **Phone.** At 390 by 800 (touch) with both settings on, there is no `#forge-menu-buttons`, no class, and the top bar is unchanged. Crossing 1000px both ways on desktop removes and restores the buttons (in the test).
+- **Screenshots** of the top right at 1440 by 900 match bible 5.2: two round card buttons, the address card and three lines in brass, and the red dot on Menu. In the Stage layout `#sheld` runs from 0 to 900 at the right edge (778,0 662x900).
+
+Not tried: a touch screen wider than 1000px (where `--forge-round` is 44px), TauriTavern itself, and Tab order (WebKit does not stop on buttons by default, as the builder noted).
+
+### Problems found
+
+None of these makes it FAIL.
+
+1. **`tests/browser/menu-frame.mjs` is outside the brief's list.** It is in lane P under bible section 9, the brief's own check needs the change, and it is stated. Accepted; see (a). The brief should have listed it.
+2. **Greyed out covers the checkbox only.** The checkbox is `disabled` and shows at `brightness(0.5)` with a not-allowed cursor, but the label text stays at full `--forge-text`. Feature CSS cannot do this, because its selectors all need `body.forge-menu`, which is absent exactly when it should apply. The builder handed it to I3 with a ready rule. I agree.
+3. **The space given back reaches past the chat.** The `--topBarBlockSize: 0px` side effects are real and documented:
+   - toasts touch the top edge (over the buttons if the user sets toasts to top right);
+   - maximised Author's Note and CFG (layer 4000) cover the buttons;
+   - RPG Companion's panel keeps a 34.5px gap and the buttons overlap its top edge. My screenshot confirms this.
+
+   None of these is something this batch may fix (bible sections 10 and 14, and the brief leaves the chat's padding to I1). It is listed for I1 in "Asked of other files".
+4. **Raw sizes in `css/menu.css`.** `18px`, `1.8` and the `8px` dot are the bible's figures with comments, as in P1. I1 could make the dot a token.
+5. **SillyTavern also styles the hover rule as a focus rule.** `scripts/dynamic-styles.js` copies every `:hover` rule into a `:focus-visible` rule in `<style id="dynamic-extension-styles">`. So `.forge-menu-round:focus-visible` gets the hover fill as well as Forge's ember ring. It sits under the same `body.forge-ui.forge-menu-buttons` selector, so nothing of it applies with the feature off. A note, not a fault.
