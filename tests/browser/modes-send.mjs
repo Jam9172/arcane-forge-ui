@@ -109,7 +109,7 @@ const sendButtonShown = () => page.waitForSelector('#send_but', { state: 'visibl
 // Types into the message box and sends it, how:
 //   'enter'        Enter in the message box
 //   'button'       a mouse click on the send button
-//   'Tab Enter'    Tab from the message box to the send button, then Enter (or 'Tab Space')
+//   'Tab Enter'    Tab from the message box to the send button, then Enter
 //   'script'       a script clicks the send button from code (as Quick Reply does)
 //   'script Enter' a script fires an Enter keydown on the send button (SillyTavern's keyboard.js clicks it)
 // Returns the text of the user messages that send added (only messages this test typed are read).
@@ -138,20 +138,13 @@ const send = async (text, how = 'enter') => {
             await sendButtonShown();
             await page.keyboard.press('Tab');
             tabbedTo = await page.evaluate(() => document.activeElement?.id ?? '');
-            await page.keyboard.press(how.split(' ')[1]);
+            await page.keyboard.press('Enter');
         }
     }
     await settle(before);
     return page.evaluate((before) => SillyTavern.getContext().chat.slice(before).filter((m) => m.is_user).map((m) => m.mes), before);
 };
 const only = (list, text) => list.length === 1 && list[0] === text;
-// Sends with Tab then Enter, and with Tab then Space, from the message box to the send button, and checks each
-const sendByKeyboard = async (label, typed, expected) => {
-    for (const key of ['Enter', 'Space']) {
-        const sent = await send(typed, `Tab ${key}`);
-        check(`${label}, Tab to the send button then ${key}: the newest user message is ${expected}`, tabbedTo === 'send_but' && only(sent, expected), `focus on ${tabbedTo}; ${JSON.stringify(sent)}`);
-    }
-};
 
 // The sandbox's test seed answers SillyTavern's generate requests in the page with an error, so that no real
 // model is ever called. A send would then end in a script error, so this test answers them in the page with
@@ -181,22 +174,34 @@ check('Do, Enter: the newest user message is "You open the door."', only(sent, '
 check('the message box is empty after the send', (await box()) === '', JSON.stringify(await box()));
 check('the send went on to SillyTavern, which asked for a reply (answered in the page)', (await replies()) === 1, `${await replies()} asked`);
 // The send button used from the keyboard is the person's own send too (bible sections 6 and 11). SillyTavern
-// turns Enter on it into a click from code; Space is ours.
-await sendByKeyboard('Do', 'open the door', 'You open the door.');
+// turns Enter on it into a click from code.
+sent = await send('open the door', 'Tab Enter');
+check('Do, Tab to the send button then Enter: the newest user message is You open the door.', tabbedTo === 'send_but' && only(sent, 'You open the door.'), `focus on ${tabbedTo}; ${JSON.stringify(sent)}`);
+// Space on the send button stays as SillyTavern has it: it does nothing, with a mode picked too, and the box
+// is not rewritten
+await dismissNotice();
+const beforeSpace = await chatLength();
+await page.fill('#send_textarea', 'open the door');
+await sendButtonShown();
+await page.keyboard.press('Tab');
+tabbedTo = await page.evaluate(() => document.activeElement?.id ?? '');
+await page.keyboard.press('Space');
+await page.waitForTimeout(1200);
+check('Do, Tab to the send button then Space: nothing is sent and the box is as typed, as in SillyTavern', tabbedTo === 'send_but' && (await chatLength()) === beforeSpace && (await box()) === 'open the door', `focus on ${tabbedTo}; ${JSON.stringify(await box())}`);
+await page.fill('#send_textarea', '');
 
 // 5. Say, the send button
 await pick('say');
 sent = await send('hello there', 'button');
 check('Say, send button: the newest user message is You say, "Hello there."', only(sent, 'You say, "Hello there."'), JSON.stringify(sent));
-await sendByKeyboard('Say', 'hello there', 'You say, "Hello there."');
+sent = await send('hello there', 'Tab Enter');
+check('Say, Tab to the send button then Enter: the newest user message is You say, "Hello there."', tabbedTo === 'send_but' && only(sent, 'You say, "Hello there."'), `focus on ${tabbedTo}; ${JSON.stringify(sent)}`);
 
 // 6. No mode
 await pick('say');
 check('clicking Say again leaves no mode picked', (await page.evaluate(() => document.querySelectorAll('#forge-modes [aria-checked="true"]').length)) === 0);
 sent = await send('open the door');
 check('no mode: the newest user message is "open the door"', only(sent, 'open the door'), JSON.stringify(sent));
-sent = await send('open the door', 'Tab Space');
-check('no mode: Tab to the send button then Space sends it as typed', tabbedTo === 'send_but' && only(sent, 'open the door'), JSON.stringify(sent));
 
 // 7. A command is never touched
 await pick('do');
@@ -299,17 +304,6 @@ sent = await send('hello there', 'button');
 check('modes off: "hello there" with the send button is sent unchanged', only(sent, 'hello there'), JSON.stringify(sent));
 sent = await send('open the door', 'Tab Enter');
 check('modes off: Tab to the send button then Enter sends it unchanged', tabbedTo === 'send_but' && only(sent, 'open the door'), JSON.stringify(sent));
-// Space on the send button is SillyTavern's again: it does nothing
-await dismissNotice();
-before = await chatLength();
-await page.fill('#send_textarea', 'open the door');
-await sendButtonShown();
-await page.keyboard.press('Tab');
-tabbedTo = await page.evaluate(() => document.activeElement?.id ?? '');
-await page.keyboard.press('Space');
-await page.waitForTimeout(1200);
-check('modes off: Space on the send button sends nothing, as in SillyTavern', tabbedTo === 'send_but' && (await chatLength()) === before && (await box()) === 'open the door', JSON.stringify(await box()));
-await page.fill('#send_textarea', '');
 await setForge(page, { enabled: false, modes: true });
 sent = await send('open the door');
 check('main switch off with the modes on: sent unchanged', only(sent, 'open the door'), JSON.stringify(sent));

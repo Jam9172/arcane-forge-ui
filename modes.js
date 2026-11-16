@@ -311,25 +311,15 @@ function onBoxKey(event) {
     shapeMessage();
 }
 
-// The send button from the keyboard (Tab from the message box lands on it).
-//  - Enter: SillyTavern's scripts/keyboard.js turns it into a click() from code, which onSendClick cannot
-//    tell from a script's. So the box is shaped here, on the person's own key, just before; keyboard.js's
-//    own test decides (no Alt, Ctrl or Shift, and the button not .disabled), so it is shaped only when that
-//    click follows.
-//  - Space: SillyTavern gives the button nothing for it. While the modes are on, Space sends as Enter does,
-//    as it would on any button: the box is shaped, then the button is clicked, as keyboard.js does for
-//    Enter. The page does not scroll, and a held key sends once.
+// Enter on the send button (Tab from the message box lands on it). SillyTavern's scripts/keyboard.js turns
+// that key into a click() from code, which onSendClick cannot tell from a script's. So the box is shaped
+// here, on the person's own key, just before; keyboard.js's own test decides (no Alt, Ctrl or Shift, and the
+// button not .disabled), so it is shaped only when that click follows. Space is left as SillyTavern has it:
+// the button gives it nothing.
 function onSendButtonKey(event, button) {
-    if (event.key !== 'Enter' && event.key !== ' ') return;
+    if (event.key !== 'Enter') return;
     if (event.altKey || event.ctrlKey || event.shiftKey || button.classList.contains('disabled')) return;
-    if (event.key === 'Enter') {
-        shapeMessage();
-        return;
-    }
-    event.preventDefault();
-    if (event.repeat) return;
     shapeMessage();
-    button.click();
 }
 
 // A click or tap on the send button. Quick Reply and other scripts click it from code (not trusted); what
