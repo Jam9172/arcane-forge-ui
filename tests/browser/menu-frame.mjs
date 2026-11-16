@@ -30,8 +30,9 @@ const same = (a, b) => !!a && !!b && ['left', 'top', 'width', 'height'].every((k
 const show = (b) => (b ? `${b.left},${b.top} ${b.width}x${b.height}` : 'not shown');
 
 if (!phone) {
-    // 1. Off: SillyTavern places the menu itself, under the top bar and across the chat column
-    await setForge(page, { menuPanel: false });
+    // 1. Off: SillyTavern places the menu itself, under the top bar and across the chat column. This test opens
+    // menus from the top bar, so the round buttons that would replace it stay off (menu-buttons.mjs tests them).
+    await setForge(page, { menuPanel: false, menuButtons: false });
     await clickAndSettle(SETTINGS);
     const nativeBox = await box(page, '#user-settings-block');
     const holder = await box(page, '#top-settings-holder');
