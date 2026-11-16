@@ -200,3 +200,119 @@ And `menu-keys.mjs` with `overhaul`'s `menu.js` and `css/menu.css` put in for on
 ## Not done
 
 Nothing in the brief. Not tried: TauriTavern itself (the brief asks for no stand-in), Safari with "Press Tab to highlight each item" on, and a screen reader.
+
+## Check
+
+**FAIL.** Checked on `batch/P4-keys-and-motion` at `766f2db`, against `overhaul...HEAD` (merge base `c428dc2`, which is still the tip of `overhaul`).
+
+Two problems make it FAIL (problems 1 and 2 below):
+
+1. **Shift+Tab leaves the panel from the Lorebooks section.** The brief's step 3 and bible section 11 say Tab stays inside.
+2. **When the panel is opened with the mouse, closing it does not give the focus back.** In WebKit the focus ends on `body`. The brief's step 5 says the focus goes back to the round button or top bar icon that opened the panel. The result file also says something different from what happens.
+
+Everything else holds up: the roles, the opening focus, Escape, the keyboard focus return, the listener's lifetime, motion under both reduced motion settings, and the pin wait.
+
+### (a) Only owned files changed
+
+`git diff --name-only overhaul...HEAD`: `css/menu.css`, `docs/redesign/changes/P4-keys-and-motion.md`, `docs/redesign/results/P4-keys-and-motion.md`, `menu.js`, `tests/browser/menu-keys.mjs`, `tests/browser/menu-characters.mjs`. All are on the brief's list except `menu-characters.mjs`. Bible section 9 gives lane P every `tests/browser/menu-*.mjs`, and the bible wins. The lead asked for that change. P3's checks in that file are untouched: the diff only adds one header line and one block at the end of the desktop run. **Pass.**
+
+### (b) The commands
+
+- `node tests/browser/menu-keys.mjs`: 46 ok, exit 0. `node tests/browser/menu-keys.mjs phone`: 4 ok, exit 0.
+- `node tests/run.mjs menu`: `8 passed, 0 failed` (menu-buttons 55, menu-characters 63, menu-frame 49, menu-keys 46, and the four phone runs).
+- `node tests/run.mjs`: three full runs, and each was cut off from outside the batch. The machine went into sleep over and over during the runs: the system's power log shows "Entering Sleep" and "DarkWake" entries every few minutes. So the runner's 5-minute limit reported waits of 374s to 2008s, and page loads timed out. In some phone runs, RPG Companion's welcome window (`#rpg-welcome-modal`) also took the clicks ("intercepts pointer events"). No check that ran failed in any of the three runs: no indented `FAIL` line in any output. Across the runs these passed at least once: foundation (both), harness (both), menu-buttons (both), menu-characters (both), menu-frame (both, in the menu run), menu-keys (both), modes-bar phone, stage-column phone, stage-content, stage-spine (both). Never reached in a run that was not cut off: modes-bar, modes-send, stage-column, stage-content phone. These are other lanes' tests, and the panel is off by default in them. **Not proven** for the whole suite. This does not decide the verdict; problems 1 and 2 do.
+
+### (c) The diff, item by item
+
+Brief "Build":
+
+1. **Roles:** `role="dialog"`, `aria-modal="true"`, `aria-labelledby="forge-menu-title"`, `<nav aria-label="Menus">`. They come from P1 and are checked by the test's step 2. **Pass.**
+2. **Opening moves the focus to the current nav button.** Checked for the round buttons, a top bar icon, and the mouse (probe F: focus on `button.forge-menu-section`). **Pass.**
+3. **Tab stays inside.** **FAIL**, see problem 1. Problem 3 is a smaller second hole.
+4. **Escape.** It closes the panel through the drawer's own toggle (`closeMenu`). A `<dialog>`, a SillyTavern popup, and `#character_popup` each take Escape first. The listener is on `body` and is added only while the frame is shown; nothing is ever added to `document` or `window`. My wrapper of `addEventListener` saw exactly one key listener from Forge in the whole run, `keydown@body@menu.js`. **Pass.** For the choice on popups, see problem 4.
+5. **Closing gives the focus back.** It works by keyboard: Menu, Characters, and the top bar icon with the buttons off (test steps 4, 5 and 10). It does not work by mouse in WebKit. **FAIL**, see problem 2.
+6. **Motion.** At opening, the only transitions in the frame and the open menu are the backdrop's opacity from 0, the panel's opacity from 0, and its transform from `scale(0.98)`, over 0.16s ease-out. Probe E listed every element in `#forge-menu`: only `.forge-menu-backdrop` (opacity 0.16s) and `.forge-menu-panel` (opacity and transform 0.16s) have a transition. Reduced motion, the system's way (`emulateMedia`): no element in the frame has any transition. Reduced motion, SillyTavern's way, set two ways: by the value (test step 9), and by ticking SillyTavern's own `#reduced_motion` checkbox inside the panel's Settings section (probe E: `{"was":false,"now":true,"value":true}`). At the next opening, no element in the frame has a transition; unticked again, the fade is back (0.16s). **Pass.** The brief's step 8 reads `#forge-menu`'s own `transition-duration`; the builder reads the backdrop and the panel. I accept this. The builder gives a sound reason: opacity on `#forge-menu`, which has no layer of its own, would flatten the frame under the chat while it fades. The frame as a whole still fades.
+7. **No focus styles of our own.** `css/menu.css` has no `:focus` rule. The `.forge-menu-nav >` added to the current section's selector only adds weight. I confirmed the builder's reason in `scripts/dynamic-styles.js`: SillyTavern copies every `:hover` rule into a `:focus-visible` one. **Pass.**
+
+Brief "Done when": the commands pass (see (b): the brief's own commands pass, and the full suite could not finish on this machine), and only owned files changed (see (a)).
+
+Bible section 3:
+
+- **3.1, native controls:** Escape, the close button and the backdrop all click the drawer's own toggle. SillyTavern's Reduced Motion is read where the bible says, never copied. **Pass.**
+- **3.2, one switch back:** probe D opened the frame and then turned the panel off three ways: its switch, a 900px window, and the main switch. Each time: the listener was gone (`before 1 left 0`), there was no `#forge-menu`, `#forge-menu-buttons` or `.forge-menu-still`, and an Escape sent afterwards reached `document` with `defaultPrevented` false. With the frame closed, Escape and Tab reach `document` untouched (test step 7). **Pass.**
+- **3.3, a setting per look choice:** the fade has no switch of its own. It goes away under either reduced motion setting, and the brief asks for no setting. **Accepted.**
+- **3.4, phone:** the phone run passes. The panel is never active there, and Escape on a menu does what it does with the panel off. **Pass.**
+- **3.5, tokens:** the motion uses `--forge-fast`. `0.98` is bible section 4's own figure, and the builder suggests a token for it under "Asked of other files". `--forge-fast: 0ms` on `.forge-menu-still` mirrors what `tokens.css` does for the system setting. **Accepted.**
+- **3.6, lane:** see (a). **Pass.**
+- **3.7, small and plain:** the Tab handling (`tabStops`, `isTabStop`, `nextStop`) is about 60 lines. The reason is real: in WebKit, plain Tab skips buttons. I confirmed that without it the nav cannot be reached. **Pass.**
+
+Bible section 9:
+
+- Every new selector starts with `body.forge-ui.forge-menu`, including those inside `@starting-style`. **Pass.**
+- No `!important` added, no network, no `localStorage`, and no `MutationObserver` on `#chat`. **Pass.**
+- No SillyTavern setting changed. **Pass.**
+- The opener is kept as a selector string (`findAgain`), not as an element. **Pass.**
+- The new class is `forge-menu-still`. **Pass.**
+- The feature contract is unchanged, and the comments say why. **Pass.**
+
+**The pin wait** (`pinsReady`, `menu-characters.mjs`). I read `lib/eventemitter.js` and `firstLoadInit` in `script.js`, and the builder's account is right. `emit` copies the listener list before it starts. The event is remembered for later listeners only after the last listener finishes. `APP_READY` follows only after that. So listening to both, with whichever is heard first answering and removing both, covers every moment. The new checks fail on `overhaul`'s `menu.js` (the builder showed this) and pass on this branch.
+
+Probe P extended this beyond the test, with real page loads and the same stand-in slow `APP_INITIALIZED` listener:
+
+- Load with all three pins saved on: all three are put away and recorded, and nothing of `menu.js` is still listening to either event.
+- Then each way the panel can stop being active, one after another: the panel switch, a 1000px window, the main switch, and Reset to Forge defaults. Each time, all three pins come back exactly: box ticked, panel `pinnedOpen`, SillyTavern's own setting `"true"`, and `menuPins` `{}`. Undoing each way puts all three away and records them again.
+- A load where the slow listener switches the panel on and then off again while it runs: every pin stays on, nothing is recorded, and nothing is left waiting.
+
+The change is sound, and every pin still comes back. (A side effect is under problem 5.)
+
+### (d) Trying to break it
+
+Probe A: in each of the nine sections, 120 Tab, 60 Shift+Tab and 10 Alt+Tab, checking the focus after every press. Eight sections never let the focus out. In Lorebooks, Shift+Tab put the focus on `body` 4 times in 60 (problem 1). The other probes and their results are in the problems and in (c) above. Scratch scripts were kept outside the repository. They used only the Forge Tester chat and never pressed Enter on a character.
+
+### Problems
+
+1. **Shift+Tab leaves the panel from Lorebooks' active-worlds box (FAIL).**
+   - **Where:** with the focus in the Select2 multi-select's inline search field in Lorebooks (`#WorldInfo textarea.select2-search__field`), Shift+Tab sends the focus to `body`. Shift+Tab from the next stop then lands there again, and it repeats every lap.
+   - **Trace (probe WI2):**
+     - The key was seen in the capture phase.
+     - No bubbling listener on `document` saw it.
+     - `menu.js` made no `focus()` call.
+     - The field had a `focusout` with no related target, and the focus ended on `body`.
+   - **Cause:** Select2 stops the propagation of every key on its inline search, so `onKey` on `body` never sees that Tab. WebKit's own Shift+Tab then finds nothing before the field that it stops at (it skips links and buttons), and takes the focus out of the page. In Safari, and in TauriTavern on a Mac, the focus goes to the browser's own controls or nowhere.
+   - **Not covered:** the results' "Tab there is Select2's own" covers the open dropdown, not this field. The test's 10 Shift+Tabs are only in AI response.
+   - **Rules broken:** brief Build step 3, bible section 11 ("keeps Tab inside itself"), and the lead's "Tab and Shift+Tab never leave the frame and the open menu".
+   - **A possible fix:** guard the focus itself, rather than rely on the key reaching `body`. For example, while the frame is shown, a `focusin`/`focusout` listener on the frame and the open menu could put back focus that went nowhere or outside. The brief's "leave alone: keys inside SillyTavern's own menus" argues against taking Tab from Select2 in the capture phase.
+2. **The focus is not given back after opening with the mouse (FAIL).**
+   - **What happens (probe F, F2):** with the focus in the message box, clicking Menu moves the focus into the panel, to the current nav button. In WebKit the mousedown on the round button first sends the focus to `body` (F2: `BODY`). So `findAgain(document.activeElement)` records nothing. Closing by Escape, by the close button or by the backdrop leaves the focus on `body` (`textarea#send_textarea -> button.forge-menu-section -> BODY`, all three ways).
+   - **What should happen:** the round button that opened the panel should get the focus back. A keyboard user who opened the panel with the mouse and pressed Escape starts again from the top of the page.
+   - **Rules broken:** brief step 5 ("whatever opened the panel: one of the round buttons, or the top-bar icon") and bible section 11 ("gives the focus back to the button that opened it").
+   - **The result file is wrong here:** it says "after a click on a round button the focus goes back to what had it before (the message box, for example)". Measured, it does not.
+   - **A possible fix:** note the round button or toggle that was clicked, not only `document.activeElement`.
+3. **With the buttons off, Shift+Tab from a top bar icon clicked while the panel is open leaves the page (minor; part of the same Tab rule).**
+   - The top bar sits above the frame (z-index 3005 against 3004), so with the buttons off its icons can be clicked while the panel is open.
+   - Probe B2: clicking the AI response icon puts the focus on `div#leftNavDrawerIcon`. Then Shift+Tab goes to `body`, and the next press goes into the menu.
+   - Tab forward from the same icon happened to land in the menu (probe B).
+   - The cause is the choice "focus outside both parts: `onKey` does not touch Tab". The builder made it for Select2 dropdowns and windows over the panel, but it also covers this case.
+4. **Escape on a SillyTavern popup over the open panel no longer reaches SillyTavern's chat-level Escape (judgement call, not counted as FAIL).**
+   - Stand-in for generating: `#mes_stop` shown, counting `GENERATION_STOPPED` (probe C).
+   - With the panel off, or on but closed, Escape on a SillyTavern popup closes the popup and stops generating in the same press (C2 = C4 = `{"stopped":1}`).
+   - With the frame open under the popup, Escape closes the popup, but nothing stops (C6 `{"stopped":0}`). The next Escape closes the panel, and only the third Escape stops.
+   - The cause is `event.stopPropagation()` when `dialogOnTop()`. That is needed for a foreign `<dialog>`: SillyTavern's `processHotkeys` would otherwise close the menu behind it (the brief's step 6). It is not needed for SillyTavern's own popups, because `processHotkeys` already stands back while `Popup.util.isPopupOpen()`.
+   - The builder chose this on purpose and wrote it down. The lead asked that stop generating keep working whenever the panel is not the thing in front, and here a popup is in front. Stopping the key only for dialogs that are not SillyTavern popups would keep both.
+   - Everything else here holds: with the frame closed, all of SillyTavern's Escape uses are exactly as with the panel off (C1 to C4). With the frame open and in front, the first Escape closes only the panel, and the next one stops (C5).
+5. **A pinned Characters panel that was open, plus a slow `APP_INITIALIZED` listener, opens in the frame at load (minor).**
+   - SillyTavern reopens a pinned panel that was open 300ms after `initRossMods`. When the answer only comes at `APP_READY`, the pin is put away after that, so the Characters panel is left open and unpinned.
+   - Probe P4: the frame shows Characters at load (`{"frame":true,"open":["right-nav-panel"]}`). In a normal load, the menu-characters test checks that the frame stays closed.
+   - The pin is still recorded and comes back when the panel turns off. This only happens with another extension that is slow, so it is a note for the owner.
+6. **Checked and true:** SillyTavern 1.19.0's `switchReducedMotion` (`scripts/power-user.js`) does toggle `reduced-motion` on `body`, so bible section 4's "puts no class on body" is out of date. Reading the value, as built, is still right.
+
+### The builder's other choices
+
+- **Escape is spent when it closes the panel:** accepted. The panel is in front (C5).
+- **Older windows are left to SillyTavern:** right; the test checks `#character_popup`.
+- **Closing does not animate:** accepted; the bible describes only the opening.
+- **The open menu does not fade:** consistent with "nothing else moves".
+- **`@starting-style`:** fine; without it the frame just appears at once.
+- **The focus moves in at every opening:** accepted. It is what makes problem 2 matter.
+- **The phone variant:** right, by bible section 12.
+- **The tab-stop rules and the order** (the frame first, then the menu): reasonable. The holes are problems 1 and 3.
