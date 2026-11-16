@@ -59,6 +59,11 @@ const SEE_AS = { describe: 'a description', picture: 'a picture' };
 // See with nothing typed (bible section 6, "What each mode sends")
 const LOOK_AROUND = { second: 'You look around.', first: 'I look around.' };
 const NO_IMAGE_GENERATION = 'See needs SillyTavern\'s Image Generation. Sending a description request instead.';
+// The warning when a Story's reply cannot start, in the manner of /trigger's own
+const NO_REPLY = 'Story was added, but its reply could not start while another reply is being generated.';
+// How long a Story's reply waits for another reply to finish, and how often it looks (as /trigger does)
+const REPLY_WAIT = 10000;
+const REPLY_LOOK = 100;
 
 export const id = 'modes';
 
@@ -177,7 +182,7 @@ export function apply(s) {
         document.getElementById('forge-modes')?.remove();
         showPrompt('');
         lastRewrite = '';
-        storyPending = false;
+        holding = null;
         return;
     }
     const form = document.getElementById('send_form');
@@ -400,9 +405,10 @@ function shapeMessage(event) {
     const context = SillyTavern.getContext();
     const s = context.extensionSettings[SETTINGS_KEY];
     if (!s?.enabled || !s.modes) return;
-    // A Story is still being added (SillyTavern is not generating yet): a second Enter or tap now, on the
-    // emptied box, would start a reply of its own next to the Story's
-    if (storyPending) {
+    // A Story or a picture is still being worked on, and SillyTavern does not know: a second Enter or tap now,
+    // on the emptied box, would send something of its own next to it (a reply, or "You look around." and a
+    // reply). So it is held back, as SillyTavern holds sends back while commands typed in the box run.
+    if (holding) {
         stopSend(event);
         return;
     }
@@ -464,50 +470,96 @@ function stopSend(event) {
     event.stopImmediatePropagation();
 }
 
-// True while a Story's narrator message is being added; shapeMessage holds other sends back meanwhile
-let storyPending = false;
+// The Story or picture being worked on while shapeMessage holds other sends back, or null. Each one holds its
+// own token, so one that ends late (after the modes were turned off and on again) cannot end another's hold.
+let holding = null;
+
+function hold() {
+    holding = {};
+    return holding;
+}
+
+function release(job) {
+    if (holding === job) holding = null;
+}
+
+const pause = (ms) => new Promise((done) => setTimeout(done, ms));
+
+// Takes what is in the message box out of it, and returns it
+function takeBox() {
+    const textarea = document.getElementById('send_textarea');
+    const text = textarea instanceof HTMLTextAreaElement ? textarea.value : '';
+    if (text) setBox(textarea, '');
+    return text;
+}
+
+// Puts what the person typed back in the message box. Anything typed since stays, after it on a new line, so
+// nothing is lost either way.
+function putBack(text) {
+    const textarea = document.getElementById('send_textarea');
+    if (!text || !(textarea instanceof HTMLTextAreaElement)) return;
+    setBox(textarea, textarea.value ? `${text}\n${textarea.value}` : text);
+}
 
 // Story as narration (bible section 6). The box is emptied first, so a second Enter while the narration is
-// being saved cannot add it twice. The narrator message comes from SillyTavern's own sendNarratorMessage (the
-// code behind /sys). Then a normal reply starts the way /trigger does: once nothing is being generated (it
-// waits up to 10 seconds), Generate('normal'). (/trigger also empties the box just before, so that its own
-// "/trigger" is not sent; this box is already empty.)
+// being saved cannot add it twice, and other sends from the box are held back until SillyTavern is writing
+// the reply. The narrator message comes from SillyTavern's own sendNarratorMessage (the code behind /sys).
+// Then a normal reply starts the way /trigger does: once nothing is being generated (it waits up to 10
+// seconds, and warns as /trigger does if that runs out), the box is emptied again and Generate('normal').
+// SillyTavern's reply sends what is in the box as your own message; here that is whatever was typed while the
+// narration was being saved, so it is held aside instead of thrown away, and put back once the reply is in.
 async function tellStory(story, typed) {
     setBox(document.getElementById('send_textarea'), '');
     lastRewrite = '';
-    storyPending = true;
+    const job = hold();
     try {
         await slashCommands.sendNarratorMessage({}, story);
     } catch (error) {
         console.error('[Arcane Forge UI] Story could not be added as narration.', error);
-        // Nothing typed is lost: it goes back while the box is still empty
-        const textarea = document.getElementById('send_textarea');
-        if (!textarea?.value) setBox(textarea, typed);
+        release(job);
+        putBack(typed);
         return;
-    } finally {
-        storyPending = false;
     }
-    for (let waited = 0; generating() && waited < 10000; waited += 100) await new Promise((done) => setTimeout(done, 100));
-    if (generating()) return;
-    try {
-        await script.Generate('normal');
-    } catch (error) {
-        console.error('[Arcane Forge UI] The reply after a Story could not be started.', error);
+    for (let waited = 0; generating() && waited < REPLY_WAIT; waited += REPLY_LOOK) await pause(REPLY_LOOK);
+    if (generating()) {
+        release(job);
+        globalThis.toastr?.warning(NO_REPLY);
+        return;
     }
+    const meanwhile = takeBox();
+    let ended = false;
+    const reply = Promise.resolve()
+        .then(() => script.Generate('normal'))
+        .catch((error) => console.error('[Arcane Forge UI] The reply after a Story could not be started.', error))
+        .finally(() => {
+            ended = true;
+            putBack(meanwhile);
+        });
+    // Generate's first steps (such as checking the server) come before SillyTavern counts itself as
+    // generating; the hold stays on until it does, and from then on SillyTavern's own flag holds sends back
+    while (!ended && !generating()) await pause(REPLY_LOOK / 2);
+    release(job);
+    await reply;
 }
 
 // See as a picture (bible section 6): the box is emptied and Image Generation's own imagine command runs with
 // what was typed. Its callback gets the text as the command's argument, as SillyTavern's command runner would
 // hand it over after parsing, but no parser or macro step sees it on the way: nothing in it can start a
-// command, end this one with "|", set an argument with "name=", or be filled as a macro. Running it as
-// "/imagine …" text cannot promise that (SillyTavern's macro engine drops "{{trim}}" even when escaped).
+// command, end this one with "|", set an argument with "name=", or be filled as a macro before imagine has
+// it. Running it as "/imagine …" text cannot promise that (SillyTavern's macro engine drops "{{trim}}" even
+// when escaped). Image Generation fills macros in its own final prompt, as for /imagine typed by hand.
+// A picture takes many seconds, and SillyTavern does not know one is being made, so other sends from the box
+// are held back until the command ends, whether it worked or not.
 async function askForPicture(imagine, typed) {
     setBox(document.getElementById('send_textarea'), '');
     lastRewrite = '';
+    const job = hold();
     try {
         await imagine.callback({}, typed);
     } catch (error) {
         console.error('[Arcane Forge UI] See could not ask Image Generation for a picture.', error);
+    } finally {
+        release(job);
     }
 }
 

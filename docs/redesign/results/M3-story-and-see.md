@@ -37,7 +37,7 @@ That is what SillyTavern's command runner (`SlashCommandClosure.executeStep`) do
 - no parser reads it: `|` cannot end the command or start `/echo`, `{:` cannot open a closure, `name=` at the start cannot set an argument, and quotes are not taken off;
 - no macro step reads it: `{{user}}`, `{{pipe}}`, `{{var::…}}` and `{{trim}}` stay as typed, and `\{` keeps its backslash.
 
-What `imagine` does with the text afterwards is its own business. In free mode it uses the text as the prompt, and a text that is exactly one of its trigger words (`you`, `me`, `scene`, `last`, `face`, `background`, `raw_last`) picks that mode, as `/imagine you` does. It does not fill macros in the text.
+What `imagine` does with the text afterwards is its own business. In free mode it uses the text as the prompt, and a text that is exactly one of its trigger words (`you`, `me`, `scene`, `last`, `face`, `background`, `raw_last`) picks that mode, as `/imagine you` does. Image Generation does fill macros in it: its `sendGenerationRequest` (`scripts/extensions/stable-diffusion/index.js`) runs `substituteParams` on the final, prefixed prompt, so `{{user}}` or `{{setvar::…}}` typed with See as a picture are filled when a picture is really made, just as for `/imagine` typed by hand. What holds is the part above: the text is handed over whole, as the command's argument, and is never parsed as a command line, nor run through a macro step of ours before `imagine` has it. (Corrected after the check; an earlier version of this paragraph said `imagine` does not fill macros.)
 
 **Why not `executeSlashCommandsWithOptions`.** The brief's step 8 expects the text to go through it in a form that cannot run as a command. I tried that in the sandbox first. A scratch script, outside the repository and using only the Forge Tester chat, registered a page-only recorder command and ran two forms of the text through it. The page uses SillyTavern's new macro engine, which is on by default.
 
@@ -160,7 +160,7 @@ ok       stage-spine phone  12 checks, 14s
   - SillyTavern's own `GENERATION_STARTED` event fired once, with the type `normal` (dry runs, which only count tokens, are left out);
   - the reply came after the narration.
 
-  It also prints a check that `held` shows no generate call, so the reason stays visible.
+  It also printed a check that `held` shows no generate call. That check tested the sandbox, not the code, and was removed after the check (see "Fixes after the check").
 - **Step 8** ("Replace `executeSlashCommandsWithOptions` on the context … with a function that records its argument"). `modes.js` does not run `imagine` through `executeSlashCommandsWithOptions`; the reason is under "How the typed text is passed". So the test puts its recorder where `modes.js` looks, as step 7 asks for hiding the command: `SillyTavern.getContext()` is wrapped for the step, and the context it returns has an `imagine` that records what it is given and makes no picture. The same wrapper also puts in the brief's recording stand-in for `executeSlashCommandsWithOptions`. The test checks that:
   - `imagine` was called once, with exactly `a door | /echo x {{user}}`;
   - its named arguments were empty;
@@ -177,11 +177,13 @@ ok       stage-spine phone  12 checks, 14s
 **Story**
 
 - **The box is emptied before the narrator message, not after.** `sendNarratorMessage` waits for the chat to save, so the text would otherwise stay in the box for a moment, and a second Enter in that moment would add the narration twice.
-- **While a Story is still being added, other sends are held back.** The box is empty by then, so a second Enter or a double tap would reach SillyTavern's own empty-box send, and that starts a reply of its own. The Story's reply would then follow it, giving two replies; the test shows this happening without the guard. So from Enter until `sendNarratorMessage` has finished, a send caught from the box or the send button is stopped. The flag is cleared in a `finally` block, and again when the modes turn off. After that, SillyTavern's own generating flag guards the reply.
+- **While a Story is still being added, other sends are held back.** The box is empty by then, so a second Enter or a double tap would reach SillyTavern's own empty-box send, and that starts a reply of its own. The Story's reply would then follow it, giving two replies; the test shows this happening without the guard. So from Enter until `sendNarratorMessage` has finished, a send caught from the box or the send button is stopped. The flag is cleared in a `finally` block, and again when the modes turn off. After that, SillyTavern's own generating flag guards the reply. (Changed after the check: the hold now lasts until SillyTavern counts itself as generating the reply, and See as a picture has the same hold. See "Fixes after the check".)
 - **"The way `/trigger` does".** I copied what matters from `triggerGenerationCallback`: wait (up to 10 seconds, every 100 ms) until SillyTavern is not generating, then `Generate('normal')`. In a group chat that lets the group pick who answers, as `/trigger` with no argument does. Three things were left out:
   - `/trigger` empties the box again, so that its own `/trigger` text is not sent; ours is already empty.
   - Its 100 ms pause before `Generate`.
   - Its warning toast when the wait runs out. Ours gives up quietly; the narration is already in the chat.
+
+  (Changed after the check: the box is emptied again just before the reply, with what was in it held aside and put back, and the warning toast is there. Only the 100 ms pause is still left out. See "Fixes after the check".)
 - **"No chat is open"** means SillyTavern's `getCurrentChatId()` gives nothing. Story is then not taken over, and the send goes on as your own message. The same goes when SillyTavern would refuse a send from the box (`swipeState` not `none`, or `isExecutingCommandsFromChatInput`). Those are `sendTextareaMessage`'s own checks; SillyTavern then refuses the send with its own message.
 - **If `sendNarratorMessage` fails,** the error goes to the console, and the typed text goes back in the box if the box is still empty. No reply is started.
 - **`sendNarratorMessage` is loaded with a dynamic `import()`,** as M2 loads `shouldSendOnEnter`. A SillyTavern without it then only loses Story as narration (Story goes in as your own message), not the whole extension.
@@ -194,7 +196,7 @@ ok       stage-spine phone  12 checks, 14s
 - **The fallback toast shows once per send** that falls back. A send that does not go through leaves the description in the box, and the next Enter sends it as it is (M2's never-twice rule) without a second toast.
 - **Without an open chat, or when SillyTavern would refuse a send,** See as a picture sends the description form, without the toast.
 - **The picture path passes the text as typed,** not tidied. `imagine` trims it itself.
-- **`imagine` is called without waiting for it in the send.** The send is stopped and the box emptied at once. Errors from it go to the console; `imagine` shows its own toasts, such as "Image generation is not available" when no image source is set up.
+- **`imagine` is called without waiting for it in the send.** The send is stopped and the box emptied at once. Errors from it go to the console; `imagine` shows its own toasts, such as "Image generation is not available" when no image source is set up. (Added after the check: other sends from the box are held back until it ends. See "Fixes after the check".)
 
 **Settings**
 
@@ -334,3 +336,201 @@ One problem makes it FAIL: problem 1 below. With See set to a picture, a second 
 3. **The result file says of `imagine`, "It does not fill macros in the text." That is wrong.** Image Generation's `sendGenerationRequest` (`scripts/extensions/stable-diffusion/index.js`) runs `substituteParams` on the prefixed prompt. So `{{user}}`, and macros such as `{{setvar::…}}`, typed with See as a picture are filled by `imagine` itself when a picture is really made, just as for `/imagine` typed by hand. The way this batch passes the text is still safe, since nothing of ours reads it (the comment on `askForPicture` says "on the way", which is right), but the sentence should say what `imagine` does. On its own this would not fail the batch.
 4. **The reply after a Story gives up quietly** when SillyTavern is still generating after 10 seconds, where `/trigger` shows a warning toast. The narration is in the chat with no reply and no word why. Minor.
 5. **One test line is misworded.** The check "(the helper's held list shows no generate call, as the seed answers it first)" tests the sandbox, not the code. In this test it is the test's own in-page stand-in that answers first, not the seed. Minor.
+
+## Fixes after the check
+
+All five problems are fixed, on `batch/M3-story-and-see`, in lane M's files only: `modes.js`, `tests/browser/modes-story-see.mjs` and this file. `css/modes.css` and the changes file are unchanged; the changelog line still says what changed for the person using it. The "Check" section above is left as the checker wrote it. Where an earlier section of this file is no longer true, it now says so and points here.
+
+### What failed, and what changed
+
+1. **See as a picture let a second send through while the picture was being made.** This was the FAIL.
+   - `askForPicture` now holds sends back from the moment it empties the box until `imagine`'s callback ends. The hold is released in a `finally`, so it also ends when the command fails.
+   - While the hold is on, `shapeMessage` stops every send caught from the box or the send button, before it looks at the mode. That is the guard Story already had, now shared. SillyTavern does the same while commands typed in the box run (`isExecutingCommandsFromChatInput`).
+   - Nothing typed is lost. A held-back Enter leaves the text in the box, and the next Enter after the picture sends it.
+   - The hold is one token per job (`hold()` and `release(job)`), in place of the `storyPending` flag. A job that ends late, for example after the modes were turned off and on again, cannot end a newer job's hold. Turning the modes off clears the hold, as it cleared `storyPending`.
+2. **Story sent what was typed while the narration was being added.** I chose to hold it aside, not to throw it away.
+   - Just before the reply, the box is emptied again, as `/trigger` does. What was in it is kept, and `Generate('normal')` runs on an empty box. When that `Generate` ends, whether it worked or not, the kept text goes back in the box. If something new was typed while the reply was written, it stays, after the kept text on a new line.
+   - **Why it goes back only when the reply is done.** `Generate` reads the box at its start, but in a group chat `generateGroupWrapper` reads it first and then every member's `Generate` reads it again. Putting the text back any earlier could send it as a message after all. The cost is that text typed in that short moment (the chat save) is out of the box while the reply is written.
+   - **The hold now lasts until SillyTavern is writing the reply.** Before, it ended once the narration was saved. But `Generate`'s first steps come before SillyTavern counts itself as generating: the `GENERATION_STARTED` listeners, its command check and the server ping. A second Enter on the empty box in that time started a second reply. A scratch probe found this with the ping held back 800 ms: two replies without the wait, one with it. The test now checks it too. So after calling `Generate`, `tellStory` keeps the hold on until `isGenerating()` is true or `Generate` has ended, looking every 50 ms. From then on SillyTavern's own flag refuses sends. The hold is not kept for the whole reply, because in streaming SillyTavern unlocks sends before its last chat save, and a hold until `Generate` ends would swallow an Enter in that moment.
+   - If `sendNarratorMessage` fails, the typed text still goes back in the box. It now goes in front of anything typed since, where before it went back only into an empty box.
+3. **The sentence about macros.** Corrected under "How the typed text is passed to `imagine`". Image Generation's `sendGenerationRequest` runs `substituteParams` on the prefixed prompt, so macros typed with See as a picture are filled by `imagine` itself when a picture is really made, as for `/imagine` typed by hand. What holds: the text is handed over whole, as the command's argument, and is never parsed as a command line, nor run through a macro step of ours. The comment on `askForPicture` now says the same.
+4. **The reply after a Story gave up quietly.** When SillyTavern is still generating after the 10-second wait, a warning now says "Story was added, but its reply could not start while another reply is being generated.", in the manner of `/trigger`'s "Cannot run /trigger command while the reply is being generated." The narration stays in the chat, the hold ends, and anything typed meanwhile stays in the box.
+5. **The test line about the held list.** Removed. It tested the sandbox and the test's own in-page answer, not the code. The comment above the reply check now says why `held` never shows a generate call.
+
+### New checks in `tests/browser/modes-story-see.mjs`
+
+All of them run at both sizes. None of them depends on how fast the machine is. The page holds the chat save, the server ping or the stand-in picture until the test lets it go, and the test checks that the request really was waiting when it pressed its keys. (A first version used fixed delays. Under load, one phone run had the test's own step land after an 800 ms save was over, so it was rewritten this way.)
+
+- **Story, a second Enter while the reply is still checking the server.** The ping is held, and the test checks that SillyTavern is not generating yet when the key is pressed. The result is one narration and one reply.
+- **Story, text typed while the narration is being saved.** The save is held, and the text is typed with no Enter. The narration and the reply come in, and nothing is sent as your own message. Afterwards the text is back in the box.
+- **The same, typed and sent with Enter.** The same result.
+- **Story, another reply still being written 10 seconds on.** SillyTavern's own flag is set while the narration's save is held. The warning shows, and no reply is asked for.
+- **See as a picture, with a stand-in `imagine` that is not done until the test says so.** Four variants: a quick double Enter; a second Enter 300 ms later; a double click on the send button (a double tap on the phone); and a picture that fails, with a second Enter 300 ms later. Each time exactly one picture is asked for, nothing is sent, no reply comes, and the box is empty.
+- **The hold ends with the picture.** After a picture that worked, and after one that failed, the next Enter asks for a picture again.
+
+The old double-Enter check uses the same held save (`holdBack`, `heldBack`, `letGo`) in place of its own one-second delay. The stand-in `imagine` can be kept "drawing" and can fail.
+
+Scratch probes, outside the repository and with the same rules (the Forge Tester chat only, replies answered in the page, `imagine` always a stand-in), checked three things at both sizes:
+- the second Enter during a slowed ping (now in the test);
+- text typed during the save, then more typed during a slowed reply, which ends as `first` and `second` on two lines;
+- the modes turned off and on again while a picture is made, after which the next send asks for a picture straight away.
+
+### The new checks against the old code
+
+The final test was run with `modes.js` as committed at `7a7c10d`, and then my `modes.js` was put back. Each size gave 55 ok and 10 FAIL, exit 1. The failures were the same at both sizes, apart from the double click or tap:
+
+```
+FAIL a second Enter while the reply is still checking the server starts no second reply (["narrator","reply","reply"], 2 asked, started: normal,normal, ping held: true, generating when it was pressed: false)
+FAIL Story, text typed while the narration is being saved: the narration, then the reply, and nothing sent as your own message (["narrator","user: half typed","reply"], 1 asked, started: normal, save held: true)
+FAIL and what was typed is back in the message box once the reply is in ("")
+FAIL Story, text typed and sent while the narration is being saved: the narration, then the reply, and nothing sent as your own message (["narrator","user: A door opens.","reply"], 1 asked, started: normal, save held: true)
+FAIL and what was typed and sent is back in the message box once the reply is in ("")
+FAIL Story, another reply still being written 10 seconds on: a warning says the reply could not start, and none is asked for (no warning, ["narrator"], 0 asked, save held: true)
+FAIL See as a picture, a quick double Enter: one picture asked for, nothing sent, no reply (pictures ["the far door"], added ["user: You look around.","reply"], 1 replies)
+FAIL See as a picture, a second Enter 300 ms later: one picture asked for, nothing sent, no reply (pictures ["the far door"], added ["user: You look around.","reply"], 1 replies)
+FAIL See as a picture, a double click on the send button: one picture asked for, nothing sent, no reply (pictures ["the far door"], added ["user: You look around.","reply"], 1 replies)
+FAIL See as a picture, a picture that fails, with a second Enter 300 ms later: one picture asked for, nothing sent, no reply (pictures ["the far door"], added ["user: You look around.","reply"], 1 replies)
+```
+
+On the phone the ninth line reads "a double tap on the send button", with the same result. The two "the next Enter asks for a picture" checks pass on the old code, as they should: they guard against a hold that never ends.
+
+### Test output
+
+On the code as committed with this section:
+
+```
+$ node tests/browser/modes-story-see.mjs
+ok   Story, You: "The rain stops." gives "The rain stops." ("The rain stops.")
+ok   Story, I: "The rain stops." gives "The rain stops." ("The rain stops.")
+ok   See, You: "the door" gives "You look at the door." ("You look at the door.")
+ok   See, I: "the door" gives "I look at the door." ("I look at the door.")
+ok   See, You: "" gives "You look around." ("You look around.")
+ok   See, I: "" gives "I look around." ("I look around.")
+ok   Story: the ends are trimmed, nothing else (no full stop, a line break inside kept) ("The rain stops,\nand the wind drops")
+ok   Story with tidy off: sent as typed ("  the rain stops ")
+ok   See: the first letter goes lower case ("You look at the old door.")
+ok   See: two capitals at the start are kept ("You look at NASA logo.")
+ok   See: text that starts with "you" gets no You or I in front ("You look at the door.")
+ok   See: an end mark that is there stays ("You look at the door?")
+ok   See with tidy off: the wording only ("You look at the door")
+ok   See uses the owner's own wording ("*studies the door.*")
+ok   See with nothing typed (or only spaces) looks around, with tidy off and with an own wording too (["You look around.","You look around.","You look around."])
+ok   Story, Enter: the first message added is a narrator message reading "The rain stops." ({"user":false,"type":"narrator","mes":"The rain stops."})
+ok   no user message with that text was added ([])
+ok   the message box is empty ("")
+ok   then a normal reply was asked for (answered in the page) and came after the narration (1 asked, started: normal, 2 added)
+ok   Story, send button: narration "The wind drops.", then a reply (["narrator","reply"])
+ok   a second Enter while the narration is being saved starts no second reply (2 added, 1 asked, started: normal)
+ok   a second Enter while the reply is still checking the server starts no second reply (["narrator","reply"], 1 asked, started: normal, ping held: true, generating when it was pressed: false)
+ok   Story, text typed while the narration is being saved: the narration, then the reply, and nothing sent as your own message (["narrator","reply"], 1 asked, started: normal, save held: true)
+ok   and what was typed is back in the message box once the reply is in ("half typed")
+ok   Story, text typed and sent while the narration is being saved: the narration, then the reply, and nothing sent as your own message (["narrator","reply"], 1 asked, started: normal, save held: true)
+ok   and what was typed and sent is back in the message box once the reply is in ("A door opens.")
+ok   Story, another reply still being written 10 seconds on: a warning says the reply could not start, and none is asked for (warned, ["narrator"], 0 asked, save held: true)
+ok   while SillyTavern is generating, Story adds nothing and leaves the box as typed ("The rain stops.")
+ok   Story: a send clicked by a script goes in as typed, as a user message (["The rain stops."])
+ok   with no chat open, Story is not narrated (sent as your own message) (["The rain stops."])
+ok   Story as "my own message": the newest user message is "The rain stops." (trimmed), no narration (["The rain stops."])
+ok   See, Enter: the newest user message is "You look at the door." (["You look at the door."])
+ok   See with an empty box, Enter: the newest user message is "You look around." (["You look around."])
+ok   See with an empty box, send button: "You look around." too (["You look around."])
+ok   See in the I voice: "I look at the door." (["I look at the door."])
+(the sandbox has the imagine command)
+ok   See as a picture without imagine: one toast says so (1 toasts)
+ok   and the description form is sent (["You look at the door."])
+ok   See as a picture: imagine ran once, with the whole typed text as its argument ([{"value":"a door | /echo x {{user}}","args":[]}])
+ok   the text reached it without a command line: nothing was parsed, so /echo did not run and {{user}} stayed as typed (0 command lines run, args [])
+ok   no message was added, no reply was asked for, and the box is empty (0 added, 0 replies, box "")
+ok   no toast about Image Generation
+ok   so are a named argument, quotes, a closure, {{trim}} and a backslash (["x=1 the door","\"quoted\" door","{: /echo hi :} door","a {{trim}} b","a \\{ b"])
+ok   the send button asks for a picture the same way ([{"value":"the old door","args":[]}])
+ok   See as a picture with an empty box: no picture is asked for; "You look around." is sent (["You look around."])
+ok   See as a picture, a quick double Enter: one picture asked for, nothing sent, no reply (pictures ["the far door"], added [], 0 replies)
+ok   when the picture is done, sends go through again: the next Enter asks for a picture (["the far door","the window"])
+ok   See as a picture, a second Enter 300 ms later: one picture asked for, nothing sent, no reply (pictures ["the far door"], added [], 0 replies)
+ok   See as a picture, a double click on the send button: one picture asked for, nothing sent, no reply (pictures ["the far door"], added [], 0 replies)
+ok   See as a picture, a picture that fails, with a second Enter 300 ms later: one picture asked for, nothing sent, no reply (pictures ["the far door"], added [], 0 replies)
+ok   a picture that fails ends the hold too: the next Enter asks for a picture (["the far door","the window"])
+ok   the Message box section has "Story goes in as": narration / my own message (Message box: Story goes in as (narration=narration, message=my own message))
+ok   and "See asks for": a description / a picture (See asks for (describe=a description, picture=a picture))
+ok   with the modes off, both are greyed out (disabled)
+ok   ticking the modes on makes them usable
+ok   choosing "my own message" and "a picture" sets both
+ok   and saves them
+ok   lookKeys: modesStoryAs (narration or message), modesSeeAs (describe or picture) ({"modesStoryAs":{"type":"enum","values":["narration","message"]},"modesSeeAs":{"type":"enum","values":["describe","picture"]}})
+ok   the defaults are narration and a description ({"modesStoryAs":"narration","modesSeeAs":"describe"})
+ok   Import look sets both, and the redrawn settings show them (narration, describe)
+ok   a look file with other values changes neither
+ok   modes off: no bar and no class
+ok   modes off with Story saved: sent as typed, as a user message, no narration (["The rain stops."])
+ok   modes off with See as a picture saved: no picture asked for, sent as typed (["the door"])
+ok   main switch off with the modes on: no bar, and Story is sent as typed (["The rain stops."])
+ok   no script errors
+```
+
+`node tests/browser/modes-story-see.mjs phone` gave the same 65 lines, all ok, exit 0, except that "a double click on the send button" reads "a double tap on the send button".
+
+Both exit 0. The desktop run took 58 minutes of wall clock for about 95 seconds of work, for the reason below.
+
+**`node tests/run.mjs modes` and `node tests/run.mjs`.** These could not be finished on this version of the test. While the fix was being checked, this machine went into system sleep, on battery, waking for under a minute every 10 to 20 minutes (its power log shows "DarkWake from Deep Idle" and "Entering Sleep state"). The runner stops a test that has not finished after 5 minutes, so every test longer than a wake was cut off. Every check that ran before a cut-off passed:
+
+```
+$ node tests/run.mjs modes
+ok       modes-bar  47 checks, 20s
+ok       modes-bar phone  50 checks, 22s
+FAIL     modes-send  no result after 5 minutes, 1946s
+FAIL     modes-send phone  no result after 5 minutes, 1673s
+FAIL     modes-story-see  no result after 5 minutes, 3062s
+FAIL     modes-story-see phone  no result after 5 minutes, 940s
+
+2 passed, 4 failed: modes-send, modes-send phone, modes-story-see, modes-story-see phone
+```
+
+(In that run, the lines the runner printed under each cut-off test were all `ok` lines; none was `FAIL`.)
+
+Before the sleep, both commands ran on the first version of the new checks, which used fixed delays (the same `modes.js`):
+
+```
+$ node tests/run.mjs modes
+ok       modes-bar  47 checks, 18s
+ok       modes-bar phone  50 checks, 18s
+ok       modes-send  70 checks, 41s
+ok       modes-send phone  70 checks, 41s
+ok       modes-story-see  65 checks, 95s
+ok       modes-story-see phone  65 checks, 95s
+
+6 passed, 0 failed
+```
+
+```
+$ node tests/run.mjs
+ok       foundation  18 checks, 13s
+ok       foundation phone  15 checks, 12s
+ok       harness  8 checks, 11s
+ok       harness phone  8 checks, 11s
+ok       menu-buttons  55 checks, 31s
+ok       menu-buttons phone  4 checks, 11s
+ok       menu-frame  49 checks, 24s
+ok       menu-frame phone  5 checks, 14s
+ok       modes-bar  47 checks, 18s
+ok       modes-bar phone  50 checks, 18s
+ok       modes-send  70 checks, 41s
+ok       modes-send phone  70 checks, 40s
+ok       modes-story-see  65 checks, 95s
+FAIL     modes-story-see phone  no result after 5 minutes, 621s
+           FAIL Story, another reply still being written 10 seconds on: a warning says the reply could not start, and none is asked for (no warning, ["narrator","reply"], 1 asked)
+ok       stage-column  35 checks, 19s
+ok       stage-column phone  10 checks, 13s
+ok       stage-content  64 checks, 71s
+FAIL     stage-content phone  exit 1, 44s
+           (shortened here: a click timed out because RPG Companion's #rpg-welcome-modal "intercepts pointer events")
+ok       stage-spine  52 checks, 22s
+ok       stage-spine phone  12 checks, 17s
+
+18 passed, 2 failed: modes-story-see phone, stage-content phone
+```
+
+- **`modes-story-see phone`** failed one check because that version of it depended on timing: the test set SillyTavern's generating flag from outside the page, and on the loaded machine (the sleep had begun) that landed after the 800 ms save was over. That is why the new checks were rewritten with held requests. The rewritten test passes at both sizes, above.
+- **`stage-content phone`** is lane S's test. RPG Companion's welcome dialog came up late and took a click. That is the late notice the lead was asked about in M2's result file and under "Asked of other files" here; nothing in this batch touches it.
+
+To finish the check: run `node tests/run.mjs modes` and `node tests/run.mjs` again on an awake machine.

@@ -9,6 +9,7 @@ const { page, held, check, finish } = await openForge({ phone });
 const MODES_JS = '/scripts/extensions/third-party/arcane-forge-ui/modes.js';
 const NO_TEMPLATES = { do: '', say: '', see: '' };
 const FALLBACK = 'See needs SillyTavern\'s Image Generation. Sending a description request instead.';
+const NO_REPLY = 'Story was added, but its reply could not start while another reply is being generated.';
 
 // ---------- 1. What Story and See send (bible section 6) ----------
 
@@ -145,11 +146,15 @@ const clearToasts = async () => {
 
 // For a step, SillyTavern.getContext() hands out the real context with one change: what modes.js looks up
 // there (the chat that is open, or the imagine command) is a stand-in. SillyTavern itself is not changed,
-// and the real getContext is put back after.
-const standIn = (which) => page.evaluate((which) => {
+// and the real getContext is put back after. The stand-in imagine can take a while, as a real picture does:
+// with `drawing`, it is not done until the test calls testPictureDone() in the page. With `fail`, it then fails.
+const standIn = (which, { drawing = false, fail = false } = {}) => page.evaluate(({ which, drawing, fail }) => {
     globalThis.testRealGetContext ??= SillyTavern.getContext;
     globalThis.testImagine = [];
     globalThis.testExecuted = [];
+    let done = null;
+    const picture = drawing ? new Promise((resolve) => { done = resolve; }) : null;
+    globalThis.testPictureDone = () => done?.();
     SillyTavern.getContext = function () {
         const context = globalThis.testRealGetContext.apply(this, arguments);
         if (which === 'no chat') return Object.create(context, { getCurrentChatId: { value: () => undefined } });
@@ -158,11 +163,16 @@ const standIn = (which) => page.evaluate((which) => {
         // the stand-in imagine records what it is given and makes no picture
         const parser = { SlashCommandParser: { value: Object.create(context.SlashCommandParser, { commands: { value: commands } }) } };
         if (which !== 'imagine') return Object.create(context, parser);
-        commands.imagine = { name: 'imagine', callback: (args, value) => { globalThis.testImagine.push({ args, value }); return ''; } };
+        commands.imagine = { name: 'imagine', callback: async (args, value) => {
+            globalThis.testImagine.push({ args, value });
+            if (picture) await picture;
+            if (fail) throw new Error('(test) the stand-in picture failed');
+            return '';
+        } };
         // A command line run through the context is recorded and not run (the brief's own stand-in)
         return Object.create(context, { ...parser, executeSlashCommandsWithOptions: { value: (...args) => { globalThis.testExecuted.push(args.map(String)); return Promise.resolve(); } } });
     };
-}, which);
+}, { which, drawing, fail });
 const realContext = () => page.evaluate(() => { if (globalThis.testRealGetContext) SillyTavern.getContext = globalThis.testRealGetContext; });
 
 await setForge(page, { enabled: true, modes: true, modesActive: '', modesVoice: 'second', modesTidy: true, modesStoryAs: 'narration', modesSeeAs: 'describe', modesTemplates: { ...NO_TEMPLATES } });
@@ -179,41 +189,134 @@ let list = await send('The rain stops.', 'enter', 2);
 check('Story, Enter: the first message added is a narrator message reading "The rain stops."', list[0]?.user === false && list[0]?.type === NARRATOR && list[0]?.mes === 'The rain stops.', JSON.stringify(list[0]));
 check('no user message with that text was added', !userTexts(list).includes('The rain stops.') && userTexts(list).length === 0, JSON.stringify(userTexts(list)));
 check('the message box is empty', (await box()) === '', JSON.stringify(await box()));
-// Brief step 3, changed: the sandbox's seed answers generate calls inside the page, so the helper's `held`
-// list never shows one (see the note above). The reply is counted where this test answers it instead.
+// Brief step 3, changed: this test answers generate calls inside the page (see the note above), so the
+// helper's `held` list never shows one. The reply is counted where this test answers it instead.
 let kinds = await started();
 check('then a normal reply was asked for (answered in the page) and came after the narration', (await replies()) === repliesBefore + 1 && kinds.join() === 'normal' && list.length === 2 && list[1].user === false && list[1].type !== NARRATOR,
     `${(await replies()) - repliesBefore} asked, started: ${kinds.join() || 'none'}, ${list.length} added`);
-check('(the helper\'s held list shows no generate call, as the seed answers it first)', !held.some((p) => p.includes('/generate')));
 
 // The same from the send button (a tap on the phone)
 repliesBefore = await replies();
 list = await send('The wind drops.', 'button', 2);
 check('Story, send button: narration "The wind drops.", then a reply', list[0]?.type === NARRATOR && list[0]?.mes === 'The wind drops.' && userTexts(list).length === 0 && (await replies()) === repliesBefore + 1, JSON.stringify(list.map((m) => m.type || (m.user ? 'user' : 'reply'))));
 
-// A second Enter while the narration is still being saved (the chat save is held back a second here, in the
-// page) starts no reply of its own: one narration, one reply
-await page.evaluate(() => {
-    const answered = window.fetch;
-    globalThis.testFetchBeforeSlowSave = answered;
+// SillyTavern's chat save, or its server check at the start of a reply, held in the page until the test lets
+// it go, so a key can land meanwhile whatever the machine's speed. heldBack() waits until one such request is
+// waiting; letGo() lets it (and any others) through, and puts fetch back.
+const holdBack = (what) => page.evaluate((what) => {
+    globalThis.testFetchBeforeHold ??= window.fetch;
+    const answered = globalThis.testFetchBeforeHold;
+    const pattern = new RegExp(what);
+    let open;
+    const gate = new Promise((done) => { open = done; });
+    globalThis.testWaiting = 0;
+    globalThis.testLetGo = () => {
+        open();
+        window.fetch = answered;
+        delete globalThis.testFetchBeforeHold;
+        delete globalThis.testLetGo;
+    };
     window.fetch = async (input, init) => {
-        if (/\/api\/chats\/save/.test(String(input?.url ?? input))) await new Promise((done) => setTimeout(done, 1000));
+        if (pattern.test(String(input?.url ?? input))) {
+            globalThis.testWaiting++;
+            await gate;
+        }
         return answered(input, init);
     };
-});
+}, what);
+const heldBack = () => page.waitForFunction(() => globalThis.testWaiting > 0, null, { timeout: 8000, polling: 50 }).then(() => true, () => false);
+const letGo = () => page.evaluate(() => globalThis.testLetGo?.());
+const SAVE = '/api/chats/save';
+const kindsOf = (list) => JSON.stringify(list.map((m) => (m.user ? `user: ${m.mes}` : m.type || 'reply')));
+
+// A second Enter while the narration is still being saved starts no reply of its own: one narration, one reply
+await holdBack(SAVE);
 repliesBefore = await replies();
 await started();
 let before = await chatLength();
 await page.fill('#send_textarea', 'The rain stops.');
 await page.press('#send_textarea', 'Enter');
 await page.press('#send_textarea', 'Enter');
+await heldBack();
+await letGo();
 await settle(before, 2);
 await page.waitForTimeout(1500);
-await page.evaluate(() => { window.fetch = globalThis.testFetchBeforeSlowSave; });
 list = await added(before);
 kinds = await started();
 check('a second Enter while the narration is being saved starts no second reply', list.filter((m) => m.type === NARRATOR).length === 1 && userTexts(list).length === 0 && (await replies()) === repliesBefore + 1 && kinds.join() === 'normal',
     `${list.length} added, ${(await replies()) - repliesBefore} asked, started: ${kinds.join() || 'none'}`);
+
+// Nor a second Enter after the narration, while the reply is still checking the server: SillyTavern does not
+// count itself as generating until that is done. (It asks for "api/ping", relative.)
+await holdBack('api/ping$');
+repliesBefore = await replies();
+await started();
+before = await chatLength();
+await page.fill('#send_textarea', 'The rain stops.');
+await page.press('#send_textarea', 'Enter');
+const pinging = await heldBack();
+const generatingYet = await page.evaluate(() => globalThis.testST.isGenerating());
+await page.press('#send_textarea', 'Enter');
+await page.waitForTimeout(300);
+await letGo();
+await settle(before, 2);
+await page.waitForTimeout(1000);
+list = await added(before);
+kinds = await started();
+check('a second Enter while the reply is still checking the server starts no second reply', pinging && !generatingYet && list.length === 2 && list[0].type === NARRATOR && (await replies()) === repliesBefore + 1 && kinds.join() === 'normal',
+    `${kindsOf(list)}, ${(await replies()) - repliesBefore} asked, started: ${kinds.join() || 'none'}, ping held: ${pinging}, generating when it was pressed: ${generatingYet}`);
+
+// Text typed while the narration is being saved is not part of the Story. SillyTavern's reply takes whatever
+// is in the box as your own message, so it must not find it there; and nothing typed is lost: it is back in
+// the box once the reply is in. First typed only, then typed and sent.
+const typedMeanwhile = async (story, meanwhile, label, sendIt) => {
+    await dismissNotice();
+    await holdBack(SAVE);
+    repliesBefore = await replies();
+    await started();
+    const before = await chatLength();
+    await page.fill('#send_textarea', story);
+    await page.press('#send_textarea', 'Enter');
+    const saving = await heldBack();
+    if (sendIt) {
+        await page.fill('#send_textarea', meanwhile);
+        await page.press('#send_textarea', 'Enter');
+    } else await page.type('#send_textarea', meanwhile);
+    await letGo();
+    await settle(before, 2);
+    await page.waitForFunction(() => document.getElementById('send_textarea').value !== '', null, { timeout: 3000, polling: 100 }).catch(() => {});
+    const list = await added(before);
+    const kinds = await started();
+    check(`Story, text ${label} while the narration is being saved: the narration, then the reply, and nothing sent as your own message`,
+        saving && list.length === 2 && list[0].type === NARRATOR && list[0].mes === story && list[1].type !== NARRATOR && !list[1].user && (await replies()) === repliesBefore + 1 && kinds.join() === 'normal',
+        `${kindsOf(list)}, ${(await replies()) - repliesBefore} asked, started: ${kinds.join() || 'none'}, save held: ${saving}`);
+    check(`and what was ${label} is back in the message box once the reply is in`, (await box()) === meanwhile, JSON.stringify(await box()));
+    await page.fill('#send_textarea', '');
+};
+await typedMeanwhile('The rain stops.', 'half typed', 'typed', false);
+await typedMeanwhile('The wind drops.', 'A door opens.', 'typed and sent', true);
+
+// If SillyTavern is still writing another reply when the Story's own would start (it waits 10 seconds, as
+// /trigger does), a warning says so, as /trigger's does, and no reply is asked for. SillyTavern's own flag is
+// set while the narration is being saved, as another reply would set it.
+await clearToasts();
+await holdBack(SAVE);
+repliesBefore = await replies();
+await started();
+before = await chatLength();
+await page.fill('#send_textarea', 'The rain stops.');
+await page.press('#send_textarea', 'Enter');
+const saving = await heldBack();
+await page.evaluate(() => globalThis.testST.setSendButtonState(true));
+await letGo();
+const warned = await page.waitForFunction((text) => [...document.querySelectorAll('#toast-container .toast')].some((t) => t.textContent.includes(text)), NO_REPLY, { timeout: 15000, polling: 200 }).then(() => true, () => false);
+await page.evaluate(() => globalThis.testST.setSendButtonState(false));
+await page.waitForTimeout(400);
+list = await added(before);
+kinds = await started();
+check('Story, another reply still being written 10 seconds on: a warning says the reply could not start, and none is asked for', saving && warned && list.length === 1 && list[0].type === NARRATOR && (await replies()) === repliesBefore && !kinds.length,
+    `${warned ? 'warned' : 'no warning'}, ${kindsOf(list)}, ${(await replies()) - repliesBefore} asked, save held: ${saving}`);
+await clearToasts();
 
 // Never while SillyTavern is generating (its own flag, set here as a reply would set it)
 await page.evaluate(() => globalThis.testST.setSendButtonState(true));
@@ -300,6 +403,49 @@ check('the send button asks for a picture the same way', r.imagine.length === 1 
 // An empty box asks for no picture (imagine needs words); See looks around instead
 r = await imagine('', 'enter', 8000);
 check('See as a picture with an empty box: no picture is asked for; "You look around." is sent', r.imagine.length === 0 && JSON.stringify(userTexts(r.list)) === '["You look around."]', JSON.stringify(userTexts(r.list)));
+
+// A real picture takes many seconds; the stand-in is being made until the test says it is done. Meanwhile more
+// sends from the box are held back, as SillyTavern holds them while a command typed in the box runs: a second
+// Enter or tap on the emptied box would otherwise be See with an empty box, and send "You look around." and
+// ask for a reply.
+const enterKey = () => page.press('#send_textarea', 'Enter');
+const sendTap = () => (phone ? page.tap('#send_but') : page.click('#send_but'));
+const pictures = () => page.evaluate(() => globalThis.testImagine.map((c) => c.value));
+const whileDrawing = async (label, sends, options = {}) => {
+    await dismissNotice();
+    await standIn('imagine', { drawing: true, ...options });
+    repliesBefore = await replies();
+    const before = await chatLength();
+    await page.fill('#send_textarea', 'the far door');
+    await sends();
+    // time for a send that got through to show, then the picture is done
+    await page.waitForTimeout(1200);
+    await page.evaluate(() => globalThis.testPictureDone());
+    await page.waitForTimeout(500);
+    const asked = await pictures();
+    const list = await added(before);
+    const replied = (await replies()) - repliesBefore;
+    check(`See as a picture, ${label}: one picture asked for, nothing sent, no reply`, asked.length === 1 && asked[0] === 'the far door' && list.length === 0 && replied === 0 && (await box()) === '',
+        `pictures ${JSON.stringify(asked)}, added ${kindsOf(list)}, ${replied} replies`);
+};
+// The hold ends with the picture: the next send asks for one again
+const nextSendWorks = async (label) => {
+    await page.fill('#send_textarea', 'the window');
+    await enterKey();
+    await page.waitForTimeout(400);
+    const asked = await pictures();
+    check(label, asked.length === 2 && asked[1] === 'the window', JSON.stringify(asked));
+    await realContext();
+};
+await whileDrawing('a quick double Enter', async () => { await enterKey(); await enterKey(); });
+await nextSendWorks('when the picture is done, sends go through again: the next Enter asks for a picture');
+await whileDrawing('a second Enter 300 ms later', async () => { await enterKey(); await page.waitForTimeout(300); await enterKey(); });
+await realContext();
+await sendButtonShown();
+await whileDrawing(phone ? 'a double tap on the send button' : 'a double click on the send button', async () => { await sendTap(); await sendTap(); });
+await realContext();
+await whileDrawing('a picture that fails, with a second Enter 300 ms later', async () => { await enterKey(); await page.waitForTimeout(300); await enterKey(); }, { fail: true });
+await nextSendWorks('a picture that fails ends the hold too: the next Enter asks for a picture');
 await setForge(page, { modesSeeAs: 'describe' });
 
 // ---------- Settings ----------
