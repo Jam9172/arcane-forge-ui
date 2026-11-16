@@ -3,7 +3,8 @@
 // the chat are unpinned while the panel is active and pinned again when it stops. Floating panels are left
 // alone. Only the Forge Tester character, which the helper has selected, is ever shown; no character name is
 // read. Phones never take the pins away, but put back recorded ones. At the end the page is loaded again, with
-// the settings it loads changed in this page only, to prove the pins survive a load.
+// the settings it loads changed in this page only, to prove the pins survive a load, and on desktop once more
+// with another extension's slow APP_INITIALIZED listener (batch P4).
 // Usage: node tests/browser/menu-characters.mjs [phone]
 import { box, openForge, setForge } from './_harness.mjs';
 
@@ -426,6 +427,60 @@ if (!phone) {
     // A load at 900px wide (a desktop window, not a phone) after a session that ended with the panel on
     await page.setViewportSize({ width: 900, height: 900 });
     await loadRecorded('load at 900px');
+
+    // A load in which the panel first becomes active while SillyTavern is still handing out APP_INITIALIZED,
+    // because another extension's listener for it is slow: a stand-in listener, put first in the page, switches
+    // the panel on and then takes a second. SillyTavern's emit took its list of listeners before the panel
+    // started waiting, and remembers the event for later listeners only after the last one has finished, so
+    // the wait has to be answered another way. Each listener menu.js adds for APP_INITIALIZED or APP_READY is
+    // noted, to see that none is left behind. Characters is pinned by SillyTavern's own saved setting.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.addInitScript(() => {
+        globalThis.forgeTestMenuWaits = [];
+        // A whole URL: a script added this way has no address of its own to resolve '/scripts/…' against
+        import(new URL('/scripts/events.js', location.href).href).then(({ eventSource, event_types }) => {
+            const on = eventSource.on;
+            eventSource.on = function (event, listener) {
+                if ([event_types.APP_INITIALIZED, event_types.APP_READY].includes(event) && /arcane-forge-ui\/menu\.js/.test(new Error().stack ?? '')) {
+                    globalThis.forgeTestMenuWaits.push({ event, listener, during: globalThis.forgeTestSlowListener === 'running' });
+                }
+                return on.apply(this, arguments);
+            };
+            eventSource.on(event_types.APP_INITIALIZED, async () => {
+                globalThis.forgeTestSlowListener = 'running';
+                const { extension_settings } = await import(new URL('/scripts/extensions.js', location.href).href);
+                extension_settings.arcaneForgeUi.menuPanel = true;
+                document.dispatchEvent(new CustomEvent('arcane-forge-ui:apply'));
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+                globalThis.forgeTestSlowListener = 'done';
+            });
+        });
+    });
+    const slowLoad = await loadWith({
+        forge: { enabled: true, menuPanel: false, menuButtons: true, menuPins: {} },
+        account: { LNavLockOn: 'false', NavLockOn: 'true', WINavLockOn: 'false', LNavOpened: 'false', NavOpened: 'false', WINavOpened: 'false' },
+    });
+    const waits = await page.evaluate(async () => {
+        const { eventSource } = await import('/scripts/events.js');
+        return {
+            slow: globalThis.forgeTestSlowListener,
+            during: globalThis.forgeTestMenuWaits.filter((w) => w.during).map((w) => w.event),
+            left: globalThis.forgeTestMenuWaits.filter((w) => eventSource.events[w.event]?.includes(w.listener)).map((w) => w.event),
+        };
+    });
+    check('slow APP_INITIALIZED: the stand-in switched the panel on while SillyTavern was handing the event out, and the panel began to wait then',
+        waits.slow === 'done' && waits.during.includes('app_initialized'), JSON.stringify(waits));
+    const slowPin = (await loadedPins()).rm_button_panel_pin;
+    check('slow APP_INITIALIZED: the Characters pin is put away all the same (box off, panel not pinned, SillyTavern\'s setting off)',
+        !slowPin.checked && !slowPin.pinned && slowPin.setting === 'false', JSON.stringify(slowPin));
+    check('slow APP_INITIALIZED: menuPins records it', (await menuPins()) === '{"rm_button_panel_pin":true}', await menuPins());
+    check('slow APP_INITIALIZED: its box was clicked once, after SillyTavern bound its handler',
+        allBound(slowLoad.clicks) && slowLoad.clicks.length === 1 && slowLoad.clicks[0].id === 'rm_button_panel_pin', JSON.stringify(slowLoad.clicks));
+    check('slow APP_INITIALIZED: nothing of menu.js still waits on APP_INITIALIZED or APP_READY', waits.left.length === 0, JSON.stringify(waits));
+    await setForge(page, { menuPanel: false });
+    const slowBack = (await loadedPins()).rm_button_panel_pin;
+    check('slow APP_INITIALIZED, then panel off: the pin is back and menuPins is empty',
+        slowBack.checked && slowBack.pinned && slowBack.setting === 'true' && (await menuPins()) === '{}', `${JSON.stringify(slowBack)} ${await menuPins()}`);
 } else {
     // Phone: the panel is never active, so the pins are never touched and their locks stay as SillyTavern
     // draws them. On phones SillyTavern itself hides the AI response and Characters locks; the Lorebooks one

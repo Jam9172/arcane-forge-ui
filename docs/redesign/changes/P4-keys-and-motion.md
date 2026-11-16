@@ -1,0 +1,1 @@
+- Menu panel: Escape closes it, Tab stays inside it, and the keyboard focus returns to where you opened it from. It fades in, or appears at once if you have reduced motion on.
