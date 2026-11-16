@@ -19,12 +19,16 @@
 // The two round buttons (#forge-menu-buttons) take the top bar's place: with them, body has
 // forge-menu-buttons and css/menu.css hides the top bar and gives its space back. They open the panel the
 // same way, through the drawers' own toggles, which stay in the page (hidden) for that.
+//
+// SillyTavern can pin three panels open beside the chat, which cannot go with the menu panel. While the menu
+// panel is active their pins are off and hidden: the ones that were on are recorded in menuPins and turned
+// off with their own checkboxes, and turned on again the same way when the menu panel stops being active.
 import { saveSettingsDebounced } from '../../../../script.js';
 import { extension_settings } from '../../../extensions.js';
 
 export const id = 'menu';
 
-export const defaults = { menuPanel: false, menuButtons: true, menuLast: 'ai-config-button' };
+export const defaults = { menuPanel: false, menuButtons: true, menuLast: 'ai-config-button', menuPins: {} };
 
 export const lookKeys = {};
 
@@ -36,7 +40,10 @@ const BUTTONS_CLASS = 'forge-menu-buttons';
 const TITLE_ID = 'forge-menu-title';
 const CHARACTERS = 'rightNavHolder';
 const DRAWERS = '#top-settings-holder > .drawer';
-const OPEN_MENU = '#top-settings-holder > .drawer > .drawer-content.openDrawer:not(.pinnedOpen)';
+const MENUS = '#top-settings-holder > .drawer > .drawer-content';
+const OPEN_MENU = `${MENUS}.openDrawer:not(.pinnedOpen)`;
+// SillyTavern's pin checkboxes: AI response, Characters and Lorebooks (bible section 8)
+const PINS = ['lm_button_panel_pin', 'rm_button_panel_pin', 'WI_panel_pin'];
 // SillyTavern marks "no API connection" on the top bar's plug: RA_checkOnlineStatus (RossAscends-mods.js)
 // swaps its fa-plug for fa-plug-circle-exclamation, which is also what the page starts with.
 const STATUS_ICON = 'API-status-top';
@@ -99,12 +106,12 @@ export function bindSettings($root, s, save) {
 
 export function apply(s) {
     const active = Boolean(s.enabled && s.menuPanel) && window.matchMedia(DESKTOP).matches;
-    if (active) turnOn();
-    else turnOff();
+    if (active) turnOn(s);
+    else turnOff(s);
     setButtons(active && Boolean(s.menuButtons));
 }
 
-function turnOn() {
+function turnOn(s) {
     document.body.classList.add('forge-menu');
     if (!document.getElementById(FRAME_ID)) document.body.append(buildFrame());
     const holder = document.getElementById('top-settings-holder');
@@ -113,19 +120,51 @@ function turnOn() {
         // connection on the plug icon in the same holder
         observer = new MutationObserver((records) => {
             if (records.some((r) => r.target.id === STATUS_ICON)) syncDot();
-            if (records.some((r) => r.target.matches?.('#top-settings-holder > .drawer > .drawer-content'))) sync();
+            const menus = records.filter((r) => r.target.matches?.(MENUS));
+            // A panel pinned while the panel is on is put away too: SillyTavern puts back the pins it saved
+            // after Forge UI has started
+            if (menus.some((r) => r.target.classList.contains('pinnedOpen'))) unpin(extension_settings[MODULE]);
+            if (menus.length) sync();
         });
         observer.observe(holder, { subtree: true, attributes: true, attributeFilter: ['class'] });
     }
+    unpin(s);
     sync();
 }
 
-function turnOff() {
+function turnOff(s) {
     observer?.disconnect();
     observer = null;
     clearTimeout(hideTimer);
     document.getElementById(FRAME_ID)?.remove();
     document.body.classList.remove('forge-menu');
+    repin(s);
+}
+
+// ---------- SillyTavern's pinned panels ----------
+
+// Records each pin that is on, then turns it off with its own checkbox, so SillyTavern does the unpinning.
+// A pin already recorded stays recorded, so applying again (or a reload, after which the pins are off)
+// never loses the pins to put back.
+function unpin(s) {
+    const on = PINS.filter((pin) => document.getElementById(pin)?.checked);
+    if (!s || !on.length) return;
+    s.menuPins = { ...s.menuPins, ...Object.fromEntries(on.map((pin) => [pin, true])) };
+    saveSettingsDebounced();
+    for (const pin of on) document.getElementById(pin).click();
+}
+
+// Turns the recorded pins on again with their own checkboxes, and forgets them. A new object, not the old
+// one emptied: Reset hands features a copy of the settings that shares it.
+function repin(s) {
+    const recorded = s?.menuPins || {};
+    if (!Object.keys(recorded).length) return;
+    s.menuPins = {};
+    saveSettingsDebounced();
+    for (const pin of PINS) {
+        const box = document.getElementById(pin);
+        if (recorded[pin] && box && !box.checked) box.click();
+    }
 }
 
 // ---------- The two round buttons ----------

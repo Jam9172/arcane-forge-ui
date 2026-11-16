@@ -1,0 +1,1 @@
+- Menu panel: your characters open in the panel too. Panels you had pinned beside the chat are unpinned while the menu panel is on and pinned again when you turn it off.
