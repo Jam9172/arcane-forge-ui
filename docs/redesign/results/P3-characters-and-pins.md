@@ -144,3 +144,122 @@ ok       stage-spine phone  12 checks, 15s
 ## Not done
 
 Nothing in the brief. Not tried: TauriTavern itself (the brief asks for no stand-in), and a real reload in which SillyTavern restores a saved pin after Forge UI starts (simulated; see the choices).
+
+## Check
+
+**FAIL.** Checked on `batch/P3-characters-and-pins` at `15fd9ec`, against `overhaul...HEAD` (merge base `427c2a7`). `overhaul` has since moved on to `90344ea` (S3 merged); `git merge-tree` shows the branch still merges into it without conflicts.
+
+One problem makes it FAIL (problem 1 below): **a page that loads at 1000px or less while pins are recorded loses them for good.** `repin` clicks SillyTavern's pin checkboxes before SillyTavern has bound its handlers to them, then empties `menuPins` anyway. SillyTavern's own pin setting is left off, and nothing can put it back. Everything else holds up.
+
+### (a) Only owned files changed
+
+`git diff --name-only overhaul...HEAD` lists five files: `css/menu.css`, `docs/redesign/changes/P3-characters-and-pins.md`, `docs/redesign/results/P3-characters-and-pins.md`, `menu.js` and `tests/browser/menu-characters.mjs`. All five are on the brief's "You own" list. The diff and the commit message hold no personal details. The commit message is the brief's. Met.
+
+### (b) The commands
+
+- `node tests/browser/menu-characters.mjs`: 47 ok, 0 FAIL.
+- `node tests/browser/menu-characters.mjs phone`: 7 ok, 0 FAIL.
+- `node tests/run.mjs menu`: 6 passed, 0 failed.
+- `node tests/run.mjs`: 16 passed, 0 failed (foundation, harness, menu-buttons, menu-characters, menu-frame, modes-bar, stage-column and stage-spine, each on desktop and phone).
+
+Met. The tests pass, but they do not try a page load, which is where problem 1 is.
+
+### (c) The brief, the "Done when" list, and bible sections 3 and 9
+
+Brief, Build:
+
+1. **Pins.** Not met in full; see problem 1.
+   - `defaults` gains `menuPins: {}`, and `lookKeys` stays `{}`, as section 7 asks.
+   - When the panel turns on, `unpin` records each checked box and clicks it. When the panel turns off, `turnOff` takes the frame and the class away first, then `repin` clicks each recorded box that is unchecked.
+   - Recording merges instead of overwriting, so a second activation never loses an entry. That meets the brief's intent; see choices, below.
+   - The locks are hidden under `body.forge-ui.forge-menu`.
+   - In a live page, all four ways the panel can stop work (see (d)). On a page load at 1000px or less they do not.
+2. **Characters section.** `#right-nav-panel` is placed by P1's rule, and the test shows its tabs, search and list inside the content area. A list longer than its box scrolls inside it, and the page does not scroll. Met.
+3. **What opens from it.** `#character_popup` and a `callGenericPopup` dialog are on top. I checked the builder's account of SillyTavern's lift against SillyTavern's `style.css`: the three selectors and the 3005 to 4005 layers are as stated. The frame goes up with it only when the open menu is not a side panel, so the window Characters opens stays above the frame. Met.
+4. **Floating panels.** With the panel on and a menu open, I tried all 32 rules from `css/menu.css` against all 329 elements of `#completion_prompt_manager_popup`, `#floatingPrompt`, `#cfgConfig` and `#logprobsViewer`. None matched. The lift rule styles only our frame. Met.
+
+Test steps 1 to 8 are all there. The phone variant follows bible section 12 over the brief's "Desktop only", which is right, because the bible wins. Step 8 uses the real Advanced definitions button on the Forge Tester character the helper selected. Names in the list are counted, never read.
+
+Done when:
+
+- **The commands pass:** yes, see (b).
+- **The result file says what happens to the pins in each of the three ways:** there is a table. Its row "The window drops to 1000px or less" holds only for a window that narrows in a live page. The table says nothing about a page that starts at that size with pins recorded, and that is where they are lost. Partly met.
+- **Only the "You own" files changed:** yes, see (a).
+
+Bible section 3:
+
+1. **Native controls stay underneath.** Pins change only through SillyTavern's own checkboxes. Its handlers do the class and storage work. The locks are hidden, not removed. Met.
+2. **One switch back.** Not met in one case (problem 1). Otherwise, turning the panel off leaves nothing of ours (see (d)).
+3. **Every look choice gets a setting.** Hiding the locks and lifting the frame are behaviour, not look. Met.
+4. **Phone.** The phone run passes in a live page. A load at phone size with pins recorded loses them (problem 1). Not met.
+5. **One list of values.** `--forge-menu-lift: 1000` is a raw layer figure in feature CSS (problem 3). The builder asked I1 for a token, which is the route house rule 6 gives. Accepted as a note.
+6. **Stay in your lane.** Met.
+7. **Small and plain.** About 50 lines added to `menu.js`, no new observer or listener. P1's observer is reused. Met.
+
+Bible section 9:
+
+- **Contract.** Unchanged in shape; `apply` decides active or not. The observer's `unpin` acts only while the panel is active. Met.
+- **Selectors.** Every rule line in `css/menu.css` starts `body.forge-ui.forge-menu`; I listed every selector and none does not. Met.
+- **`!important`, `innerHTML`, network, `localStorage`.** None added. Met.
+- **Observers.** Still one, on `#top-settings-holder` (class changes). Met.
+- **"Never change SillyTavern's own settings, except the pins in 5.2, which are put back."** In a live page they are always put back. After a load at 1000px or less they are not (problem 1). Not met.
+- **Nothing held across calls.** Pins are looked up by id each time. Met.
+
+The builder's choices, judged against the bible:
+
+- **Recording merges instead of overwriting.** Accepted: no recorded pin is ever lost, which is what "never record twice" protects.
+- **The observer puts away pins that turn up late.** Accepted, and now proven for real. I loaded the page with SillyTavern's saved settings still pinning Characters. The settings were changed in that page only; see (d). SillyTavern pinned it in `initRossMods` with its handler bound, and the observer then unpinned and recorded it. Turning the panel off put it back, and the save that would have been made had `NavLockOn` `true` and `menuPins` `{}`.
+- **A panel that was open is pinned again but not opened again.** Within what the brief asks; see problem 2.
+- **How the locks are hidden.** Accepted. While on, the three locks are gone; when off, they are shown again (test).
+- **The lift, and SillyTavern's leftovers.** The lift is accepted. The note that SillyTavern's cross leaves the `open` class is true: my snapshot after the cross shows it. That class is SillyTavern's own, not ours.
+- **A press in the advanced definitions window closes Characters.** True; I reproduced it. A press on the window's text closes Characters and hides the frame, while the window stays open and usable. This is SillyTavern's behaviour for an unpinned panel. Accepted as a note for the owner (problem 4).
+
+### (d) Trying to break it
+
+Scratch scripts outside the repository, against the sandbox, with the Forge Tester chat only. They follow the harness's rules: every save is held, no model is called, and other hosts are refused. They also read each held settings save for its pin fields only, which shows what would have been saved. For the two load cases, the settings the page loaded were changed in that page only. Nothing was written to the sandbox.
+
+- **Every way the panel can stop, in a live page.** I pinned all three panels by hand and left them open, then took the panel off in each way:
+  - its switch through `apply`;
+  - its switch ticked and unticked by hand in the Extensions section inside the panel;
+  - the main switch;
+  - the window at 1000px;
+  - Reset.
+
+  In every case each pin came back exactly: the checkbox, `pinnedOpen`, the drawer icon's `drawerPinnedOpen`, and SillyTavern's `NavLockOn`, `LNavLockOn` and `WINavLockOn`. `menuPins` was `{}`. The last held save had all three `...LockOn` `true` and `menuPins` `{}`, the same as before the panel was on. The only difference was the open state (problem 2).
+- **What reaches the sandbox.** Nothing. A fresh load after all my runs and the full test suite shows the same pin state the sandbox started with: no box checked, `menuPins` `{}`, `menuPanel` `false`, and the same six pin and opened values in SillyTavern's account storage.
+- **Off leaves nothing behind.** I took a snapshot with the panel off, covering:
+  - `html`, `body`, `#top-bar`, `#top-settings-holder`, `#sheld`, `#chat`, `#form_sheld` and `#send_form`;
+  - every drawer, toggle, content and icon;
+  - the three pin blocks, labels and boxes, and the four floating panels;
+  - `body`'s children, every `forge-` id, and `--forge-menu-lift` on `body`.
+
+  Then I used the panel: a pin, Characters, Advanced definitions, and Lorebooks over it, with the lift at `1000`. After turning it off, the second snapshot matches the first apart from `#character_popup`'s `open` class and inline `display: none; opacity: 0`. SillyTavern leaves both there itself when its cross closes the window.
+- **Phone.** The phone variant passes. At 390 by 800 there is no class and no frame, and the Lorebooks pin is left alone.
+- **A load while pins are recorded.** The saved settings stood in for a session that ended with the panel on and Characters recorded: `menuPanel` `true`, `menuPins` `{"rm_button_panel_pin":true}` and `NavLockOn` `false`.
+  - At 1440 by 900: nothing is clicked at load, the record is kept, and turning the panel off pins Characters again. Correct.
+  - At 900px wide (a desktop browser, for example a window snapped to half of a 1920px screen): the pin is lost (problem 1).
+  - At phone size: the same.
+
+### Problems found
+
+1. **FAIL: a load at 1000px or less loses the recorded pins for good.** The extension's first `apply` runs while SillyTavern is still loading its settings. That is before `initRossMods` binds its click handlers to the pin checkboxes. When the window is 1000px or less at that moment, `apply` turns the panel off and `repin` runs. Logging the clicks shows `repin` clicking `#rm_button_panel_pin` with no handler bound. So:
+   - no `pinnedOpen` is added and SillyTavern's storage is not updated;
+   - `menuPins` is emptied and saved regardless;
+   - `initRossMods` then sets the box from the saved `NavLockOn` `false`, which unchecks it.
+
+   After the load, the box is unchecked and `#right-nav-panel` is not pinned. The held save carries `NavLockOn` `false` and `menuPins` `{}`, so no later step can put the pin back.
+
+   This breaks:
+   - brief Build 1 ("the window drops to phone size: click each recorded checkbox to pin it again");
+   - house rule 2 (a changed SillyTavern setting is left behind);
+   - bible section 9 (the pins must be put back).
+
+   It is a realistic path. The same settings are opened from a phone browser, or SillyTavern starts in a narrow or half-screen window after the panel was in use. Two things would close it: putting pins back only once SillyTavern is ready (for example after `APP_READY` when called earlier), and forgetting a recorded pin only once its box is really checked. The test should also cover a load at 1000px or less with pins recorded.
+2. **Not a FAIL: pinned panels come back closed.** A pinned panel is usually open beside the chat. When the panel turns on, SillyTavern's own unpin handler closes each unpinned panel while another drawer is open. When the panel turns off, the pins come back, but those panels stay closed until clicked.
+   - With the switch ticked in the Extensions section, all three panels close.
+   - SillyTavern's `NavOpened` and the related values stay `true`, so they reopen on the next load.
+
+   The brief asks only for the checkboxes to be clicked again, and the builder states the choice. Noted for the owner.
+3. **Not a FAIL: raw `1000` in `css/menu.css`.** House rule 5 wants a token. The builder asked I1 for `--forge-z-lift`.
+4. **Not a FAIL: a press in the advanced definitions window closes Characters.** It hides the frame behind the window. This is SillyTavern's behaviour, unchanged, and the window stays usable. But with pins always off under the panel, someone who used to pin Characters will now meet it.
+5. **Not a FAIL: disabling the extension while the panel is on.** If the extension is turned off in SillyTavern's extension manager, no code runs to put the pins back. They stay off, and `menuPins` keeps the record until the extension runs again. This is outside the brief's three ways. Noted for the owner.
