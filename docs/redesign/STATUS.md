@@ -12,7 +12,7 @@ States: `todo`, `doing`, `checked` (a second agent passed it), `merged`, `blocke
 | `M3-story-and-see` | todo | | |
 | `S1-chat-column` | merged | `708247d` | Checked PASS. For I1: a layer token for `#forge-stage` (raw `z-index: -1`); RPG Companion panel covers the column. |
 | `S2-spine-and-width` | merged | `267290f` | Checked PASS. For I1: tokens for the spine's raw sizes and layer. For I3: Import clamps `stageChat` where I3's test expects it ignored. |
-| `S3-stage-content` | doing | | |
+| `S3-stage-content` | merged | `0151f07` | Checked PASS. For I1: `stage.js` exports a seventh name, `setPlateText` (the brief asks for it; bible 9 says exactly six); raw layers and line height. Lane S done. |
 | `P1-menu-frame` | merged | `f1b534d` | Checked PASS. For I1: a `--forge-menu-dim` token for the backdrop's raw colour. |
 | `P2-buttons-and-top-bar` | merged | `bc7235f` | Checked PASS. For I1: toasts touch the top edge; maximised Author's Note and CFG cover the buttons; the buttons overlap RPG Companion's panel top. |
 | `P3-characters-and-pins` | doing | | |
