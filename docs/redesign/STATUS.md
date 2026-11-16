@@ -11,8 +11,8 @@ States: `todo`, `doing`, `checked` (a second agent passed it), `merged`, `blocke
 | `M2-do-and-say` | doing | | |
 | `M3-story-and-see` | todo | | |
 | `S1-chat-column` | merged | `708247d` | Checked PASS. For I1: a layer token for `#forge-stage` (raw `z-index: -1`); RPG Companion panel covers the column. |
-| `S2-spine-and-width` | doing | | |
-| `S3-stage-content` | todo | | |
+| `S2-spine-and-width` | merged | `267290f` | Checked PASS. For I1: tokens for the spine's raw sizes and layer. For I3: Import clamps `stageChat` where I3's test expects it ignored. |
+| `S3-stage-content` | doing | | |
 | `P1-menu-frame` | merged | `f1b534d` | Checked PASS. For I1: a `--forge-menu-dim` token for the backdrop's raw colour. |
 | `P2-buttons-and-top-bar` | doing | | |
 | `P3-characters-and-pins` | todo | | |
