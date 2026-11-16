@@ -180,3 +180,106 @@ Nothing from the brief. Not tried:
 
 - **A real finger or pen drag was not tried.** Playwright's WebKit can tap but cannot move a touch or a pen. What was tried is a mouse drag in a touch-emulated window 1280px wide. The code path is the same pointer events and capture for all three.
 - **TauriTavern, SillyTavern's MovingUI and visual novel mode (`body.waifuMode`) were not tried.** If MovingUI has put inline `left` and `width` on `#sheld` (S1's note), the column does not dock and the spine does not follow it. In visual novel mode the spine still runs from the top bar to the bottom, whatever height `#sheld` has there. Visual novel mode with the stage is I1's (its brief, item 5).
+
+## Check
+
+**PASS.** Checked by a second agent that did not write the code, on `batch/S2-spine-and-width` at `e999c74`, against the brief, bible sections 3, 5.1, 7, 9, 11 and 12, and the page itself. Nothing was fixed. `overhaul` has moved on since the batch was cut (merge base `1f070de`, `overhaul` now at `92b7649` with P1 merged), so the diff was taken with three dots as asked. The problems found are listed at the end; none of them fails the batch.
+
+### (a) Files
+
+`git diff --name-only overhaul...HEAD` lists `css/stage.css`, `docs/redesign/changes/S2-spine-and-width.md`, `docs/redesign/results/S2-spine-and-width.md`, `stage.js` and `tests/browser/stage-spine.mjs`. Those are exactly the five files under "You own". `index.js`, `style.css` and `css/tokens.css` are untouched, as is S1's `tests/browser/stage-column.mjs`. `git merge-tree` of this branch with the current `overhaul` merges with no conflict. **Pass.**
+
+### (b) Commands
+
+- `node tests/browser/stage-spine.mjs`: 52 ok, 0 FAIL, exit 0.
+- `node tests/browser/stage-spine.mjs phone`: 12 ok, 0 FAIL, exit 0.
+- `node tests/run.mjs stage`: stage-column (35), stage-column phone (10), stage-spine (52), stage-spine phone (12); "4 passed, 0 failed".
+- `node tests/run.mjs`: foundation (18), foundation phone (15), harness (8), harness phone (8), stage-column (35), stage-column phone (10), stage-spine (52), stage-spine phone (12); "8 passed, 0 failed".
+
+Every line and count matches the output the builder pasted above. As an extra, the tree this branch makes when merged with the current `overhaul` was extracted outside the repository and the whole suite run from it: "12 passed, 0 failed" (it adds menu-frame 49/5 and modes-bar 47/50). **Pass.**
+
+### (c) The diff, item by item
+
+Brief, Build:
+
+1. **The spine.** `spineElement()` makes one `div#forge-spine` with `role="separator"`, `aria-orientation="vertical"`, `tabindex="0"`, `aria-label="Chat width"`, `aria-valuemin="35"`, `aria-valuemax="70"`, and `apply()` sets `aria-valuenow`. The `::before` line is 1px of `--forge-bar-line` (the test compares the resolved colour), and the grab area is 11px with `cursor: col-resize`. **Pass.**
+2. **Dragging.** `pointerdown`, `pointermove`, `pointerup`, `pointercancel` and `lostpointercapture` are on the spine, with `setPointerCapture`. `forge-dragging` goes on `body` at the press and comes off at the release. The CSS turns off selection for `body` and everything in it while the class is there. `moveDrag` sets `--forge-stage-chat` live. `endDrag` rounds the value, keeps it within 35 to 70 (`chatShare`) and saves it. `endDrag` sets `drag` to null before anything else, so the `lostpointercapture` that follows a `pointerup` does nothing. **Pass.**
+3. **Keys.** `SPINE_KEYS`: Left +1, Right -1, Home 70, End 35. A `dblclick` sets 46. Keys with Alt, Ctrl or Meta are left alone. **Pass.**
+4. **Setting.** `settingsHtml` adds a `forge-ui-range` row "Chat width" with an `<output>` showing the percentage, `min="35" max="70" step="1"`, under the existing `<h4>Layout</h4>`. It is `disabled` unless the layout is Stage, and the layout select switches that at once. `lookKeys` is `{ stageChat: { type: 'number', min: 35, max: 70 } }`. **Pass** (see problem 3 for how faint "greyed out" is).
+5. **Clamp.** The width is still the bible 5.1 `clamp(var(--forge-chat-min), Nvw, calc(100vw - var(--forge-stage-min)))`. The drag and the keys only change N. At 1040 by 700 the test drags to both ends: the stage stops at 320px and the column at 480px. At 1001 by 700 the column is 480px with the spine on its edge. **Pass.**
+6. **Only while the stage is active.** `apply()` adds the spine only in the active branch and removes it in the other, with `forge-dragging` and the drag in progress. **Pass.**
+
+Brief, Leave alone: `--sheldWidth` stays `50vw` and `power_user.chat_width` stays 50 throughout. The test checks this, and so did every snapshot in (d). **Pass.**
+
+Brief, Test: all seven steps are in `tests/browser/stage-spine.mjs` with the tolerances the brief gives (2px, 3px, 2px). Step 1 reads "sits on `#sheld`'s left edge" as the spine's middle, and checks the line separately (within 1px). The brief says "Desktop only", but bible 12 asks every feature test to run at phone size. The builder followed the bible, added the `[phone]` Usage line and said so. That is correct: the bible wins. **Pass.**
+
+Brief, Done when:
+
+- **The commands pass.** See (b). **Pass.**
+- **Only the files under "You own" changed.** See (a). **Pass.**
+
+The changelog line is the brief's, word for word. The commit message is "Let the stage's chat edge be dragged". **Pass.**
+
+Bible section 3:
+
+1. **Native controls underneath.** Nothing native is copied or rebuilt. Chat width is Forge's own setting (bible 7). SillyTavern's Chat Width is not touched. **Pass.**
+2. **One switch back.** The spine's listeners are all on the spine itself, so they leave with it. There is no listener on `document` or `window`. `apply()` removes the spine, `forge-dragging` and `--forge-stage-chat`. See (d) for the snapshots. **Pass.**
+3. **Every look choice gets a setting.** The width is the setting. The line's colour comes from `--forge-bar-line`, which follows the colour settings. The grab sizes are invisible and come from bible 5.1 and 11. No hover look was added. **Pass.**
+4. **Phone counts.** The phone run passes, and the brief asks for no TauriTavern stand-in. **Pass.**
+5. **One list of values.** There is no hex. The colour and the 44px touch width come from tokens. Raw `z-index: 30`, `11px`, `1px`, `5px` and `6px` remain (problem 1). **Pass, with a note**, as S1's `z-index: -1` was.
+6. **Stay in your lane.** See (a). The builder wrote what it needs from `css/tokens.css`, `index.js` and `style.css` under "Asked of other files" instead of editing them. **Pass.**
+7. **Small and plain.** About 140 lines of JS and 4 CSS rules, with no dependency. **Pass.**
+
+Bible section 9:
+
+- **Ownership.** Only lane S's files and this batch's two docs. **Pass.**
+- **Feature contract.** The module exports exactly `id`, `defaults`, `lookKeys`, `settingsHtml`, `bindSettings` and `apply`. `apply` is still the only place the spine is added or removed. A second apply keeps one spine (tested). Between calls the module keeps only `drag`, which holds numbers. The drag handler changes only the live width and the transient `forge-dragging` class, and `apply` takes both away. The spine saves through `SillyTavern.getContext()` and re-runs only stage's own `apply`, because it has no `save()` of its own. Nothing else reads `stageChat`, so this is acceptable. **Pass.**
+- **Shared names.** The module uses `body.forge-stage`, `--forge-stage-chat`, `#forge-stage`, `#forge-spine`, and its own `forge-dragging`, which has the `forge-` prefix and is the brief's own name. **Pass.**
+- **Rules for the code.**
+  - Every selector starts with `body.forge-ui.forge-stage`, including `body.forge-ui.forge-stage.forge-dragging *` and the one inside `@media (pointer: coarse)`.
+  - There is no `!important`, `transform`, `filter` or `contain` on `#sheld`.
+  - There is no `innerHTML` with outside text: the percentage is a number, written with `textContent` or into the settings template.
+  - No network, no `localStorage`, no `MutationObserver`. No SillyTavern setting changes. No element is held across calls. New ids start with `forge-`.
+
+  **Pass.**
+
+Bible 5.1, 7 and 11 for the spine: live drag, save on release, double-click 46, Left/Right 1%, Home/End limits, `Chat width` in Layout, a look-file key. Tab reaches the spine, and it then shows the existing ember ring (`solid 2px rgb(232, 98, 44)`, offset 2px, from `style.css`'s `[tabindex]:not([tabindex^="-"]):focus-visible` rule). On a touch screen the grab area is 44px. **Pass.**
+
+### Choices in the result file, judged against the bible
+
+- **The spine in `body` beside `#sheld`:** allowed. Bible 9 names `#forge-spine` as an element we add and does not fix where it goes. Measured: as tall as the column (35 to 900px) and centred on its edge at 1001, 1040 and 1440 wide. It puts nothing on `#sheld`.
+- **The grab area centred on the line:** fine, and it meets the brief's 2px. Its 6px over the column cover the left 3px of the options button. The result file does not say so (problem 2).
+- **`z-index: 30`:** a raw layer (problem 1). The builder asked integration for a token this time. Verified as safe:
+  - top-bar drawers that cross the spine are drawn over it (Backgrounds, User Settings and Connection, at 1440 by 900);
+  - on the merged tree, the P1 menu panel's backdrop and frame cover it at every height, and a drag where it lies underneath changes nothing;
+  - the open options menu (`#options`) is drawn over it.
+- **44px under `(pointer: coarse)`:** agrees with bible 11. Verified at 1280 by 800 with touch: 44px wide, line on the column's first pixel, `touch-action: none`, and a tap changes nothing.
+- **Cancelling `pointerdown` and `-webkit-user-drag: none` while dragging:** scoped to the drag. A side effect: a mouse press on the spine sends no `mousedown`, so it does not close an open drawer. The builder disclosed this, and it is acceptable.
+- **The spine's keys stop at the spine:** needed, because SillyTavern swipes on Left and Right. The test proves no key reaches `document`. Up, Down, PageUp and PageDown do nothing (tried).
+- **`aria-valuenow` is the setting:** fine. With a fractional value it disagrees with the width shown (problem 4).
+- **The native `disabled` attribute for "greyed out":** meets bible 7 for the control only (problem 3).
+- **S1's two nits fixed in passing** (`parseFloat`, `Object.hasOwn`): both are inside owned files and correct.
+- **Phone run despite "Desktop only":** correct, the bible wins.
+
+### (d) Trying to break it
+
+Scratch scripts outside the repository used this worktree's own test helper and only the Forge Tester chat. They compared `body`'s classes, `style` attribute, attributes and children; every `forge-` id in the page; `#sheld`'s box, `style` attribute and computed `left`, `right`, `width`, `top`, `height`, `z-index` and `position`; `--forge-stage-chat`; `--sheldWidth`; and SillyTavern's own Chat Width.
+
+- **Classic again after a drag, the keys and a double-click:** identical to the start. **Pass.**
+- **Main switch off with Stage chosen:** identical to main switch off from Classic. **Pass.**
+- **Main switch off in the middle of a drag**, then the mouse moved on and let go: identical to main switch off from Classic. No save was posted and the width was kept. **Pass.**
+- **Window to 900px in the middle of a drag**, then let go: no spine, no `forge-dragging`, no `forge-stage`, no `--forge-stage-chat`, and the width was kept. **Pass.**
+- **`apply()` run again in the middle of a drag:** the column snaps back to the setting for a moment, then the drag carries on and saves where it ended (864px, 60). **Pass.**
+- **A plain click on the spine:** no save, no change. **Pass.**
+- **Phone (390 by 800, touch):** with Stage chosen and Chat width 60, the page is identical to Classic. The Chat width row fits the screen with no sideways scroll, and it is the same size as the Text size range. **Pass.**
+- **End of the long desktop run:** one difference from the start. RPG Companion moved its own elements (`#rpg-mobile-toggle`, `#rpg-thought-icon`) to the end of `body`. A control run with the layout left on Classic shows that RPG Companion does this whenever the window crosses 1000px. It is not ours.
+- **Screenshots**, cropped to the settings rows and to a strip at the spine (no chat text in them): the line is on the column's edge, the ember ring shows on keyboard focus, and the disabled range is only slightly darker than the usable one.
+
+### Problems found (none fails the batch)
+
+1. **Raw values in `css/stage.css`.** `z-index: 30`, `width: 11px`, the line's `1px`, and the `5px` and `6px` offsets. Bible 3 rule 5 asks for tokens. 11px and 1px are bible 5.1's own measurements, and 30 is SillyTavern's `#sheld` layer, each with a comment. The builder asked for `--forge-z-chat` but not for the spine's sizes. Suggestion for integration: a token such as `--forge-spine-grab: 11px` beside `--forge-z-chat: 30`. Same standing as S1's `-1`.
+2. **The spine covers the left 3px of the message box's options button.** At 1440 by 900 the button starts at 780.6px and the spine ends at 783.6px. `elementFromPoint` 1px inside the button gives `forge-spine`. The same holds on a wide touch screen (694.2 against 697.2). A press there does nothing instead of opening the menu. The result file says the spine does not reach the chat's text, but does not mention this. Minor.
+3. **"Greyed out" is faint.** Only the slider is dimmed, by SillyTavern's `input:disabled` (`brightness(0.5)`, `cursor: not-allowed`). The label and the percentage keep full text colour. The builder could not style the row from `css/stage.css` while the layout is Classic, and asked I3 for a label rule. That request should be kept.
+4. **A fractional Chat width is shown rounded but drawn exact.** A look file can bring `stageChat: 55.5`, because foundation's validator clamps but does not round. The column is then 55.5% wide, while `aria-valuenow` and the range say 56. `apply()` could round. Nit.
+5. **The spine is the last stop in Tab order** (119th of 119, after RPG Companion's thoughts button), because it is appended to the end of `body`. It is reachable, and the bible sets no order. Note.
+6. **Not tried by either agent:** a real finger or pen drag, TauriTavern itself, MovingUI positions on `#sheld`, and visual novel mode. The builder disclosed all four.
