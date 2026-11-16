@@ -11,8 +11,9 @@
 //                 change, when the window crosses 1000px, and on the arcane-forge-ui:apply event; safe to
 //                 call any number of times, and the only place that adds or removes the modes.
 //
-// Do and Say rewrite what you type (transform below) just before SillyTavern sends it. Story and See still
-// send it as typed.
+// Do, Say and See rewrite what you type (transform below) just before SillyTavern sends it. Story goes in as
+// narration and See can ask Image Generation for a picture instead; those two stop SillyTavern's send and do
+// their own (tellStory and askForPicture).
 import * as script from '../../../../script.js';
 
 // Where index.js keeps Arcane Forge UI's settings. A click on the bar and a send read them from here, so they
@@ -52,6 +53,12 @@ const STARTS_WITH_SELF = /^(?:you|i)(?![\p{L}\p{N}_])/iu;
 const STARTS_WITH_SELF_SAY = /^(?:you|i)\s+say(?![\p{L}\p{N}_])/iu;
 
 const VOICES = { second: 'You …', first: 'I …' };
+// How Story and See go in (bible section 7), with the words the settings show for each
+const STORY_AS = { narration: 'narration', message: 'my own message' };
+const SEE_AS = { describe: 'a description', picture: 'a picture' };
+// See with nothing typed (bible section 6, "What each mode sends")
+const LOOK_AROUND = { second: 'You look around.', first: 'I look around.' };
+const NO_IMAGE_GENERATION = 'See needs SillyTavern\'s Image Generation. Sending a description request instead.';
 
 export const id = 'modes';
 
@@ -60,14 +67,18 @@ export const defaults = {
     modesActive: '',
     modesVoice: 'second',
     modesTidy: true,
+    modesStoryAs: 'narration',
+    modesSeeAs: 'describe',
     modesTemplates: { do: '', say: '', see: '' },
 };
 
-// Bible section 7: the voice, the tidying and the wording travel in a look file; the switch and the picked
-// mode do not
+// Bible section 7: the voice, the tidying, how Story and See go in, and the wording travel in a look file;
+// the switch and the picked mode do not
 export const lookKeys = {
     modesVoice: { type: 'enum', values: Object.keys(VOICES) },
     modesTidy: { type: 'boolean' },
+    modesStoryAs: { type: 'enum', values: Object.keys(STORY_AS) },
+    modesSeeAs: { type: 'enum', values: Object.keys(SEE_AS) },
     modesTemplates: { type: 'strings', keys: TEMPLATE_KEYS, max: TEMPLATE_MAX },
 };
 
@@ -76,9 +87,7 @@ export const lookKeys = {
 // this HTML, so nothing the owner typed is ever read as markup.
 export function settingsHtml(s) {
     const off = s.modes ? '' : ' disabled';
-    const voices = Object.entries(VOICES)
-        .map(([key, label]) => `<option value="${key}"${key === voiceOf(s) ? ' selected' : ''}>${label}</option>`)
-        .join('');
+    const voices = options(VOICES, voiceOf(s));
     const fields = TEMPLATE_KEYS.map((key) => `
                     <label class="forge-ui-select">
                         <span>${MODES.find((m) => m.mode === key).label}</span>
@@ -98,11 +107,26 @@ export function settingsHtml(s) {
                     <input type="checkbox" id="forge-ui-modes-tidy" class="forge-ui-modes-option"${s.modesTidy !== false ? ' checked' : ''}${off}>
                     <span>Tidy what I type (first letter, full stop, quotes)</span>
                 </label>
+                <label class="forge-ui-select">
+                    <span>Story goes in as</span>
+                    <select id="forge-ui-modes-story-as" class="text_pole forge-ui-modes-option"${off}>${options(STORY_AS, storyAs(s))}</select>
+                </label>
+                <label class="forge-ui-select">
+                    <span>See asks for</span>
+                    <select id="forge-ui-modes-see-as" class="text_pole forge-ui-modes-option"${off}>${options(SEE_AS, seeAs(s))}</select>
+                </label>
                 <details id="forge-ui-modes-wording">
                     <summary>Advanced: my own wording</summary>${fields}
                     <small>{{input}} is what you typed (tidied, when tidying is on). Leave a box empty to use the wording shown in it. A wording without {{input}} is ignored, and the one shown is used instead.</small>
                 </details>
 `;
+}
+
+// A select's options, from a { value: label } list (our own fixed words, never anything typed)
+function options(list, selected) {
+    return Object.entries(list)
+        .map(([key, label]) => `<option value="${key}"${key === selected ? ' selected' : ''}>${label}</option>`)
+        .join('');
 }
 
 export function bindSettings($root, s, save) {
@@ -118,6 +142,14 @@ export function bindSettings($root, s, save) {
     });
     $root.find('#forge-ui-modes-tidy').on('change', function () {
         s.modesTidy = this.checked;
+        save();
+    });
+    $root.find('#forge-ui-modes-story-as').on('change', function () {
+        s.modesStoryAs = Object.hasOwn(STORY_AS, this.value) ? this.value : defaults.modesStoryAs;
+        save();
+    });
+    $root.find('#forge-ui-modes-see-as').on('change', function () {
+        s.modesSeeAs = Object.hasOwn(SEE_AS, this.value) ? this.value : defaults.modesSeeAs;
         save();
     });
     $root.find('.forge-ui-modes-template').each(function () {
@@ -145,6 +177,7 @@ export function apply(s) {
         document.getElementById('forge-modes')?.remove();
         showPrompt('');
         lastRewrite = '';
+        storyPending = false;
         return;
     }
     const form = document.getElementById('send_form');
@@ -166,6 +199,14 @@ function voiceOf(s) {
     return s?.modesVoice === 'first' ? 'first' : 'second';
 }
 
+function storyAs(s) {
+    return s?.modesStoryAs === 'message' ? 'message' : 'narration';
+}
+
+function seeAs(s) {
+    return s?.modesSeeAs === 'picture' ? 'picture' : 'describe';
+}
+
 // The owner's wording; an older or hand-edited settings file may hold something else there
 function ownTemplates(s) {
     const own = s?.modesTemplates;
@@ -175,22 +216,30 @@ function ownTemplates(s) {
 // ---------- What is sent (bible section 6) ----------
 
 /**
- * The text to send for what was typed, with the given mode picked. Do and Say follow the tidy rules and
- * templates of bible section 6; Story, See and anything else come back unchanged for now.
+ * The text to send for what was typed, with the given mode picked: the tidy rules and templates of bible
+ * section 6. Story is only trimmed (it has no wording); See with nothing typed looks around. How Story and
+ * See go in (narration, a picture) is decided where the send is caught, not here. Any other mode comes back
+ * unchanged.
  * @param {string} text what is in the message box
  * @param {string} mode 'do', 'say', 'story' or 'see'
  * @param {{modesVoice?: string, modesTidy?: boolean, modesTemplates?: object}} [s] the settings to use
  * @returns {string}
  */
 export function transform(text, mode, s = {}) {
-    if (typeof text !== 'string' || (mode !== 'do' && mode !== 'say')) return text;
+    if (typeof text !== 'string') return text;
+    // Rule 5: Story gets rule 1 only (and with tidy off, nothing: it has no template)
+    if (mode === 'story') return s?.modesTidy === false ? text : text.trim();
+    if (mode !== 'do' && mode !== 'say' && mode !== 'see') return text;
+    // See is the one mode that acts on an empty box. The sentence is all ours, so it is the same with tidy
+    // off, and the owner's See wording (which needs something typed for {{input}}) is not used.
+    if (mode === 'see' && !text.trim()) return LOOK_AROUND[voiceOf(s)];
     const template = templateFor(mode, s);
     // Tidy off: the template and nothing else
     if (s?.modesTidy === false) return fill(template, text);
     // Rule 1: trim the ends; line breaks inside stay
     const typed = text.trim();
     if (!typed) return text;
-    if (mode === 'do') {
+    if (mode === 'do' || mode === 'see') {
         // Rule 3: already "you …" or "I …", so no You or I goes in front
         if (STARTS_WITH_SELF.test(typed)) return endMark(upperFirst(typed));
         return fill(template, endMark(startsWithCapitals(typed) ? typed : lowerFirst(typed)));
@@ -274,9 +323,24 @@ function sendsOnEnter() {
     return !window.matchMedia(PHONE).matches;
 }
 
+// SillyTavern's scripts/slash-commands.js: sendNarratorMessage (the code behind /sys) for Story, and the flag
+// for commands typed in the box still running. Loaded the same way, so a host without it only loses Story as
+// narration: Story is then sent as your own message.
+let slashCommands = null;
+import('../../../slash-commands.js')
+    .then((module) => { slashCommands = module; })
+    .catch(() => { /* Story goes in as your own message */ });
+
 // SillyTavern's own test for "a reply is being written", with its older flag as a fallback
 function generating() {
     return typeof script.isGenerating === 'function' ? Boolean(script.isGenerating()) : Boolean(script.is_send_press);
+}
+
+// SillyTavern's other reasons to refuse a send from the message box (sendTextareaMessage in script.js): a
+// swipe under way, or commands typed in the box still running. Story and See as a picture send on their own,
+// so they ask the same.
+function refusesSend() {
+    return (script.swipeState ?? 'none') !== 'none' || Boolean(slashCommands?.isExecutingCommandsFromChatInput);
 }
 
 // Both listeners sit on document in the capture phase, so they run before SillyTavern's own (its Enter
@@ -308,7 +372,7 @@ function onBoxKey(event) {
     if (event.key !== 'Enter') return;
     if (event.isComposing || event.keyCode === 229 || event.shiftKey || event.ctrlKey || event.altKey) return;
     if (!sendsOnEnter()) return;
-    shapeMessage();
+    shapeMessage(event);
 }
 
 // Enter on the send button (Tab from the message box lands on it). SillyTavern's scripts/keyboard.js turns
@@ -319,7 +383,7 @@ function onBoxKey(event) {
 function onSendButtonKey(event, button) {
     if (event.key !== 'Enter') return;
     if (event.altKey || event.ctrlKey || event.shiftKey || button.classList.contains('disabled')) return;
-    shapeMessage();
+    shapeMessage(event);
 }
 
 // A click or tap on the send button. Quick Reply and other scripts click it from code (not trusted); what
@@ -327,26 +391,124 @@ function onSendButtonKey(event, button) {
 // has shaped the box by then.
 function onSendClick(event) {
     if (!event.isTrusted || !(event.target instanceof Element) || !event.target.closest('#send_but')) return;
-    shapeMessage();
+    shapeMessage(event);
 }
 
 // Rewrites the message box for the picked mode, then lets the event carry on to SillyTavern, which sends
-// what is now in the box. The input event lets SillyTavern (and TauriTavern) see the new text.
-function shapeMessage() {
-    const s = SillyTavern.getContext().extensionSettings[SETTINGS_KEY];
+// what is now in the box. Story as narration and See as a picture take the send over instead (takeOver).
+function shapeMessage(event) {
+    const context = SillyTavern.getContext();
+    const s = context.extensionSettings[SETTINGS_KEY];
     if (!s?.enabled || !s.modes) return;
+    // A Story is still being added (SillyTavern is not generating yet): a second Enter or tap now, on the
+    // emptied box, would start a reply of its own next to the Story's
+    if (storyPending) {
+        stopSend(event);
+        return;
+    }
     const mode = selectedMode(s);
     if (!mode || generating()) return;
     const textarea = document.getElementById('send_textarea');
     if (!(textarea instanceof HTMLTextAreaElement)) return;
     const text = textarea.value;
-    // Empty, a command (SillyTavern's own test: the trimmed text starts with "/"), or already rewritten
-    if (!text.trim() || text.trim().startsWith('/') || text === lastRewrite) return;
+    const typed = text.trim();
+    // Empty (See is the one mode that acts on an empty box), a command (SillyTavern's own test: the trimmed
+    // text starts with "/"), or already rewritten
+    if ((!typed && mode !== 'see') || typed.startsWith('/') || (lastRewrite && text === lastRewrite)) return;
+    if (typed && takeOver(event, context, mode, s, text)) return;
     const shaped = transform(text, mode, s);
     if (shaped === text) return;
-    textarea.value = shaped;
+    setBox(textarea, shaped);
     lastRewrite = shaped;
+}
+
+// The input event lets SillyTavern (and TauriTavern) see the new text
+function setBox(textarea, value) {
+    if (!(textarea instanceof HTMLTextAreaElement)) return;
+    textarea.value = value;
     textarea.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+// Story as narration and See as a picture do not send what is in the box: they stop SillyTavern's own send
+// and do their own. Both need an open chat and a send SillyTavern would make; without them the send carries
+// on as Story as your own message, or See as a description. Returns whether it took the send over.
+function takeOver(event, context, mode, s, text) {
+    if (mode === 'story' && storyAs(s) === 'narration') {
+        if (typeof slashCommands?.sendNarratorMessage !== 'function' || !canSendHere(context)) return false;
+        stopSend(event);
+        tellStory(transform(text, 'story', s), text);
+        return true;
+    }
+    if (mode === 'see' && seeAs(s) === 'picture') {
+        if (!canSendHere(context)) return false;
+        const imagine = context.SlashCommandParser?.commands?.imagine;
+        if (typeof imagine?.callback !== 'function') {
+            globalThis.toastr?.warning(NO_IMAGE_GENERATION);
+            return false;
+        }
+        stopSend(event);
+        askForPicture(imagine, text);
+        return true;
+    }
+    return false;
+}
+
+function canSendHere(context) {
+    return Boolean(context.getCurrentChatId?.()) && !refusesSend();
+}
+
+// Ours run first (capture, on document), so stopping here keeps the key or the click from SillyTavern's own
+// handlers (and keyboard.js's click for Enter on the send button); Enter makes no new line either
+function stopSend(event) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+}
+
+// True while a Story's narrator message is being added; shapeMessage holds other sends back meanwhile
+let storyPending = false;
+
+// Story as narration (bible section 6). The box is emptied first, so a second Enter while the narration is
+// being saved cannot add it twice. The narrator message comes from SillyTavern's own sendNarratorMessage (the
+// code behind /sys). Then a normal reply starts the way /trigger does: once nothing is being generated (it
+// waits up to 10 seconds), Generate('normal'). (/trigger also empties the box just before, so that its own
+// "/trigger" is not sent; this box is already empty.)
+async function tellStory(story, typed) {
+    setBox(document.getElementById('send_textarea'), '');
+    lastRewrite = '';
+    storyPending = true;
+    try {
+        await slashCommands.sendNarratorMessage({}, story);
+    } catch (error) {
+        console.error('[Arcane Forge UI] Story could not be added as narration.', error);
+        // Nothing typed is lost: it goes back while the box is still empty
+        const textarea = document.getElementById('send_textarea');
+        if (!textarea?.value) setBox(textarea, typed);
+        return;
+    } finally {
+        storyPending = false;
+    }
+    for (let waited = 0; generating() && waited < 10000; waited += 100) await new Promise((done) => setTimeout(done, 100));
+    if (generating()) return;
+    try {
+        await script.Generate('normal');
+    } catch (error) {
+        console.error('[Arcane Forge UI] The reply after a Story could not be started.', error);
+    }
+}
+
+// See as a picture (bible section 6): the box is emptied and Image Generation's own imagine command runs with
+// what was typed. Its callback gets the text as the command's argument, as SillyTavern's command runner would
+// hand it over after parsing, but no parser or macro step sees it on the way: nothing in it can start a
+// command, end this one with "|", set an argument with "name=", or be filled as a macro. Running it as
+// "/imagine …" text cannot promise that (SillyTavern's macro engine drops "{{trim}}" even when escaped).
+async function askForPicture(imagine, typed) {
+    setBox(document.getElementById('send_textarea'), '');
+    lastRewrite = '';
+    try {
+        await imagine.callback({}, typed);
+    } catch (error) {
+        console.error('[Arcane Forge UI] See could not ask Image Generation for a picture.', error);
+    }
 }
 
 // ---------- The bar ----------

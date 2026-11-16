@@ -1,9 +1,10 @@
 // Do and Say (M2): with a mode picked, what you type in the message box is rewritten just before SillyTavern
-// sends it. The rewriting does not depend on the screen size, so this test has no phone run.
-// Usage: node tests/browser/modes-send.mjs
+// sends it. The phone run makes the same sends on a 390 by 800 touch screen (taps for clicks).
+// Usage: node tests/browser/modes-send.mjs [phone]
 import { fakeConnection, openForge, setForge } from './_harness.mjs';
 
-const { page, held, check, finish } = await openForge();
+const phone = process.argv[2] === 'phone';
+const { page, held, check, finish } = await openForge({ phone });
 const MODES_JS = '/scripts/extensions/third-party/arcane-forge-ui/modes.js';
 const NO_TEMPLATES = { do: '', say: '', see: '' };
 
@@ -61,8 +62,9 @@ got = await transform('pay $& go', 'do');
 check('nothing in the text is read as a replacement pattern', got === 'You pay $& go.', JSON.stringify(got));
 got = await transform('Ice the cake', 'do');
 check('a word that only starts with "I" is not the word I', got === 'You ice the cake.', JSON.stringify(got));
-got = [await transform('the door', 'see'), await transform('The rain stops', 'story')];
-check('Story and See come back unchanged for now', got[0] === 'the door' && got[1] === 'The rain stops', JSON.stringify(got));
+// (Story and See are shaped since M3; tests/browser/modes-story-see.mjs checks them)
+got = await transform('open the door', 'shout');
+check('a mode that is not one of the four comes back unchanged', got === 'open the door', JSON.stringify(got));
 
 // ---------- End to end ----------
 
@@ -85,20 +87,22 @@ const dismissNotice = async () => {
     });
     if (dismissed) await page.waitForTimeout(400);
 };
+// A tap on the phone, a mouse click on a desktop
 const click = async (selector) => {
     await dismissNotice();
-    await page.click(selector);
+    await (phone ? page.tap(selector) : page.click(selector));
 };
 const pick = async (mode) => {
     await click(`#forge-modes [data-mode="${mode}"]`);
     await page.waitForTimeout(150);
 };
 // Waits until SillyTavern has added a message and finished the (fake) reply, or until it is clear nothing came
-const settle = async (before) => {
-    await page.waitForFunction(async (before) => {
-        const st = await import('/script.js');
-        return SillyTavern.getContext().chat.length > before && !st.isGenerating() && !document.body.dataset.generating;
-    }, before, { timeout: 8000, polling: 100 }).catch(() => {});
+// (wait: how long to give it). The check is a plain function: Playwright does not wait for a promise, so
+// SillyTavern's script.js is put on a global once, here, for it to read.
+await page.evaluate(async () => { globalThis.testST = await import('/script.js'); });
+const settle = async (before, wait = 8000) => {
+    await page.waitForFunction((before) => SillyTavern.getContext().chat.length > before && !globalThis.testST.isGenerating() && !document.body.dataset.generating,
+        before, { timeout: wait, polling: 100 }).catch(() => {});
     await page.waitForTimeout(400);
 };
 // Where the focus was when the last 'Tab …' send pressed its key
@@ -112,8 +116,9 @@ const sendButtonShown = () => page.waitForSelector('#send_but', { state: 'visibl
 //   'Tab Enter'    Tab from the message box to the send button, then Enter
 //   'script'       a script clicks the send button from code (as Quick Reply does)
 //   'script Enter' a script fires an Enter keydown on the send button (SillyTavern's keyboard.js clicks it)
-// Returns the text of the user messages that send added (only messages this test typed are read).
-const send = async (text, how = 'enter') => {
+// Returns the text of the user messages that send added (only messages this test typed are read). wait: how
+// long to wait for a message (shorter where none should come).
+const send = async (text, how = 'enter', wait = 8000) => {
     await dismissNotice();
     const before = await chatLength();
     await page.evaluate(() => { globalThis.testBoxValues = []; });
@@ -141,7 +146,7 @@ const send = async (text, how = 'enter') => {
             await page.keyboard.press('Enter');
         }
     }
-    await settle(before);
+    await settle(before, wait);
     return page.evaluate((before) => SillyTavern.getContext().chat.slice(before).filter((m) => m.is_user).map((m) => m.mes), before);
 };
 const only = (list, text) => list.length === 1 && list[0] === text;
@@ -205,7 +210,7 @@ check('no mode: the newest user message is "open the door"', only(sent, 'open th
 
 // 7. A command is never touched
 await pick('do');
-sent = await send('/echo test');
+sent = await send('/echo test', 'enter', 2000);
 const seen = await page.evaluate(() => globalThis.testBoxValues);
 check('Do, "/echo test": no user message is added', sent.length === 0, JSON.stringify(sent));
 check('and the text was not rewritten before SillyTavern ran it', seen.every((v) => v === '/echo test' || v === ''), JSON.stringify(seen));
@@ -368,7 +373,11 @@ await page.waitForTimeout(1500);
 check('the changes are saved', held.filter((p) => p.endsWith('/api/settings/save')).length > savesBefore);
 
 // The voice, the tidying and the wording travel in a look file (bible section 7)
-const lookKeys = await page.evaluate(async (url) => (await import(url)).lookKeys, MODES_JS);
+// (Story's and See's keys, from M3, are checked in tests/browser/modes-story-see.mjs)
+const lookKeys = await page.evaluate(async (url) => {
+    const { modesVoice, modesTidy, modesTemplates } = (await import(url)).lookKeys;
+    return { modesVoice, modesTidy, modesTemplates };
+}, MODES_JS);
 check('lookKeys: modesVoice (second or first), modesTidy, modesTemplates (do, say, see; 200 at most)', JSON.stringify(lookKeys) === JSON.stringify({ modesVoice: { type: 'enum', values: ['second', 'first'] }, modesTidy: { type: 'boolean' }, modesTemplates: { type: 'strings', keys: ['do', 'say', 'see'], max: 200 } }), JSON.stringify(lookKeys));
 const look = { format: 'arcane-forge-ui-look', version: 1, look: { modesVoice: 'second', modesTidy: true, modesTemplates: { say: '{{user}}: "{{input}}"' } } };
 await page.setInputFiles('#forge-ui-import-file', { name: 'look.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(look)) });
