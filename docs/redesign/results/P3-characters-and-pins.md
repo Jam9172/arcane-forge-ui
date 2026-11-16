@@ -263,3 +263,165 @@ Scratch scripts outside the repository, against the sandbox, with the Forge Test
 3. **Not a FAIL: raw `1000` in `css/menu.css`.** House rule 5 wants a token. The builder asked I1 for `--forge-z-lift`.
 4. **Not a FAIL: a press in the advanced definitions window closes Characters.** It hides the frame behind the window. This is SillyTavern's behaviour, unchanged, and the window stays usable. But with pins always off under the panel, someone who used to pin Characters will now meet it.
 5. **Not a FAIL: disabling the extension while the panel is on.** If the extension is turned off in SillyTavern's extension manager, no code runs to put the pins back. They stay off, and `menuPins` keeps the record until the extension runs again. This is outside the brief's three ways. Noted for the owner.
+
+## Fixes after the check
+
+Problem 1 of the check is fixed. Problems 2 to 4 are left as they are; problem 5 is under "For the owner" below.
+
+### What failed
+
+A page that loaded at 1000px or less while `menuPins` held recorded pins lost them for good. Extensions start before SillyTavern's `initRossMods` (`RossAscends-mods.js`), which binds the three pin checkboxes' click handlers and then sets each box from the pin SillyTavern saved (`LNavLockOn`, `NavLockOn`, `WINavLockOn`). The first `apply` came before that, so `repin` clicked the boxes with no handler bound, emptied `menuPins` and saved it, and `initRossMods` then unticked the boxes again from SillyTavern's saved settings.
+
+### What I changed
+
+- `menu.js`:
+  - **Pins wait for SillyTavern.** `unpin` and `repin` now record, click and save nothing until SillyTavern emits `APP_INITIALIZED`, which `firstLoadInit` (`script.js`) does right after `initRossMods`. Until then the new `pinsReady()` says no and adds one `eventSource.once` listener, which applies the panel again when the event comes. SillyTavern's event emitter hands `APP_INITIALIZED` and `APP_READY` at once to a listener added after they were emitted (`events.js`), so after start-up `pinsReady` says yes straight away and leaves nothing waiting. The listener is only added when there is pin work to wait for: the panel is active, or pins are recorded. TauriTavern's `script.js` emits the same event after its `initRossMods`.
+  - **Why `APP_INITIALIZED` and not `APP_READY`.** Both come after `initRossMods`, but `APP_READY` waits for the loading screen to fade (up to 500ms), and 300ms after `initRossMods` SillyTavern reopens the panels it saved as pinned and open (`OpenNavPanels`). A scratch probe (desktop load, panel on, all three pins saved pinned and open, two runs) logged `initRossMods` setting the pins at about 1440ms, `APP_INITIALIZED` 3ms later, all three unpinned within the next 10ms, and `APP_READY` about 130ms after `initRossMods`. With `APP_INITIALIZED` the pins are off before SillyTavern looks at them again, so nothing opens at load, the same as before the fix.
+  - **A pin is forgotten only once SillyTavern has it.** `repin` clicks each recorded box that is not ticked, then keeps in `menuPins` every recorded pin that SillyTavern does not have on. A pin counts as back when its box is ticked and SillyTavern's own setting for it, read from `accountStorage` (the store its click handler writes), is `'true'`. A pin that did not come back stays recorded, and the next time the panel stops being active tries again. It is still a new object, for Reset.
+  - `PINS` maps each checkbox to SillyTavern's setting for it. The observer's comment now says that `unpin` waits.
+  - On desktop, what a load does is unchanged; only when. Before, the first `apply` found no box ticked, and P1's observer unpinned right after `initRossMods` put SillyTavern's saved pins back. Now the observer's call waits, and the same happens at `APP_INITIALIZED`, a few milliseconds later. Nothing can click before the handlers are bound.
+- `tests/browser/menu-characters.mjs`: a helper that loads the page again. The settings the page loads stand in for what an earlier session saved: the sandbox's answer to `/api/settings/get` is changed on its way into this page only. Every settings save is answered by the test and kept for the checks, and each click on a pin box is logged with whether SillyTavern's own click handler was bound to it at that moment. After the load the helper waits for `APP_READY`, then makes the harness's own waits and opens the Forge Tester chat the way the harness does. New checks, each at the end of its run:
+  - **Desktop, 1440 by 900:** the panel on, nothing recorded, all three pins saved by SillyTavern as pinned and open. Each pin is put away (box off, no `pinnedOpen`, SillyTavern's setting `'false'`); no menu opens and the frame stays closed; `menuPins` records all three; each box is clicked once, after its handler was bound; the last save has the three recorded and off. Turning the panel off then puts all three back and empties `menuPins`.
+  - **Desktop, 900 by 900** (a desktop window, not a phone): the panel on, all three recorded, SillyTavern's settings off. Each pin is back (box ticked, `pinnedOpen`, setting `'true'`); `menuPins` is `{}`; every click came after the handler was bound; no settings save forgets a pin SillyTavern still has off, and the last save has all three on and none recorded.
+  - **Phone, 390 by 800:** the same as at 900px.
+- The result file: this section. The "Check" section above is unchanged.
+
+The "What happens to the pins" table above now also holds for a load: at 1000px or less (or with Forge UI's main switch off), recorded pins are put back as soon as SillyTavern's pin boxes answer clicks and forgotten once they are back; on desktop with the panel on, pins SillyTavern brings back at load are put away and recorded at the same moment. The real reload that "Not done" lists as simulated is now tested.
+
+### The new checks against the old code
+
+The final test, run with `menu.js` as it was at `7e78670` (put back afterwards). Desktop: 54 ok, 3 FAIL. Phone: 8 ok, 3 FAIL. The lines of the new checks:
+
+```
+$ node tests/browser/menu-characters.mjs        # old menu.js
+ok   load at 1440px with the panel on and three pins SillyTavern saved: each is put away (box off, panel not pinned, SillyTavern's setting off) ({"lm_button_panel_pin":{"checked":false,"pinned":false,"setting":"false"},"rm_button_panel_pin":{"checked":false,"pinned":false,"setting":"false"},"WI_panel_pin":{"checked":false,"pinned":false,"setting":"false"}})
+ok   load at 1440px: no menu opens, and the frame stays closed (none open)
+ok   load at 1440px: menuPins records all three ({"lm_button_panel_pin":true,"rm_button_panel_pin":true,"WI_panel_pin":true})
+ok   load at 1440px: every click on a pin box came after SillyTavern bound its handler, one each ([{"id":"lm_button_panel_pin","bound":true},{"id":"rm_button_panel_pin","bound":true},{"id":"WI_panel_pin","bound":true}])
+ok   load at 1440px: the last settings save has the three recorded and off ({"pins":{"lm_button_panel_pin":true,"rm_button_panel_pin":true,"WI_panel_pin":true},"locks":{"lm_button_panel_pin":"false","rm_button_panel_pin":"false","WI_panel_pin":"false"}})
+ok   load at 1440px, then panel off: each pin is back and menuPins is empty ({"lm_button_panel_pin":{"checked":true,"pinned":true,"setting":"true"},"rm_button_panel_pin":{"checked":true,"pinned":true,"setting":"true"},"WI_panel_pin":{"checked":true,"pinned":true,"setting":"true"}} {})
+FAIL load at 900px with three pins recorded: each pin is back (box ticked, panel pinned, SillyTavern's setting on) ({"lm_button_panel_pin":{"checked":false,"pinned":false,"setting":"false"},"rm_button_panel_pin":{"checked":false,"pinned":false,"setting":"false"},"WI_panel_pin":{"checked":false,"pinned":false,"setting":"false"}})
+ok   load at 900px: menuPins is emptied ({})
+FAIL load at 900px: every click on a pin box came after SillyTavern bound its handler ([{"id":"lm_button_panel_pin","bound":false},{"id":"rm_button_panel_pin","bound":false},{"id":"WI_panel_pin","bound":false}])
+FAIL load at 900px: no settings save forgets a pin SillyTavern still has off, and the last one has them all on and none recorded (2 saves, too soon [{"pins":{},"locks":{"lm_button_panel_pin":"false","rm_button_panel_pin":"false","WI_panel_pin":"false"}},{"pins":{},"locks":{"lm_button_panel_pin":"false","rm_button_panel_pin":"false","WI_panel_pin":"false"}}], last {"pins":{},"locks":{"lm_button_panel_pin":"false","rm_button_panel_pin":"false","WI_panel_pin":"false"}})
+ok   no script errors
+
+$ node tests/browser/menu-characters.mjs phone  # old menu.js
+FAIL phone: load with three pins recorded: each pin is back (box ticked, panel pinned, SillyTavern's setting on) ({"lm_button_panel_pin":{"checked":false,"pinned":false,"setting":"false"},"rm_button_panel_pin":{"checked":false,"pinned":false,"setting":"false"},"WI_panel_pin":{"checked":false,"pinned":false,"setting":"false"}})
+ok   phone: load: menuPins is emptied ({})
+FAIL phone: load: every click on a pin box came after SillyTavern bound its handler ([{"id":"lm_button_panel_pin","bound":false},{"id":"rm_button_panel_pin","bound":false},{"id":"WI_panel_pin","bound":false}])
+FAIL phone: load: no settings save forgets a pin SillyTavern still has off, and the last one has them all on and none recorded (2 saves, too soon [{"pins":{},"locks":{"lm_button_panel_pin":"false","rm_button_panel_pin":"false","WI_panel_pin":"false"}},{"pins":{},"locks":{"lm_button_panel_pin":"false","rm_button_panel_pin":"false","WI_panel_pin":"false"}}], last {"pins":{},"locks":{"lm_button_panel_pin":"false","rm_button_panel_pin":"false","WI_panel_pin":"false"}})
+ok   no script errors
+```
+
+The 900px and phone loads fail as the check found: every pin box was clicked before SillyTavern bound its handler, the pins ended off in SillyTavern, and `menuPins` was saved empty while they were off. ("menuPins is emptied" passes there; that is the problem.) The load at 1440px passes on the old code too: there the old first `apply` found no box ticked before `initRossMods`, and P1's observer unpinned right after it, with the handlers bound. Those checks guard the new wait, which must still come before SillyTavern reopens pinned panels.
+
+### Test output
+
+```
+$ node tests/browser/menu-characters.mjs
+ok   start: no panel is pinned (none)
+ok   1. panel off: the Characters lock pins #right-nav-panel ({"checked":true,"pinned":true})
+ok   2. panel on: #right-nav-panel is no longer pinned and its checkbox is off ({"checked":false,"pinned":false})
+ok   2. menuPins records it ({"rm_button_panel_pin":true})
+ok   2. the frame stays closed (Characters was closed)
+ok   2. the three pin controls are not shown in their sections ({"AI response":"gone","Lorebooks":"gone","Characters":"gone"})
+ok   3. re-applied: menuPins is unchanged ({"rm_button_panel_pin":true})
+ok   a pin SillyTavern sets later is taken off and recorded as well ({"checked":false,"pinned":false} {"rm_button_panel_pin":true,"WI_panel_pin":true})
+ok   4. Characters opens the frame with #right-nav-panel
+ok   4. #right-nav-panel fills the content area (390,116 879x723 vs {"left":390,"top":116,"right":1269,"bottom":839})
+ok   4. the list tab shows the character list (#rm_print_characters_block) inside the content area (395,283 869x551 in {"left":390,"top":116,"right":1269,"bottom":839})
+ok   4. the tabs lie inside the content area (395,148 864x27)
+ok   4. the search box lies inside the content area (400,214 859x28)
+ok   4. searching filters the list, and clearing the search brings it back (7 entries, 0 found, 7 after clearing)
+ok   4. a long list scrolls inside its own box, which stays in the content area, and the page does not scroll ({"overflows":true,"scrolled":true,"bottom":834,"pageScrolled":false})
+ok   4. the selected character's tab brings its editor back
+ok   8. Advanced definitions opens #character_popup, with the Characters section still open behind it
+ok   8. the element at the middle of #character_popup is inside it, not in the frame ({"shown":true,"at":"popup","popup":4001,"backdrop":3003,"panel":3004,"holder":3005})
+ok   8. the frame and the menus' holder are below it ({"shown":true,"at":"popup","popup":4001,"backdrop":3003,"panel":3004,"holder":3005})
+ok   8. Lorebooks opened from the nav meanwhile: frame and menu go over the window together, the frame just under the menu ({"shown":true,"at":"menu WorldInfo","popup":4001,"backdrop":4003,"panel":4004,"holder":4005})
+ok   8. back on Characters: the window is on top again ({"shown":true,"at":"popup","popup":4001,"backdrop":3003,"panel":3004,"holder":3005})
+ok   8. its own cross closes it, and Characters stays open
+ok   a SillyTavern dialog opened over the Characters section is on top
+ok   the dialog closes with its own button, and Characters stays open
+ok   5. the frame is closed
+ok   5. panel off: #rm_button_panel_pin is checked again and #right-nav-panel pinned ({"checked":true,"pinned":true})
+ok   5. the Lorebooks pin is back too ({"checked":true,"pinned":true})
+ok   5. menuPins is empty ({})
+ok   5. the locks are shown again, and unpin both by hand (shown, shown; pinned: none)
+ok   6. panel off: the AI response lock pins #left-nav-panel ({"checked":true,"pinned":true})
+ok   6. panel on: #left-nav-panel is no longer pinned and its checkbox is off ({"checked":false,"pinned":false})
+ok   6. menuPins records it ({"lm_button_panel_pin":true})
+ok   6. AI response, which was open, now shows in the frame
+ok   6. its lock is not shown there (gone)
+ok   6. frame closed, panel off: #lm_button_panel_pin is checked again and #left-nav-panel pinned ({"checked":true,"pinned":true})
+ok   6. menuPins is empty ({})
+ok   6. the lock is shown again, and unpin it by hand (shown; pinned: none)
+ok   window at 1000px: the pin is back and menuPins empty ([{"label":"on","pinned":false,"unpinned":true,"pins":"{\"rm_button_panel_pin\":true}"},{"label":"1000px","pinned":true,"unpinned":false,"pins":"{}"}])
+ok   window at 1440px again: unpinned and recorded again ({"label":"1440px","pinned":false,"unpinned":true,"pins":"{\"rm_button_panel_pin\":true}"})
+ok   Forge UI switched off: the pin is back and menuPins empty ({"label":"main switch off","pinned":true,"unpinned":false,"pins":"{}"})
+ok   Forge UI switched on: unpinned and recorded again ({"label":"main switch on","pinned":false,"unpinned":true,"pins":"{\"rm_button_panel_pin\":true}"})
+ok   Reset: the panel is off, the pin is back and menuPins is empty ({"checked":true,"pinned":true} {})
+ok   unpinned again by hand, and no menu is open
+ok   7. with the panel on and a menu open, the floating stand-in is where it was and looks the same ({"box":[515,140,450,200],"style":["fixed","block","visible","auto","1","rgba(0, 0, 0, 0)","1px","8px","rgba(0, 0, 0, 0.6) 0px 12px 32px 0px, color(srgb 0.85098 0.639216 0.356863 / 0.08) 0px 0px 0px 1px inset","auto","height 0.25s ease-in-out allow-discrete, display 0.25s ease-in-out allow-discrete","0px 475px"]} vs {"box":[515,140,450,200],"style":["fixed","block","visible","auto","1","rgba(0, 0, 0, 0)","1px","8px","rgba(0, 0, 0, 0.6) 0px 12px 32px 0px, color(srgb 0.85098 0.639216 0.356863 / 0.08) 0px 0px 0px 1px inset","auto","height 0.25s ease-in-out allow-discrete, display 0.25s ease-in-out allow-discrete","0px 475px"]})
+ok   7. marked open, it does not bring up the frame
+ok   end: no panel is pinned and menuPins is empty
+ok   load at 1440px with the panel on and three pins SillyTavern saved: each is put away (box off, panel not pinned, SillyTavern's setting off) ({"lm_button_panel_pin":{"checked":false,"pinned":false,"setting":"false"},"rm_button_panel_pin":{"checked":false,"pinned":false,"setting":"false"},"WI_panel_pin":{"checked":false,"pinned":false,"setting":"false"}})
+ok   load at 1440px: no menu opens, and the frame stays closed (none open)
+ok   load at 1440px: menuPins records all three ({"lm_button_panel_pin":true,"rm_button_panel_pin":true,"WI_panel_pin":true})
+ok   load at 1440px: every click on a pin box came after SillyTavern bound its handler, one each ([{"id":"lm_button_panel_pin","bound":true},{"id":"rm_button_panel_pin","bound":true},{"id":"WI_panel_pin","bound":true}])
+ok   load at 1440px: the last settings save has the three recorded and off ({"pins":{"lm_button_panel_pin":true,"rm_button_panel_pin":true,"WI_panel_pin":true},"locks":{"lm_button_panel_pin":"false","rm_button_panel_pin":"false","WI_panel_pin":"false"}})
+ok   load at 1440px, then panel off: each pin is back and menuPins is empty ({"lm_button_panel_pin":{"checked":true,"pinned":true,"setting":"true"},"rm_button_panel_pin":{"checked":true,"pinned":true,"setting":"true"},"WI_panel_pin":{"checked":true,"pinned":true,"setting":"true"}} {})
+ok   load at 900px with three pins recorded: each pin is back (box ticked, panel pinned, SillyTavern's setting on) ({"lm_button_panel_pin":{"checked":true,"pinned":true,"setting":"true"},"rm_button_panel_pin":{"checked":true,"pinned":true,"setting":"true"},"WI_panel_pin":{"checked":true,"pinned":true,"setting":"true"}})
+ok   load at 900px: menuPins is emptied ({})
+ok   load at 900px: every click on a pin box came after SillyTavern bound its handler ([{"id":"lm_button_panel_pin","bound":true},{"id":"rm_button_panel_pin","bound":true},{"id":"WI_panel_pin","bound":true}])
+ok   load at 900px: no settings save forgets a pin SillyTavern still has off, and the last one has them all on and none recorded (2 saves, too soon [], last {"pins":{},"locks":{"lm_button_panel_pin":"true","rm_button_panel_pin":"true","WI_panel_pin":"true"}})
+ok   no script errors
+
+$ node tests/browser/menu-characters.mjs phone
+ok   phone: start: no panel is pinned (none)
+ok   phone, panel off: the Lorebooks lock pins #WorldInfo (shown {"checked":true,"pinned":true})
+ok   phone: no forge-menu class and no #forge-menu
+ok   phone, panel on: the pin stays on and nothing is recorded ({"checked":true,"pinned":true} {})
+ok   phone, panel on: the Lorebooks lock is still shown, and unpins it by hand (shown; pinned: none)
+ok   phone: menuPins is still empty ({})
+ok   phone: load with three pins recorded: each pin is back (box ticked, panel pinned, SillyTavern's setting on) ({"lm_button_panel_pin":{"checked":true,"pinned":true,"setting":"true"},"rm_button_panel_pin":{"checked":true,"pinned":true,"setting":"true"},"WI_panel_pin":{"checked":true,"pinned":true,"setting":"true"}})
+ok   phone: load: menuPins is emptied ({})
+ok   phone: load: every click on a pin box came after SillyTavern bound its handler ([{"id":"lm_button_panel_pin","bound":true},{"id":"rm_button_panel_pin","bound":true},{"id":"WI_panel_pin","bound":true}])
+ok   phone: load: no settings save forgets a pin SillyTavern still has off, and the last one has them all on and none recorded (2 saves, too soon [], last {"pins":{},"locks":{"lm_button_panel_pin":"true","rm_button_panel_pin":"true","WI_panel_pin":"true"}})
+ok   no script errors
+
+$ node tests/run.mjs menu
+ok       menu-buttons  55 checks, 31s
+ok       menu-buttons phone  4 checks, 11s
+ok       menu-characters  57 checks, 68s
+ok       menu-characters phone  11 checks, 24s
+ok       menu-frame  49 checks, 25s
+ok       menu-frame phone  5 checks, 14s
+
+6 passed, 0 failed
+
+$ node tests/run.mjs
+ok       foundation  18 checks, 13s
+ok       foundation phone  15 checks, 12s
+ok       harness  8 checks, 10s
+ok       harness phone  8 checks, 10s
+ok       menu-buttons  55 checks, 31s
+ok       menu-buttons phone  4 checks, 11s
+ok       menu-characters  57 checks, 67s
+ok       menu-characters phone  11 checks, 24s
+ok       menu-frame  49 checks, 25s
+ok       menu-frame phone  5 checks, 14s
+ok       modes-bar  47 checks, 18s
+ok       modes-bar phone  50 checks, 18s
+ok       stage-column  35 checks, 19s
+ok       stage-column phone  10 checks, 13s
+ok       stage-spine  52 checks, 22s
+ok       stage-spine phone  12 checks, 14s
+
+16 passed, 0 failed
+```
+
+### For the owner
+
+- Problem 5 of the check is unchanged: if Arcane Forge UI is disabled in SillyTavern's extension manager while the menu panel is on, none of its code runs to put the pins back. They stay off in SillyTavern, and `menuPins` keeps the record until the extension runs again; turning the panel off then, or opening SillyTavern at 1000px or less, puts them back. Without the extension, tick the locks again by hand.

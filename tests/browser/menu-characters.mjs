@@ -2,7 +2,8 @@
 // list fills the content area and works there, and what it opens shows above the panel. Panels pinned beside
 // the chat are unpinned while the panel is active and pinned again when it stops. Floating panels are left
 // alone. Only the Forge Tester character, which the helper has selected, is ever shown; no character name is
-// read. Phones never touch the pins.
+// read. Phones never take the pins away, but put back recorded ones. At the end the page is loaded again, with
+// the settings it loads changed in this page only, to prove the pins survive a load.
 // Usage: node tests/browser/menu-characters.mjs [phone]
 import { box, openForge, setForge } from './_harness.mjs';
 
@@ -84,6 +85,95 @@ const overPopup = () => page.evaluate(() => {
         holder: z(document.getElementById('top-settings-holder')),
     };
 });
+
+// ---------- Real page loads ----------
+// The page is loaded again after an earlier session. The settings it loads stand in for what that session
+// saved: they are changed in this page only, never in the sandbox. Every settings save the page makes is
+// answered here and kept for the checks, and each click on a pin box is logged with whether SillyTavern's own
+// click handler (bound in initRossMods) was on it at that moment.
+const LOCKS = { lm_button_panel_pin: 'LNavLockOn', rm_button_panel_pin: 'NavLockOn', WI_panel_pin: 'WINavLockOn' };
+const PANELS = { lm_button_panel_pin: 'left-nav-panel', rm_button_panel_pin: 'right-nav-panel', WI_panel_pin: 'WorldInfo' };
+const ALL_PINS = Object.fromEntries(PINS.map((pin) => [pin, true]));
+const loadWith = async ({ forge, account }) => {
+    const saves = [];
+    await page.route('**/api/settings/get', async (route) => {
+        const response = await route.fetch();
+        const data = await response.json();
+        const settings = JSON.parse(data.settings);
+        Object.assign((settings.accountStorage ??= {}), account);
+        Object.assign(((settings.extension_settings ??= {}).arcaneForgeUi ??= {}), forge);
+        data.settings = JSON.stringify(settings);
+        await route.fulfill({ response, json: data });
+    });
+    await page.route('**/api/settings/save', async (route) => {
+        const body = JSON.parse(route.request().postData() || '{}');
+        saves.push({
+            pins: body.extension_settings?.arcaneForgeUi?.menuPins ?? null,
+            locks: Object.fromEntries(Object.entries(LOCKS).map(([pin, key]) => [pin, body.accountStorage?.[key] ?? null])),
+        });
+        await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ result: 'ok' }) });
+    });
+    await page.addInitScript(() => {
+        if (globalThis.forgeTestPinClicks) return;
+        globalThis.forgeTestPinClicks = [];
+        const click = HTMLElement.prototype.click;
+        HTMLElement.prototype.click = function () {
+            if (['lm_button_panel_pin', 'rm_button_panel_pin', 'WI_panel_pin'].includes(this.id)) {
+                globalThis.forgeTestPinClicks.push({ id: this.id, bound: Boolean(globalThis.jQuery?._data(this, 'events')?.click) });
+            }
+            return click.call(this);
+        };
+    });
+    await page.reload({ waitUntil: 'load' });
+    // The helper's own waits, after SillyTavern says it is ready (it hands APP_READY at once to a late listener).
+    // That covers its reopening of pinned panels (300ms after initRossMods) and the delayed settings save.
+    await page.waitForFunction(() => globalThis.SillyTavern?.getContext?.()?.extensionSettings?.arcaneForgeUi !== undefined && document.querySelector('#send_textarea'), null, { timeout: 45000 });
+    await page.evaluate(() => new Promise((resolve) => {
+        const { eventSource, eventTypes } = globalThis.SillyTavern.getContext();
+        eventSource.once(eventTypes.APP_READY, () => resolve());
+    }));
+    await page.waitForTimeout(2500);
+    await page.evaluate(() => [...document.querySelectorAll('button, .menu_button')].find((b) => /Got it/i.test(b.textContent))?.click());
+    await page.evaluate(async () => { await (await import('/forge-seed.js')).seed(); });
+    await page.waitForTimeout(600);
+    await page.unroute('**/api/settings/get');
+    await page.unroute('**/api/settings/save');
+    return { saves, clicks: await page.evaluate(() => globalThis.forgeTestPinClicks) };
+};
+// Each pin as the page has it: its box, its panel's pinnedOpen, and SillyTavern's own setting for it
+const loadedPins = () => page.evaluate(async ([locks, panels]) => {
+    const { accountStorage } = await import('/scripts/util/AccountStorage.js');
+    return Object.fromEntries(Object.entries(locks).map(([pin, key]) => [pin, {
+        checked: document.getElementById(pin).checked,
+        pinned: document.getElementById(panels[pin]).classList.contains('pinnedOpen'),
+        setting: accountStorage.getItem(key),
+    }]));
+}, [LOCKS, PANELS]);
+const allOn = (state) => Object.values(state).every((p) => p.checked && p.pinned && p.setting === 'true');
+const allOff = (state) => Object.values(state).every((p) => !p.checked && !p.pinned && p.setting === 'false');
+const allBound = (clicks) => clicks.length > 0 && clicks.every((c) => c.bound);
+const recordsAll = (json) => {
+    const pins = JSON.parse(json ?? 'null') ?? {};
+    return Object.keys(pins).length === PINS.length && PINS.every((pin) => pins[pin] === true);
+};
+// A save that has forgotten a recorded pin while SillyTavern still has it off would lose it for good
+const forgotTooSoon = (saves) => saves.filter((save) => save.pins && PINS.some((pin) => !save.pins[pin] && save.locks[pin] !== 'true'));
+// A load with all three pins recorded by a session that ended with the panel on (so SillyTavern has them off),
+// in a window where the panel is not active: every pin comes back, and menuPins is emptied only after that
+const loadRecorded = async (where) => {
+    const { saves, clicks } = await loadWith({
+        forge: { enabled: true, menuPanel: true, menuButtons: true, menuPins: ALL_PINS },
+        account: { LNavLockOn: 'false', NavLockOn: 'false', WINavLockOn: 'false' },
+    });
+    const state = await loadedPins();
+    check(`${where} with three pins recorded: each pin is back (box ticked, panel pinned, SillyTavern's setting on)`, allOn(state), JSON.stringify(state));
+    check(`${where}: menuPins is emptied`, (await menuPins()) === '{}', await menuPins());
+    check(`${where}: every click on a pin box came after SillyTavern bound its handler`, allBound(clicks), JSON.stringify(clicks));
+    const last = saves.at(-1);
+    check(`${where}: no settings save forgets a pin SillyTavern still has off, and the last one has them all on and none recorded`,
+        forgotTooSoon(saves).length === 0 && !!last && JSON.stringify(last.pins) === '{}' && Object.values(last.locks).every((l) => l === 'true'),
+        `${saves.length} saves, too soon ${JSON.stringify(forgotTooSoon(saves).slice(0, 2))}, last ${JSON.stringify(last)}`);
+};
 
 if (!phone) {
     await setForge(page, { menuPanel: false, menuButtons: true, menuPins: {}, menuLast: 'ai-config-button' });
@@ -310,6 +400,32 @@ if (!phone) {
     await page.evaluate(() => document.getElementById('test-floating').remove());
     await setForge(page, { menuPanel: false });
     check('end: no panel is pinned and menuPins is empty', (await anyPin()).length === 0 && (await menuPins()) === '{}');
+
+    // A load on desktop with the panel on and three pins SillyTavern saved itself (for example after a session
+    // at 1000px or less), pinned panels that were open: SillyTavern puts the pins back in initRossMods, then the
+    // panel puts them away and records them, before SillyTavern reopens pinned panels (300ms later)
+    const desktopLoad = await loadWith({
+        forge: { enabled: true, menuPanel: true, menuButtons: true, menuPins: {} },
+        account: { LNavLockOn: 'true', NavLockOn: 'true', WINavLockOn: 'true', LNavOpened: 'true', NavOpened: 'true', WINavOpened: 'true' },
+    });
+    let loaded = await loadedPins();
+    check('load at 1440px with the panel on and three pins SillyTavern saved: each is put away (box off, panel not pinned, SillyTavern\'s setting off)',
+        allOff(loaded), JSON.stringify(loaded));
+    const openAtLoad = await page.evaluate(() => [...document.querySelectorAll('#top-settings-holder .drawer-content.openDrawer')].map((d) => d.id));
+    check('load at 1440px: no menu opens, and the frame stays closed', openAtLoad.length === 0 && !(await frameShown()), openAtLoad.join(', ') || 'none open');
+    check('load at 1440px: menuPins records all three', recordsAll(await menuPins()), await menuPins());
+    check('load at 1440px: every click on a pin box came after SillyTavern bound its handler, one each',
+        allBound(desktopLoad.clicks) && desktopLoad.clicks.length === 3, JSON.stringify(desktopLoad.clicks));
+    const lastSave = desktopLoad.saves.at(-1);
+    check('load at 1440px: the last settings save has the three recorded and off',
+        !!lastSave && recordsAll(JSON.stringify(lastSave.pins)) && Object.values(lastSave.locks).every((l) => l === 'false'), JSON.stringify(lastSave));
+    await setForge(page, { menuPanel: false });
+    loaded = await loadedPins();
+    check('load at 1440px, then panel off: each pin is back and menuPins is empty', allOn(loaded) && (await menuPins()) === '{}', `${JSON.stringify(loaded)} ${await menuPins()}`);
+
+    // A load at 900px wide (a desktop window, not a phone) after a session that ended with the panel on
+    await page.setViewportSize({ width: 900, height: 900 });
+    await loadRecorded('load at 900px');
 } else {
     // Phone: the panel is never active, so the pins are never touched and their locks stay as SillyTavern
     // draws them. On phones SillyTavern itself hides the AI response and Characters locks; the Lorebooks one
@@ -327,6 +443,9 @@ if (!phone) {
     check('phone, panel on: the Lorebooks lock is still shown, and unpins it by hand', seenOn === 'shown' && (await anyPin()).length === 0, `${seenOn}; pinned: ${(await anyPin()).join(', ') || 'none'}`);
     await setForge(page, { menuPanel: false });
     check('phone: menuPins is still empty', (await menuPins()) === '{}', await menuPins());
+
+    // A load on a phone after a session that ended with the panel on (on a desktop with the same settings)
+    await loadRecorded('phone: load');
 }
 
 await finish();
