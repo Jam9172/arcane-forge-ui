@@ -493,12 +493,34 @@ function takeBox() {
     return text;
 }
 
-// Puts what the person typed back in the message box. Anything typed since stays, after it on a new line, so
-// nothing is lost either way.
+// Puts what the person typed back in the message box, in front of anything typed since. It is all one stream of
+// typing in the same box, so the two are joined as typed, with nothing added between them.
 function putBack(text) {
     const textarea = document.getElementById('send_textarea');
     if (!text || !(textarea instanceof HTMLTextAreaElement)) return;
-    setBox(textarea, textarea.value ? `${text}\n${textarea.value}` : text);
+    setBox(textarea, `${text}${textarea.value}`);
+}
+
+// While a reply is being started, SillyTavern reads the message box again after its first steps (commands,
+// then the server check) and sends what it finds as your own message; in a group chat its group code reads
+// it too. So from the moment the reply is asked for until SillyTavern counts itself as generating, whatever
+// is typed is moved out of the box as it comes, and kept. Returns a function that ends this and gives back
+// what was kept. The listener is on the box only for that moment.
+function keepBoxClear() {
+    const textarea = document.getElementById('send_textarea');
+    if (!(textarea instanceof HTMLTextAreaElement)) return () => '';
+    let kept = '';
+    const move = (event) => {
+        // Mid-composition (an input method) the text is not settled yet; the input at its end moves it
+        if (event.isComposing || !textarea.value) return;
+        kept += textarea.value;
+        setBox(textarea, '');
+    };
+    textarea.addEventListener('input', move);
+    return () => {
+        textarea.removeEventListener('input', move);
+        return kept;
+    };
 }
 
 // Story as narration (bible section 6). The box is emptied first, so a second Enter while the narration is
@@ -526,18 +548,29 @@ async function tellStory(story, typed) {
         globalThis.toastr?.warning(NO_REPLY);
         return;
     }
-    const meanwhile = takeBox();
+    let meanwhile = takeBox();
+    const stopKeeping = keepBoxClear();
     let ended = false;
+    let kept = false;
+    // What was moved out of the box while the reply was starting joins what was set aside before it
+    const endKeeping = () => {
+        if (kept) return;
+        kept = true;
+        meanwhile += stopKeeping();
+    };
     const reply = Promise.resolve()
         .then(() => script.Generate('normal'))
         .catch((error) => console.error('[Arcane Forge UI] The reply after a Story could not be started.', error))
         .finally(() => {
             ended = true;
+            endKeeping();
             putBack(meanwhile);
         });
     // Generate's first steps (such as checking the server) come before SillyTavern counts itself as
-    // generating; the hold stays on until it does, and from then on SillyTavern's own flag holds sends back
-    while (!ended && !generating()) await pause(REPLY_LOOK / 2);
+    // generating; the box is kept clear and the hold stays on until it does, and from then on SillyTavern's
+    // own flag holds sends back. Turning the modes off (holding cleared) ends both at once.
+    while (!ended && !generating() && holding === job) await pause(REPLY_LOOK / 2);
+    endKeeping();
     release(job);
     await reply;
 }

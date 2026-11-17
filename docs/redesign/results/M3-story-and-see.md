@@ -656,3 +656,24 @@ Scratch scripts outside the repository did this, through the test helper. Only t
 1. **(Makes it FAIL.) Text typed just after a Story's narration is saved is sent as your own message, and the reply answers it.** It is read by `Generate` in its first steps, after the set-aside. With the ping held, the whole text goes, and a typed `/echo …` is posted as a message. With ordinary typing and nothing held, a fragment went in 3 of 8 Story sends on the desktop and 5 of 8 on the phone, against 0 of 8 with SillyTavern's own send. The batch's test holds only the save, so it misses this.
 2. **The put-back adds a line break inside what is being typed** when typing goes on across the reply (`I \nalk to the door and knock`). Nothing is lost, but the text has changed. This would not fail the batch alone.
 3. **Not this batch:** `index.js` leaves its own body classes on with the main switch off, see (d).
+
+## Fixes after the second check
+
+Made by the lead, after the owner asked to finish the wave without helper agents. Because the lead wrote this fix, it has **not** had a check by someone who did not write it; it rests on the tests below.
+
+**What failed:** text typed after a Story's narration was saved, while SillyTavern's reply was still checking the server (`api/ping`), was sent as the person's own message and answered, because SillyTavern's `Generate` reads the message box again after that check (and group chats read it in their own code). The second check also found that the put-back added a line break in the middle of continued typing (`I \nalk to the door`).
+
+**What changed in `modes.js`:**
+- `keepBoxClear()`: from the moment the reply is asked for until SillyTavern counts itself as generating, an `input` listener on the message box moves anything typed out of it as it comes and keeps it (it waits for an input method to finish composing). `Generate` therefore always finds the box empty, in a group chat too, and nothing typed is lost. The listener exists only for that moment, and turning the modes off ends it at once.
+- What was kept joins what was set aside while the narration was saved, and both go back in the box once the reply is in, in front of anything typed during the reply, joined as typed with nothing added between.
+- `Generate`'s `automatic_trigger` option was considered and not used: group chats read the box in their own code without it, and `Generate` would still empty the box and lose the text.
+
+**New checks in `tests/browser/modes-story-see.mjs`**, at both sizes: with the server check held, `late words` typed, and `/echo leaked` typed, each give only the narration and the reply and come back in the box as typed; and with the chat save and the reply each held in turn, `I ` typed during the save and `walk to the door` during the reply come back as `I walk to the door`.
+
+**Against the old `modes.js` (`bcb6260`):** 66 ok, 5 FAIL, which are exactly the second check's findings (`user: late words`, `user: /echo leaked`, both boxes empty afterwards, and `"I \nwalk to the door"`).
+
+**Test output on the fix:**
+- `node tests/browser/modes-story-see.mjs`: 71 ok, 0 FAIL.
+- `node tests/browser/modes-story-see.mjs phone`: 71 ok, 0 FAIL.
+- `node tests/run.mjs modes`: 6 passed, 0 failed.
+- `node tests/run.mjs` on `overhaul` after the merge: see `STATUS.md`.

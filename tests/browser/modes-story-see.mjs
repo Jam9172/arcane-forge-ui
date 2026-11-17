@@ -296,6 +296,79 @@ const typedMeanwhile = async (story, meanwhile, label, sendIt) => {
 await typedMeanwhile('The rain stops.', 'half typed', 'typed', false);
 await typedMeanwhile('The wind drops.', 'A door opens.', 'typed and sent', true);
 
+// Nor text typed after the narration is saved, while the reply is still checking the server (SillyTavern
+// reads the box again after that check and would send what it finds as your own message), a typed command
+// included: neither is sent or run, and both are back in the box once the reply is in.
+const typedWhilePinging = async (meanwhile, label) => {
+    await dismissNotice();
+    await holdBack('api/ping$');
+    repliesBefore = await replies();
+    await started();
+    const before = await chatLength();
+    await page.fill('#send_textarea', 'The rain stops.');
+    await page.press('#send_textarea', 'Enter');
+    const pinging = await heldBack();
+    await page.type('#send_textarea', meanwhile);
+    await letGo();
+    await settle(before, 2);
+    await page.waitForFunction(() => document.getElementById('send_textarea').value !== '', null, { timeout: 3000, polling: 100 }).catch(() => {});
+    await page.waitForTimeout(300);
+    const list = await added(before);
+    const kinds = await started();
+    check(`Story, ${label} while the reply checks the server: the narration and the reply only, nothing sent as your own message`,
+        pinging && list.length === 2 && list[0].type === NARRATOR && !list[1].user && list[1].type !== NARRATOR && (await replies()) === repliesBefore + 1 && kinds.join() === 'normal',
+        `${kindsOf(list)}, ${(await replies()) - repliesBefore} asked, started: ${kinds.join() || 'none'}, ping held: ${pinging}`);
+    check(`and the ${label} is back in the message box as typed`, (await box()) === meanwhile, JSON.stringify(await box()));
+    await page.fill('#send_textarea', '');
+};
+await typedWhilePinging('late words', 'text typed');
+await typedWhilePinging('/echo leaked', 'command typed');
+
+// Typing that carries on across the reply comes back as one piece, joined as typed: what was set aside while
+// the narration was saved, then what was typed while the reply was written, with nothing added between.
+{
+    await dismissNotice();
+    await page.evaluate(({ save }) => {
+        const answered = window.fetch;
+        const gates = {};
+        globalThis.testWaitingFor = {};
+        for (const name of ['save', 'reply']) {
+            let open;
+            gates[name] = { gate: new Promise((done) => { open = done; }), open };
+            globalThis.testWaitingFor[name] = 0;
+        }
+        const which = (url) => (new RegExp(save).test(url) ? 'save' : /\/api\/backends\/[^/]+\/generate/.test(url) ? 'reply' : '');
+        window.fetch = async (input, init) => {
+            const name = which(String(input?.url ?? input));
+            if (name) {
+                globalThis.testWaitingFor[name]++;
+                await gates[name].gate;
+            }
+            return answered(input, init);
+        };
+        globalThis.testOpen = (name) => gates[name].open();
+        globalThis.testUnhold = () => { gates.save.open(); gates.reply.open(); window.fetch = answered; };
+    }, { save: SAVE });
+    const waitFor = (name) => page.waitForFunction((name) => globalThis.testWaitingFor[name] > 0, name, { timeout: 8000, polling: 50 }).then(() => true, () => false);
+    repliesBefore = await replies();
+    const before = await chatLength();
+    await page.fill('#send_textarea', 'The rain stops.');
+    await page.press('#send_textarea', 'Enter');
+    const saving = await waitFor('save');
+    await page.type('#send_textarea', 'I ');
+    await page.evaluate(() => globalThis.testOpen('save'));
+    const replying = await waitFor('reply');
+    await page.type('#send_textarea', 'walk to the door');
+    await page.evaluate(() => globalThis.testUnhold());
+    await settle(before, 2);
+    await page.waitForTimeout(500);
+    const list = await added(before);
+    check('Story, typing that carries on across the reply: nothing sent as your own message', saving && replying && list.length === 2 && userTexts(list).length === 0,
+        `${kindsOf(list)}, save held: ${saving}, reply held: ${replying}`);
+    check('and the box holds it joined as typed, with no line break added', (await box()) === 'I walk to the door', JSON.stringify(await box()));
+    await page.fill('#send_textarea', '');
+}
+
 // If SillyTavern is still writing another reply when the Story's own would start (it waits 10 seconds, as
 // /trigger does), a warning says so, as /trigger's does, and no reply is asked for. SillyTavern's own flag is
 // set while the narration is being saved, as another reply would set it.
