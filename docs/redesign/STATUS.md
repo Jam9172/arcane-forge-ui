@@ -17,8 +17,8 @@ States: `todo`, `doing`, `checked` (a second agent passed it), `merged`, `blocke
 | `P2-buttons-and-top-bar` | merged | `bc7235f` | Checked PASS. For I1: toasts touch the top edge; maximised Author's Note and CFG cover the buttons; the buttons overlap RPG Companion's panel top. |
 | `P3-characters-and-pins` | merged | `573150f` | Failed the first check (a load at 1000px or less lost recorded pins), fixed, passed the second. For the owner: pinned panels come back closed; disabling the extension in the manager leaves pins off until it runs again. |
 | `P4-keys-and-motion` | merged | `0e20e33` | Failed the first check (Shift+Tab left the panel; focus not given back after a mouse open), fixed, passed the second (checked by the lead, who did not write it). For I1: a token for the 0.98 scale. Lane P done. |
-| `I1-together` | todo | | |
-| `I2-phone` | todo | | |
+| `I1-together` | merged | `bf08911` | Built and tested by the lead, no independent check. RPG Companion's right panel now gets its room; main switch off leaves nothing; lane tokens added. |
+| `I2-phone` | merged | `a40c2fd` | Built and tested by the lead, no independent check. Bar spans the form; 36px in short landscape. |
 | `I3-settings-and-look` | todo | | |
 | `I4-sign-off` | todo | | |
 
