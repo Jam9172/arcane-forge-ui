@@ -534,3 +534,125 @@ ok       stage-spine phone  12 checks, 17s
 - **`stage-content phone`** is lane S's test. RPG Companion's welcome dialog came up late and took a click. That is the late notice the lead was asked about in M2's result file and under "Asked of other files" here; nothing in this batch touches it.
 
 To finish the check: run `node tests/run.mjs modes` and `node tests/run.mjs` again on an awake machine.
+
+## Check, second round
+
+**FAIL.** Checked on `batch/M3-story-and-see` at `bcb6260`. The batch was cut from `overhaul` at `a7bf109`. `overhaul` is now at `7bb4ba4`. What it gained since then touches only `menu.js`, `css/menu.css`, `tests/browser/menu-characters.mjs`, `STATUS.md` and P3's documents, none of this batch's files, and `git merge-tree` merges the two without a conflict.
+
+Both original problems were reproduced the first check's way, and both are gone in that form, at both sizes. But one problem fails the batch. Text typed while a Story is still under way can still go out as your own message, unshaped, and the reply answers it. The set-aside covers the narration's chat save, but not the moment just after it, before SillyTavern's reply has read the message box. With ordinary typing and nothing held back, this happened in 3 of 8 Story sends on the desktop and 5 of 8 on the phone. SillyTavern's own send, with the same typing, did it 0 times in 8. Everything else checks out.
+
+### How the runs went
+
+The machine stayed awake throughout, with a keep-awake hold for the session and `caffeinate -i` around each run. No test run was cut off, and none had to be repeated. Every result below is from one complete run.
+
+### (a) Files
+
+- `git diff --name-only overhaul...HEAD` lists 5 files: `docs/redesign/changes/M3-story-and-see.md`, `docs/redesign/results/M3-story-and-see.md`, `modes.js`, `tests/browser/modes-send.mjs` and `tests/browser/modes-story-see.mjs`.
+- Four are under "You own". The fifth, `tests/browser/modes-send.mjs`, is not, but the lead asked for its changes and bible section 9 gives lane M every `tests/browser/modes-*.mjs`. `css/modes.css`, `index.js` and `aiTab.js` are unchanged.
+- The changes file holds the brief's changelog line word for word.
+- The diff and the three commit messages hold no names, user names or local folder paths.
+
+### (b) Commands
+
+- `node tests/browser/modes-story-see.mjs`: 65 ok, exit 0, 84 s.
+- `node tests/run.mjs`: `20 passed, 0 failed`. modes-story-see gave 65 checks at each size, 82 s each.
+- `node tests/run.mjs modes`: `6 passed, 0 failed` (modes-bar 47 and 50, modes-send 70 and 70, modes-story-see 65 and 65).
+
+### The two original problems
+
+Scratch scripts outside the repository did this, through the test helper. Only the Forge Tester chat was open, replies were answered in the page, `imagine` was always a stand-in that made no picture, and only messages the scripts added were read.
+
+- **Problem 1 (See as a picture, a second send while the picture is made): gone.** The stand-in `imagine` was held "drawing" until the script let it finish.
+  - Desktop: Enter Enter; Enter, then Enter 300 ms later; Enter, then Enter 2 s later; two clicks on the send button.
+  - Phone: two taps; a tap, then a tap 300 ms later; a tap, then a tap 2 s later; Enter Enter.
+  - Each time, one picture was asked for, nothing was added to the chat, no reply was asked for, and the box was empty.
+  - A Do send typed and sent during the picture was held: the text stayed in the box, and once the picture was done it went in as `You open the gate.`. The hold also ends when the modes are turned off during a picture: a send then went in at once as SillyTavern's own, and with the modes back on See asked for a picture at once.
+- **Problem 2 (text typed during the narration's save sent unshaped): gone in that form.** The save was held, `half typed words` was typed, once without Enter and once with it (a tap on the phone). Both times the chat got the narration and then the reply, no user message, one reply, and afterwards the text was back in the box. Same at both sizes.
+
+### The problem that makes it FAIL: what is typed just after the narration is saved
+
+`tellStory` takes what is in the box aside (`takeBox()`) and then calls `Generate('normal')`. But `Generate` reads the box only after its own first steps: `unshallowCharacter`, the `GENERATION_STARTED` listeners, its command check, `GENERATION_AFTER_COMMANDS`, and the server ping (`pingServer`, a request to `api/ping`). Whatever is typed in that gap is read by `Generate`, sent as a user message, and answered. The hold does not help here, because it stops sends, and this is plain typing with no send at all. The batch's own test holds only the chat save, not the ping, so it cannot see this.
+
+- **With the ping held** (the batch's own method, which its test already uses for the second Enter), `late words` was typed with no Enter. The chat got `narrator: The rain stops.`, then `user: late words`, then the reply, and the box was empty afterwards. Same at both sizes.
+  - `/echo leaked` typed in the gap went into the chat as a user message reading `/echo leaked`.
+  - Typing on across both waits split the text. `early words ` (typed during the save) came back in the box, and `late words` (typed during the ping) was sent.
+- **With nothing held, typing as a person does.** Send a Story, pause 200 ms, then type `I walk to the door and knock`, 8 sends each time:
+
+  | | Desktop, 150 ms a key | Phone (tap to send), 200 ms a key |
+  |---|---|---|
+  | Story as narration | 3 of 8 added a user message `I` and a reply to it, and the box was left as ` walk to the door and knock` | 5 of 8, the same |
+  | Modes off (SillyTavern's own send) | 0 of 8 | 0 of 8 |
+
+  The part of the gap I could time, from `GENERATION_STARTED` to `Generate` reading the box, was 7 to 13 ms. The counts above suggest the whole gap, from the set-aside on, is longer. The reply started 216 to 223 ms after the Enter, which is just when a person starts typing their next line. With no mode, the same gap comes right after the Enter, before anyone types.
+- **Why this fails the batch.** It is the first check's problem 2 again, now in the reply's first steps instead of the narration's save. It does the same harm as the first check's FAIL: a message the person never sent, and a model call that answers it. It fails the bar for the set-aside choice: nothing the person typed may be lost or sent unshaped. The result file says this problem was fixed.
+- **What would close it** (for the builder; not done here): keep the box clear from the set-aside until SillyTavern counts itself as generating. Until then, anything typed has to go aside too. Add a test that holds `api/ping` and types meanwhile, the way the test already holds the save.
+
+### The set-aside-and-put-back choice, judged against the bible
+
+- **Nothing lost: holds.** In every run, whatever was set aside came back once the reply was in, including with the modes turned off in between. (A reply that fails was not tried.) Held save and ping, `kept words` typed, the modes turned off while it was aside: the chat got the narration and the reply, no user message, and `kept words` came back in the box.
+- **Nothing of ours left with the feature off: holds.** In that same run there was no bar and no `forge-modes` class once the modes were off, and the placeholder was SillyTavern's own. The next send was SillyTavern's own, as typed. Putting the text back after the switch is off writes only the person's own words into the box, so it is no trace of ours.
+- **Nothing sent unshaped: does not hold.** See the problem above.
+- **The text is not always put back as typed.** `putBack` puts the set-aside part first and adds a line break before anything typed later. Typing on without a pause (60 ms a key) left the box as `I \nalk to the door and knock`. At 150 ms a key it was `I\nwalk to the door and knock`. That is a line break inside the sentence, and the first part is out of sight while the reply is written. Nothing is lost, but the text has changed, and if it is sent the line break goes with it. Those runs had no pause before the first key, and SillyTavern's own send does not cope with that either: it adds that first key to the message. So they are left out of the comparison above. The line break, though, is ours alone. This would not fail the batch alone, but it should be fixed in the same round.
+
+### (c) Done when, the brief, and bible sections 3, 6 and 9
+
+**Done when:**
+
+- **The commands pass.** Yes, see (b).
+- **The result file says exactly how the typed text is passed to `imagine` and why that is safe.** Yes. `SillyTavern.getContext().SlashCommandParser.commands.imagine.callback({}, typed)`, which is what `SlashCommandClosure.executeStep` calls after parsing a command line. The corrected paragraph now says rightly that Image Generation fills macros in its own final prompt (`substituteParams` in `sendGenerationRequest`), as for `/imagine` typed by hand. The safety claim holds: no command line is built and no macro step of ours sees the text. The batch's test shows `a door | /echo x {{user}}` and five other texts a command line could not carry arriving whole, with 0 command lines run.
+- **Only the files under "You own" changed.** Yes, with the lead's one allowed exception, see (a).
+
+**The brief's build steps:**
+
+1. **Settings.** `defaults` and `lookKeys` have `modesStoryAs` (`narration` / `message`) and `modesSeeAs` (`describe` / `picture`), with bible section 7's defaults. The Message box section has "Story goes in as" (narration / my own message) and "See asks for" (a description / a picture). Both are greyed out while the modes are off. A value that is not one of the two falls back to the default. Import look carries both and refuses other values. The test checks all of this.
+2. **Story as narration.** The send is stopped in the capture phase, the box is emptied with an `input` event, SillyTavern's own `sendNarratorMessage` adds the narrator message, and then `Generate('normal')` runs after the same wait as `/trigger`. Nothing is taken over while generating, with no chat open, or when SillyTavern would refuse a send. The gap above is in this step.
+3. **Story as my own message.** A plain send, trimmed.
+4. **See as a description.** Rule 3 and the end mark, as for Do. An empty box gives `You look around.` or `I look around.`.
+5. **See as a picture.** The send is stopped, the box is emptied, sends are held until `imagine` ends (in a `finally`), and the text reaches `imagine` whole. Without the command there is one toast with the brief's words, and the description form is sent.
+6. **Off.** See (d).
+
+**The test steps the builder changed (3 and 8).** Both changes are justified, as the first check found. The sandbox's seed answers generate calls in the page, so `held` never sees one. The direct `imagine` call is the only route that carries every text whole, and the brief's recorder for `executeSlashCommandsWithOptions` is kept and shows 0 calls.
+
+**Bible section 6, Story and See in every setting and voice.** This was checked end to end at both sizes: You and I, tidy on and off, Story as narration and as my own message, See as a description and as a picture. All 32 cases at each size gave the table:
+- Story: the narration `The rain stops.` and a reply, or the user message `The rain stops.`.
+- See: `You look at the door.`, or `You look at the door` with tidy off, and the I forms likewise.
+- See with an empty box: `You look around.` or `I look around.`, with tidy on or off, and with See set to a picture too.
+- See as a picture: `imagine` got `the door`, with nothing added and the box empty.
+- `/echo probe` with Story, and with See as a picture, ran as a command: nothing was added, and no picture was asked for.
+
+**Bible section 3:**
+
+1. **Native controls stay underneath.** It uses SillyTavern's own `sendNarratorMessage`, `Generate`, `isGenerating`, `swipeState` and `isExecutingCommandsFromChatInput`, and Image Generation's own command. The hold token and the set-aside text are our own short-lived state, not a copy of SillyTavern's.
+2. **One switch back.** See (d).
+3. **Every look choice gets a setting.** No look was added. Both new behaviours have their setting.
+4. **Phone.** The test passes at phone size, and every probe was run at both sizes.
+5. **Tokens.** No CSS.
+6. **Stay in your lane.** See (a).
+7. **Small and plain.** `slash-commands.js` is loaded with a dynamic `import()`, as M2 loads `RossAscends-mods.js`. Nothing new is added.
+
+**Bible section 9:**
+
+- **The contract.** `modes.js` keeps the six contract exports, plus M2's `transform`. `apply()` is safe to repeat, and it also clears the hold.
+- **The rules for the code.** Every rule holds:
+  - The select options come from fixed word lists, and the toasts are fixed strings.
+  - No `innerHTML` with typed text, no `localStorage`, no network request of its own, and no `MutationObserver` on `#chat`.
+  - No element is held across calls: `takeBox`, `putBack` and `setBox` look the box up each time.
+  - The new ids start with `forge-ui-modes-`.
+  - No SillyTavern setting is changed: `imagine` gets `{}`, so `applyCommandArguments` changes nothing.
+
+**`tests/browser/modes-send.mjs`.** The changes are sound:
+- `settle()` now waits on a plain predicate, where before it waited on a promise, which Playwright counts as done at once.
+- The `[phone]` line adds the phone run, with taps for clicks.
+- The two checks that M3 made false now test M2's own keys.
+
+### (d) Trying to break it
+
+- **Off.** With the modes off and Story or See as a picture saved, sends were SillyTavern's own, as typed, with no narration and no picture, and there was no bar and no `forge-modes` class. The same with the main switch off: an empty send with See as a picture saved was SillyTavern's own reply, with no `You look around.` and no picture. With the modes turned off during a Story, the next send was SillyTavern's own. Turning them off during a picture left no hold behind: with the modes back on, See asked for a picture at once. Both at both sizes.
+- **Phone, 390 by 800 with touch.** The test and every probe above gave the same results as on the desktop, apart from the counts in the typing table.
+- **Not this batch, for the lead.** With the main switch off, `index.js` leaves its own body classes on (`forge-user-layout`, `forge-menu-cards`, `forge-ext-cards`, `forge-icons`, `forge-swipes-right`, `forge-phone-compact`, `forge-ai-hide-help`). Every rule needs `body.forge-ui`, so they do nothing, but `CLAUDE.md` rule 6 says nothing of ours stays in the page. `index.js` is not in this batch's diff.
+
+### Problems
+
+1. **(Makes it FAIL.) Text typed just after a Story's narration is saved is sent as your own message, and the reply answers it.** It is read by `Generate` in its first steps, after the set-aside. With the ping held, the whole text goes, and a typed `/echo …` is posted as a message. With ordinary typing and nothing held, a fragment went in 3 of 8 Story sends on the desktop and 5 of 8 on the phone, against 0 of 8 with SillyTavern's own send. The batch's test holds only the save, so it misses this.
+2. **The put-back adds a line break inside what is being typed** when typing goes on across the reply (`I \nalk to the door and knock`). Nothing is lost, but the text has changed. This would not fail the batch alone.
+3. **Not this batch:** `index.js` leaves its own body classes on with the main switch off, see (d).
