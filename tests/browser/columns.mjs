@@ -35,7 +35,7 @@ if (phone) {
     await finish();
 }
 
-await setForge(page, { layout: 'columns', columnsProfile: true, columnsWidth: 720, modes: true });
+await setForge(page, { layout: 'columns', columnsProfile: true, columnsReading: 720, modes: true });
 await page.waitForTimeout(800);
 const on = await traces();
 check('layout Three columns puts its class and all four parts in the page', on.length === 7, on.join(', '));
@@ -79,6 +79,15 @@ check('the message box lines up with the messages', form && near(form.left, mes?
 const bar = await box(page, '#forge-modes');
 check('the send modes bar is inside the message box', bar && form && bar.left >= form.left && bar.right <= form.right && bar.top >= form.top && bar.bottom <= form.bottom, bar ? `${bar.left},${bar.top} to ${bar.right},${bar.bottom}` : 'not shown');
 await shot('columns.png');
+
+// Reading width at the top of its range is Full: messages and the message box fill the chat column
+await setForge(page, { columnsReading: 1600 });
+const full = await box(page, '#chat > .mes.last_mes');
+const fullForm = await box(page, '#send_form');
+check('Reading width Full: a message fills the chat column, less its padding', full && sheld.right - sheld.left - (full.right - full.left) <= 80, full ? `${full.left} to ${full.right} in ${sheld.left} to ${sheld.right}` : 'no message');
+check('and the message box lines up with it', fullForm && near(fullForm.left, full?.left, 2) && near(fullForm.right, full?.right, 2), fullForm ? `${fullForm.left} to ${fullForm.right}` : 'not shown');
+await shot('columns-full.png');
+await setForge(page, { columnsReading: 720 });
 
 // The rail's Menu button opens SillyTavern's menus in the panel
 await page.click('#forge-rail .forge-rail-foot [aria-label="Menu"]');

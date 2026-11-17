@@ -23,15 +23,16 @@ import { selected_world_info } from '../../../world-info.js';
 
 export const id = 'columns';
 
-// The reading column's width in px, and its range on the settings screen
+// The reading column's widest, in px, and its range on the settings screen. The top of the range means no
+// limit: the text fills the chat column.
 const WIDTH_MIN = 560;
-const WIDTH_MAX = 1000;
+const WIDTH_MAX = 1600;
 
-export const defaults = { columnsProfile: true, columnsWidth: 720, columnsPreview: true };
+export const defaults = { columnsProfile: true, columnsReading: WIDTH_MAX, columnsPreview: true };
 
 export const lookKeys = {
     columnsProfile: { type: 'boolean' },
-    columnsWidth: { type: 'number', min: WIDTH_MIN, max: WIDTH_MAX },
+    columnsReading: { type: 'number', min: WIDTH_MIN, max: WIDTH_MAX },
     columnsPreview: { type: 'boolean' },
 };
 
@@ -73,11 +74,11 @@ let chatsRun = 0;
 
 export function settingsHtml(s) {
     const off = s.layout === 'columns' ? '' : ` disabled title="${NEED.replaceAll('"', '&quot;')}"`;
-    const width = readingWidth(s.columnsWidth);
+    const width = readingWidth(s.columnsReading);
     return `
                 <h4>Three columns</h4>
                 <label class="forge-ui-range">
-                    <span>Reading width <output id="forge-ui-columns-width-value">${width}px</output></span>
+                    <span>Reading width <output id="forge-ui-columns-width-value">${widthLabel(width)}</output></span>
                     <input type="range" id="forge-ui-columns-width" min="${WIDTH_MIN}" max="${WIDTH_MAX}" step="20" value="${width}"${off}>
                 </label>
                 <label class="checkbox_label" for="forge-ui-columns-profile">
@@ -98,8 +99,8 @@ export function bindSettings($root, s, save) {
         for (const control of CONTROLS) $root.find(`#${control}`).prop('disabled', !on).attr('title', on ? null : NEED);
     });
     $root.find('#forge-ui-columns-width').on('input', function () {
-        s.columnsWidth = readingWidth(this.value);
-        $root.find('#forge-ui-columns-width-value').text(`${s.columnsWidth}px`);
+        s.columnsReading = readingWidth(this.value);
+        $root.find('#forge-ui-columns-width-value').text(widthLabel(s.columnsReading));
         save();
     });
     $root.find('#forge-ui-columns-profile').on('change', function () {
@@ -124,7 +125,8 @@ export function apply(s) {
         for (const element of [RAIL_ID, CHATS_ID, HEAD_ID, PROFILE_ID]) document.getElementById(element)?.remove();
         return;
     }
-    body.style.setProperty(WIDTH, `${readingWidth(s.columnsWidth)}px`);
+    const width = readingWidth(s.columnsReading);
+    body.style.setProperty(WIDTH, width >= WIDTH_MAX ? 'none' : `${width}px`);
     if (!document.getElementById(RAIL_ID)) body.append(el('nav', { id: RAIL_ID, 'aria-label': 'Characters' }));
     if (!document.getElementById(CHATS_ID)) body.append(el('aside', { id: CHATS_ID, 'aria-label': 'Chats' }));
     if (!document.getElementById(HEAD_ID)) body.append(el('div', { id: HEAD_ID }));
@@ -135,7 +137,11 @@ export function apply(s) {
 
 function readingWidth(value) {
     const number = Number(value);
-    return Number.isFinite(number) ? Math.min(WIDTH_MAX, Math.max(WIDTH_MIN, Math.round(number))) : defaults.columnsWidth;
+    return Number.isFinite(number) ? Math.min(WIDTH_MAX, Math.max(WIDTH_MIN, Math.round(number))) : defaults.columnsReading;
+}
+
+function widthLabel(width) {
+    return width >= WIDTH_MAX ? 'Full' : `${width}px`;
 }
 
 function currentSettings() {

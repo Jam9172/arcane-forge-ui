@@ -115,6 +115,7 @@ body.forge-ui.forge-columns #chat > .mes .mes_text p:last-child {
 body.forge-ui.forge-columns #form_sheld {
     box-sizing: border-box;
     width: 100%;
+    /* The same width as a message plus the chat's side padding; "none" (Full) makes this invalid, and so no limit */
     max-width: calc(var(--forge-columns-width) + 2 * var(--forge-space-5));
     margin: 0 auto;
     padding: 0 var(--forge-space-5) var(--forge-space-5);
