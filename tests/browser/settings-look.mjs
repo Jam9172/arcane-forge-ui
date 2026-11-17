@@ -10,7 +10,7 @@ const MODULE_URL = '/scripts/extensions/third-party/arcane-forge-ui/';
 
 // Bible section 7: every key, whether the look file carries it, and the label it has on screen
 const KEYS = {
-    layout: { look: false, label: 'Forge layout', kind: 'select', options: ['Classic', 'Stage (desktop)'], set: 'stage' },
+    layout: { look: false, label: 'Forge layout', kind: 'select', options: ['Classic', 'Stage (desktop)', 'Three columns (desktop)'], set: 'stage' },
     stageChat: { look: true, label: 'Chat width', kind: 'range', set: '50' },
     stagePlate: { look: true, label: 'Name on the stage', kind: 'checkbox' },
     stageSprite: { look: true, label: 'Character sprite on the stage, when it has one', kind: 'checkbox' },
@@ -46,7 +46,7 @@ await page.waitForTimeout(600);
 // 1. The three sections, in order, between Panels and Keyboard
 const headings = await page.evaluate(() => [...document.querySelectorAll('.arcane-forge-ui-settings h4')].map((h) => h.textContent.trim()));
 const at = (name) => headings.indexOf(name);
-check('the headings run Panels, Layout, Menus, Message box, Keyboard', at('Panels') >= 0 && at('Layout') === at('Panels') + 1 && at('Menus') === at('Layout') + 1 && at('Message box') === at('Menus') + 1 && at('Keyboard') === at('Message box') + 1, headings.join(', '));
+check('the headings run Panels, Layout, Three columns, Menus, Message box, Keyboard', at('Panels') >= 0 && at('Layout') === at('Panels') + 1 && at('Three columns') === at('Layout') + 1 && at('Menus') === at('Three columns') + 1 && at('Message box') === at('Menus') + 1 && at('Keyboard') === at('Message box') + 1, headings.join(', '));
 
 // The control a label names, found by the label's own words
 const control = (label) => page.evaluate((label) => {
