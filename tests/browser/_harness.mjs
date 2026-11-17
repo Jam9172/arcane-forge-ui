@@ -79,6 +79,9 @@ export async function openForge({ phone = false, width = 1440, height = 900, cha
         await page.evaluate(async () => { await (await import('/forge-seed.js')).seed(); });
         await page.waitForTimeout(600);
     }
+    // Another extension's welcome notice can come up after the first "Got it" when the machine is busy, and then
+    // takes clicks meant for the page; give it one more chance to be dismissed
+    await page.evaluate(() => [...document.querySelectorAll('button, .menu_button')].find((b) => /Got it/i.test(b.textContent) && b.getClientRects().length)?.click());
 
     let fail = 0;
     /** Prints one "ok" or "FAIL" line; the run-all script reads these. */

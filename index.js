@@ -112,26 +112,34 @@ function loadFonts() {
 function apply() {
     const s = settings();
     const body = document.body;
-    if (s.enabled) loadFonts();
-    body.classList.toggle('forge-ui', s.enabled);
-    body.classList.toggle('forge-no-focus-ring', !s.focusRing);
-    body.classList.toggle('forge-user-layout', s.userLayout);
-    body.classList.toggle('forge-menu-cards', s.menuCards ?? true);
-    body.classList.toggle('forge-ext-cards', s.extCards);
-    body.classList.toggle('forge-icons', s.icons !== false);
-    body.classList.toggle('forge-swipes-right', s.swipesRight !== false);
-    body.classList.toggle('forge-phone-compact', s.phoneCompact !== false);
+    const on = Boolean(s.enabled);
+    // With the main switch off nothing of ours stays in the page (CLAUDE.md rule 6): no class, no inline
+    // property and no fonts link. Every class below is set only while the look is on.
+    if (on) loadFonts();
+    else document.getElementById(FONT_LINK_ID)?.remove();
+    body.classList.toggle('forge-ui', on);
+    body.classList.toggle('forge-no-focus-ring', on && !s.focusRing);
+    body.classList.toggle('forge-user-layout', on && s.userLayout);
+    body.classList.toggle('forge-menu-cards', on && (s.menuCards ?? true));
+    body.classList.toggle('forge-ext-cards', on && s.extCards);
+    body.classList.toggle('forge-icons', on && s.icons !== false);
+    body.classList.toggle('forge-swipes-right', on && s.swipesRight !== false);
+    body.classList.toggle('forge-phone-compact', on && s.phoneCompact !== false);
 
-    body.style.setProperty('--forge-font-px', `${s.fontSize}px`);
-    body.style.setProperty('--forge-chat-scale', String(s.chatScale / 100));
-    body.style.setProperty('--forge-phone-chat-scale', String((s.phoneChatScale ?? 100) / 100));
-    body.style.setProperty('--forge-panel-alpha', `${s.panelOpacity}%`);
-    body.style.setProperty('--forge-panel-blur', `${s.panelBlur}px`);
-    body.style.setProperty('--forge-drawer-alpha', `${s.drawerOpacity ?? 100}%`);
-    body.style.setProperty('--forge-heading', (HEADING_FONTS[s.headingFont] ?? HEADING_FONTS.cinzel).value);
-    body.style.setProperty('--forge-body-font', (BODY_FONTS[s.bodyFont] ?? BODY_FONTS.alegreya).value);
-    for (const [key, c] of Object.entries(COLORS)) {
-        body.style.setProperty(c.variable, s.colors[key]);
+    const properties = {
+        '--forge-font-px': `${s.fontSize}px`,
+        '--forge-chat-scale': String(s.chatScale / 100),
+        '--forge-phone-chat-scale': String((s.phoneChatScale ?? 100) / 100),
+        '--forge-panel-alpha': `${s.panelOpacity}%`,
+        '--forge-panel-blur': `${s.panelBlur}px`,
+        '--forge-drawer-alpha': `${s.drawerOpacity ?? 100}%`,
+        '--forge-heading': (HEADING_FONTS[s.headingFont] ?? HEADING_FONTS.cinzel).value,
+        '--forge-body-font': (BODY_FONTS[s.bodyFont] ?? BODY_FONTS.alegreya).value,
+    };
+    for (const [key, c] of Object.entries(COLORS)) properties[c.variable] = s.colors[key];
+    for (const [name, value] of Object.entries(properties)) {
+        if (on) body.style.setProperty(name, value);
+        else body.style.removeProperty(name);
     }
     applyAiLayout();
     applyFeatures(s);
@@ -153,9 +161,9 @@ function applyFeatures(s) {
 function applyAiLayout() {
     const s = settings();
     const wanted = s.enabled && s.aiLayout && $('#main_api').val() === 'openai';
-    document.body.classList.toggle('forge-ai-hide-help', !s.aiHelp);
-    document.body.classList.toggle('forge-ai-hide-desc', !s.aiDescriptions);
-    document.body.classList.toggle('forge-ai-body-labels', s.aiLabelFont === 'body');
+    document.body.classList.toggle('forge-ai-hide-help', s.enabled && !s.aiHelp);
+    document.body.classList.toggle('forge-ai-hide-desc', s.enabled && !s.aiDescriptions);
+    document.body.classList.toggle('forge-ai-body-labels', s.enabled && s.aiLabelFont === 'body');
     if (wanted) buildAiTab();
     else restoreAiTab();
 }

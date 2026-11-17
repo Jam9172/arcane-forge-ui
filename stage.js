@@ -15,7 +15,9 @@
 // column's width as --forge-stage-chat on body, #forge-stage (the layer over the stage, holding the shade and
 // the name plate), #forge-spine (the chat column's left edge, which can be dragged), forge-dragging on body
 // while it is, forge-stage-sprite on body while the sprite is placed on the stage, and one listener for
-// SillyTavern's chat-changed event while the name plate is on.
+// SillyTavern's chat-changed event while the name plate is on. While the layout is on it also watches for
+// RPG Companion's side panel (a watch on body's children and the panel's class and style, and a resize
+// listener) and sets --forge-stage-aside on body to its width while it is open at the right edge.
 //
 // Beyond the contract, setPlateText is exported so a test can give the plate any name.
 
@@ -146,6 +148,7 @@ export function apply(s) {
     // The sprite is placed by css/stage.css alone; with this class off it is wherever SillyTavern puts it
     body.classList.toggle(SPRITE_CLASS, active && Boolean(s.stageSprite));
     followChats(active && Boolean(s.stagePlate));
+    followAside(active);
     if (active) {
         body.style.setProperty(CHAT_WIDTH, chatWidth(chatShare(s.stageChat)));
         if (!document.getElementById(STAGE_ID)) body.append(stageLayer());
@@ -239,7 +242,62 @@ function chatShare(value) {
 // Bible section 5.1: the chat's share of the window, but never narrower than --forge-chat-min and never so wide
 // that the stage gets narrower than --forge-stage-min. Left to CSS, so it follows the window as it is resized.
 function chatWidth(share) {
-    return `clamp(var(--forge-chat-min), ${share}vw, calc(100vw - var(--forge-stage-min)))`;
+    return `clamp(var(--forge-chat-min), ${share}vw, calc(100vw - var(--forge-stage-min) - var(--forge-stage-aside, 0px)))`;
+}
+
+// ---------- Room for another extension's side panel (bible section 10) ----------
+
+// RPG Companion can open a side panel fixed to the window's right edge (#rpg-companion-panel with the class
+// rpg-position-right). Nothing of it is styled or moved: its box is only measured, and the chat column moves
+// left by its width (--forge-stage-aside on body). Its own code toggles its classes and style, and it may be
+// added to body after us, so while the stage is on we watch body's children and the panel's two attributes.
+const ASIDE = '--forge-stage-aside';
+const ASIDE_PANEL = 'rpg-companion-panel';
+let asideWatch = null;
+let asideTimer = 0;
+
+function followAside(on) {
+    if (!on) {
+        asideWatch?.disconnect();
+        asideWatch = null;
+        clearTimeout(asideTimer);
+        window.removeEventListener('resize', measureAside);
+        document.body.style.removeProperty(ASIDE);
+        return;
+    }
+    if (!asideWatch) {
+        asideWatch = new MutationObserver(() => {
+            watchPanel();
+            measureAside();
+            // Its panel slides; measure again once that is over
+            clearTimeout(asideTimer);
+            asideTimer = setTimeout(measureAside, 400);
+        });
+        asideWatch.observe(document.body, { childList: true });
+        window.addEventListener('resize', measureAside);
+    }
+    watchPanel();
+    measureAside();
+}
+
+function watchPanel() {
+    const panel = document.getElementById(ASIDE_PANEL);
+    // Observing the same element again only renews the same watch
+    if (panel && asideWatch) asideWatch.observe(panel, { attributes: true, attributeFilter: ['class', 'style'] });
+}
+
+// The panel's width when it is drawn against the right edge and on the right half of the window; else none
+function measureAside() {
+    const panel = document.getElementById(ASIDE_PANEL);
+    let width = 0;
+    if (panel?.classList.contains('rpg-position-right')) {
+        const r = panel.getBoundingClientRect();
+        const style = getComputedStyle(panel);
+        const shown = r.width > 0 && r.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+        if (shown && r.right >= window.innerWidth - 1 && r.left > window.innerWidth / 2) width = Math.ceil(window.innerWidth - r.left);
+    }
+    if (width) document.body.style.setProperty(ASIDE, `${width}px`);
+    else document.body.style.removeProperty(ASIDE);
 }
 
 // The layer over the art that holds the shade and the name plate. It is only decoration, so screen readers
