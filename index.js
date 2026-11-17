@@ -204,7 +204,7 @@ function exportLook() {
 }
 
 // The one check for a feature's look key, by the type its lookKeys entry names (bible section 9). Returns the
-// value to keep, or undefined to ignore it. Numbers are clamped into range, as Forge UI's own are.
+// value to keep, or undefined to ignore it. A number outside its range is ignored (Forge UI's own numbers are clamped, as before).
 function validLookValue(rule, value) {
     switch (rule?.type) {
         case 'enum':
@@ -212,7 +212,8 @@ function validLookValue(rule, value) {
         case 'boolean':
             return typeof value === 'boolean' ? value : undefined;
         case 'number':
-            return typeof value === 'number' && Number.isFinite(value) ? Math.min(rule.max, Math.max(rule.min, value)) : undefined;
+            // Out of range is ignored, not clamped: a file asking for 999 asks for something else than 70
+            return typeof value === 'number' && Number.isFinite(value) && value >= rule.min && value <= rule.max ? value : undefined;
         case 'string':
             return typeof value === 'string' && value.length <= rule.max ? value : undefined;
         case 'strings': {

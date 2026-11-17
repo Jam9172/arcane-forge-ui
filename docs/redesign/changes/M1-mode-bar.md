@@ -1,1 +1,0 @@
-- New **Do, Say, Story and See** buttons above the message box (off by default; turn them on under Message box). Pick one to shape what you type; pick it again to go back to plain sending.

@@ -1,1 +1,0 @@
-- **Do** and **Say** now shape what you type: "open the door" is sent as "You open the door.", and "hello there" as You say, "Hello there." Choose "I" instead of "You", switch the tidying off, or write your own wording under Message box.

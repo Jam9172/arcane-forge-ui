@@ -14,6 +14,16 @@ A SillyTavern / TauriTavern UI extension that carries the Arcane Forge look from
 - A cleaner AI Response tab: preset card, length, sampling with a short description under each sampler, model features, behaviour, logit bias and prompts
 - Side panels sit flush with the chat and the window edge
 
+## Stage layout, menu panel and send modes
+
+Three larger changes, each with its own switch and each **off by default**. Turn them on under Extensions → Arcane Forge UI:
+
+- **Send modes** (Message box): Do, Say, Story and See buttons right above the message box, on desktop and phones. They shape what you type before it is sent: an action, a line of speech, narration, or a look at something.
+- **Stage layout** (Layout, desktop only): the chat as one column on the right and the background art on the rest of the window, with the character's name and sprite on the stage. Drag the chat's edge to resize it.
+- **Menu panel** (Menus, desktop only): every SillyTavern menu opens in one centred panel with a list of sections, and two round buttons take the place of the top bar.
+
+Phones keep SillyTavern's own top bar and menus; only the send modes appear there.
+
 ## Install
 
 In SillyTavern or TauriTavern: Extensions → Install extension → paste

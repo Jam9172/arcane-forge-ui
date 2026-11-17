@@ -165,7 +165,7 @@ const section = await page.evaluate(() => {
 const at = (name) => section.headings.indexOf(name);
 check('the settings have a Layout section between Panels and Keyboard', at('Layout') > at('Panels') && at('Layout') < at('Keyboard') && at('Panels') >= 0, section.headings.join(', '));
 check('Layout has the select "Forge layout", set to Classic', section.label === 'Forge layout' && section.value === 'classic', `${section.label}: ${section.value}`);
-check('it offers Classic and Stage, in that order', same(section.options, ["classic: Classic (SillyTavern's own)", 'stage: Stage (art on the left, chat on the right)']), section.options.join(' | '));
+check('it offers Classic and Stage, in that order', same(section.options, ['classic: Classic', 'stage: Stage (desktop)']), section.options.join(' | '));
 check('it carries the note "Desktop only. Phones keep the classic layout."', section.note === 'Desktop only. Phones keep the classic layout.', section.note ?? 'no note');
 await page.selectOption('#forge-ui-layout', 'stage');
 await page.waitForTimeout(300);

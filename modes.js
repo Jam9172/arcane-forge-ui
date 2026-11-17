@@ -90,8 +90,11 @@ export const lookKeys = {
 // The voice, tidy and wording controls only matter with the modes on, so they are greyed out (disabled)
 // while the modes are off. What a text field holds and shows is set in bindSettings, not written into
 // this HTML, so nothing the owner typed is ever read as markup.
+// The title a greyed-out control carries, saying which setting it needs
+const MODES_NEED = 'Needs "Do, Say, Story and See buttons above the message box" on';
+
 export function settingsHtml(s) {
-    const off = s.modes ? '' : ' disabled';
+    const off = s.modes ? '' : ` disabled title="${MODES_NEED.replaceAll('"', '&quot;')}"`;
     const voices = options(VOICES, voiceOf(s));
     const fields = TEMPLATE_KEYS.map((key) => `
                     <label class="forge-ui-select">
@@ -137,7 +140,7 @@ function options(list, selected) {
 export function bindSettings($root, s, save) {
     $root.find('#forge-ui-modes').on('change', function () {
         s.modes = this.checked;
-        $root.find('.forge-ui-modes-option').prop('disabled', !s.modes);
+        $root.find('.forge-ui-modes-option').prop('disabled', !s.modes).attr('title', s.modes ? null : MODES_NEED);
         save();
     });
     $root.find('#forge-ui-modes-voice').on('change', function () {
