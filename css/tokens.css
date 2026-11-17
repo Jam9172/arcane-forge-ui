@@ -55,6 +55,8 @@ body.forge-ui {
     /* The spine's grab area reaches this far into the chat column (and the message box's first button stays
        clear of it) */
     --forge-spine-reach: 6px;
+    /* The send modes bar's height on a phone on its side (a window under 420px tall) */
+    --forge-bar-short: 36px;
 }
 
 /* Touch screens and phones: every target at least 44px */
