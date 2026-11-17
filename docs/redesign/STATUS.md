@@ -9,7 +9,7 @@ States: `todo`, `doing`, `checked` (a second agent passed it), `merged`, `blocke
 | `00-foundation` | merged | `bc524f3` | Checked PASS. Main switch off still leaves Forge UI's older body classes, inline properties and fonts link (true before this batch); left for integration. |
 | `M1-mode-bar` | merged | `6316dc0` | Checked PASS. A mode's question hides "Not connected to API!" in the message box (owner to see). |
 | `M2-do-and-say` | merged | `be23891` | Failed the first check (send button by keyboard went out unshaped), fixed, passed the second. For the owner: Ctrl+Enter is sent as typed; own wording is skipped when the text starts with you or I. |
-| `M3-story-and-see` | doing | | Paused. First check FAIL (See as a picture: a second Enter sent a message). Fix 1 committed (`bcb6260`); its full suite and the second check never finished (machine asleep). Next: check round 2. |
+| `M3-story-and-see` | blocked | | Failed two checks (round 2: `13e4950`). Text typed just after a Story's narration is saved, before SillyTavern starts generating (its server ping), is still sent as the person's own message and answered. Suggested fix: keep the box clear until SillyTavern counts itself as generating, and test with `api/ping` held. Also: the put-back can add a line break mid-sentence. Waiting on the owner for a third round. |
 | `S1-chat-column` | merged | `708247d` | Checked PASS. For I1: a layer token for `#forge-stage` (raw `z-index: -1`); RPG Companion panel covers the column. |
 | `S2-spine-and-width` | merged | `267290f` | Checked PASS. For I1: tokens for the spine's raw sizes and layer. For I3: Import clamps `stageChat` where I3's test expects it ignored. |
 | `S3-stage-content` | merged | `0151f07` | Checked PASS. For I1: `stage.js` exports a seventh name, `setPlateText` (the brief asks for it; bible 9 says exactly six); raw layers and line height. Lane S done. |
@@ -30,4 +30,4 @@ States: `todo`, `doing`, `checked` (a second agent passed it), `merged`, `blocke
 
 ## Waiting on the owner
 
-Nothing yet. The run was paused by the owner on 2026-11-16 with M3 and P4 open (see their rows).
+- `M3-story-and-see` is blocked after two failed checks (see its row): a third fix round needs your go-ahead. Nothing else in wave 1 needs it; I1 does.
