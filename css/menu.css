@@ -21,7 +21,7 @@ body.forge-ui.forge-menu #forge-menu .forge-menu-backdrop {
     inset: 0;
     /* --forge-menu-lift: see "Windows over the panel" below */
     z-index: calc(var(--forge-z-backdrop) + var(--forge-menu-lift, 0));
-    background: rgb(0 0 0 / 55%);
+    background: var(--forge-menu-dim);
 }
 
 /* The nav runs down the left, the head across the top right, and the open menu fills the rest. The
@@ -68,7 +68,7 @@ body.forge-ui.forge-menu #forge-menu .forge-menu-panel {
 
     body.forge-ui.forge-menu #forge-menu .forge-menu-panel {
         opacity: 0;
-        transform: scale(0.98);
+        transform: scale(var(--forge-menu-grow));
     }
 }
 
@@ -132,8 +132,8 @@ body.forge-ui.forge-menu #forge-menu .forge-menu-label {
 /* Icons are drawn at 18px (bible section 4, Icons), brass, and take the text colour on the current section */
 body.forge-ui.forge-menu #forge-menu .forge-menu-icon {
     flex: none;
-    width: 18px;
-    height: 18px;
+    width: var(--forge-icon);
+    height: var(--forge-icon);
     color: var(--forge-brass);
 }
 
@@ -203,8 +203,8 @@ body.forge-ui.forge-menu #forge-menu .forge-menu-close:hover {
 
 /* Line icons: 24 by 24, stroke 1.8, round caps and joins, drawn at 18px (bible section 4, Icons) */
 body.forge-ui.forge-menu #forge-menu .forge-menu-svg {
-    width: 18px;
-    height: 18px;
+    width: var(--forge-icon);
+    height: var(--forge-icon);
     fill: none;
     stroke: currentColor;
     stroke-width: 1.8;
@@ -269,7 +269,7 @@ body.forge-ui.forge-menu #top-settings-holder :is(#lm_button_panel_pin_div > lab
 body.forge-ui.forge-menu:has(.drawer-content.maximized):has(#top-settings-holder .drawer-content.openDrawer:not(.fillLeft):not(.fillRight)),
 body.forge-ui.forge-menu:has(.drawer-content.open):has(#top-settings-holder .drawer-content.openDrawer:not(.fillLeft):not(.fillRight)),
 body.forge-ui.forge-menu:has(#character_popup.open):has(#top-settings-holder .drawer-content.openDrawer:not(.fillLeft):not(.fillRight)) {
-    --forge-menu-lift: 1000;
+    --forge-menu-lift: var(--forge-z-lift);
 }
 
 /* ---------- The two round buttons, in place of the top bar ----------
@@ -285,6 +285,12 @@ body.forge-ui.forge-menu-buttons {
 
 body.forge-ui.forge-menu-buttons #top-bar {
     display: none;
+}
+
+/* The chat now reaches the top of the window, so its scroll area starts below the round buttons: their height
+   and the gap above and below them (bible section 5.2, "Chat under the buttons"). */
+body.forge-ui.forge-menu-buttons #chat {
+    padding-top: calc(var(--forge-round) + 2 * var(--forge-space-3));
 }
 
 /* The icons are hidden but stay in the page, so the buttons and the panel can still click them. The holder
@@ -335,8 +341,8 @@ body.forge-ui.forge-menu-buttons #forge-menu-buttons .forge-menu-round:hover {
 
 /* Line icons: 24 by 24, stroke 1.8, round caps and joins, drawn at 18px (bible section 4, Icons) */
 body.forge-ui.forge-menu-buttons #forge-menu-buttons .forge-menu-svg {
-    width: 18px;
-    height: 18px;
+    width: var(--forge-icon);
+    height: var(--forge-icon);
     fill: none;
     stroke: currentColor;
     stroke-width: 1.8;
@@ -349,8 +355,8 @@ body.forge-ui.forge-menu-buttons #forge-menu-buttons .forge-menu-dot {
     position: absolute;
     top: var(--forge-space-1);
     right: var(--forge-space-1);
-    width: 8px;
-    height: 8px;
+    width: var(--forge-dot);
+    height: var(--forge-dot);
     border-radius: var(--forge-radius-pill);
     background: var(--forge-danger);
     pointer-events: none;

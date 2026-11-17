@@ -55,8 +55,8 @@ body.forge-ui.forge-modes #forge-modes > .forge-modes-button[aria-checked="true"
 /* Line icons drawn at 18px (bible section 4; no token covers the icon size or the stroke) */
 body.forge-ui.forge-modes #forge-modes .forge-modes-icon {
     flex: none;
-    width: 18px;
-    height: 18px;
+    width: var(--forge-icon);
+    height: var(--forge-icon);
     fill: none;
     stroke: currentColor;
     stroke-width: 1.8;

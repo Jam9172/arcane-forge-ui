@@ -6,6 +6,10 @@ import { box, openForge, setForge } from './_harness.mjs';
 
 const phone = process.argv[2] === 'phone';
 const { page, check, finish } = await openForge({ phone });
+// These checks measure the stage against the whole window. RPG Companion's side panel, if the sandbox has it open,
+// takes room at the right that the chat column leaves free (tested in together.mjs); a test-page rule hides it
+// (its own code shows it again after an inline change).
+await page.addStyleTag({ content: '#rpg-companion-panel { display: none !important; }' });
 
 const LANDMARKS = ['#sheld', '#top-bar', '#bg1', '#send_textarea'];
 const boxes = async () => {

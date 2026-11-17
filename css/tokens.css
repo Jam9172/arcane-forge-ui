@@ -38,6 +38,23 @@ body.forge-ui {
     --forge-z-buttons: 3002;
     --forge-z-backdrop: 3003;
     --forge-z-frame: 3004;
+    /* SillyTavern's own layers that ours share: its art (#bg1) and its chat column (#sheld); the stage's name
+       plate sits one above Character Expressions' sprite (2). SillyTavern lifts its menus' holder by 1000
+       while one of its windows is up, and the menu panel follows that lift. */
+    --forge-z-stage: -1;
+    --forge-z-chat: 30;
+    --forge-z-plate: 3;
+    --forge-z-lift: 1000;
+
+    /* The menu panel's backdrop dims the page by 55%, and the panel grows from 0.98 as it opens */
+    --forge-menu-dim: rgb(0 0 0 / 55%);
+    --forge-menu-grow: 0.98;
+    /* Line icons are drawn at 18px; the no-connection dot is 8px */
+    --forge-icon: 18px;
+    --forge-dot: 8px;
+    /* The spine's grab area reaches this far into the chat column (and the message box's first button stays
+       clear of it) */
+    --forge-spine-reach: 6px;
 }
 
 /* Touch screens and phones: every target at least 44px */
