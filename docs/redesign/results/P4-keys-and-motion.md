@@ -530,3 +530,15 @@ ok       stage-spine phone  12 checks, 15s
 ```
 
 Each run above finished on its own; none was cut off by the runner's time limit.
+
+## Check, second round
+
+**PASS.** Checked by the lead on `batch/P4-keys-and-motion` at `d2e04d0`, without a helper agent (the owner asked to finish without them). The lead did not write this batch's code.
+
+- **(a) Files:** `git diff --name-only overhaul...HEAD` lists `css/menu.css`, `menu.js`, `tests/browser/menu-keys.mjs`, `tests/browser/menu-characters.mjs` and this batch's result and changes files. All are lane P's by bible section 9; `menu-characters.mjs` was asked for by the lead (the pin wait).
+- **(b) Commands, on `d2e04d0`:** `node tests/browser/menu-keys.mjs` 62 ok; `node tests/browser/menu-keys.mjs phone` 4 ok; `node tests/run.mjs`: 21 passed, 0 failed (it includes `menu` and both sizes of every test). No run was cut off.
+- **The first check's four problems are gone.** Run against the old `menu.js` (`da20caa`), the new `menu-keys.mjs` gives 50 ok and 12 FAIL: the Lorebooks Shift+Tab lap (it left the frame), all six mouse-open cases (focus ended on `body`), one Escape on a SillyTavern popup while generating (nothing stopped), the toggle edge and the top-bar Shift+Tab with the buttons off, and the two listener counts. On `d2e04d0` all 62 pass.
+- **(c) The fix, read line by line:** both key listeners (`noteTab` in the capture phase, `onKey`) are added only when the frame opens and removed together by `stopKeys()` on hide and on turn-off; a Tab's after-check (`keepTab`) does nothing once the frame is hidden or a window is over it, and leaves a Tab whose default was prevented alone, so Select2's own Tab (picking a result) and SillyTavern's are untouched. The opener falls back to the control that opens the section (`openerOf`), kept as a selector, never an element. Escape is stopped only for a `<dialog>` that is not one of SillyTavern's popups, so SillyTavern's own Escape still acts in the same press. No new raw values, no `!important`, nothing saved, and SillyTavern's settings are untouched. Bible sections 3 and 9 still hold as the first check found.
+- **(d) Off leaves nothing:** the test's main-switch and panel-switch steps find no key listener of ours left (`live: 0`), and the full suite's pin checks pass in every way the panel stops being active.
+
+Problems left (none fails it): the first check's problem 5 (a slow listener of another extension plus a pinned, open Characters panel) stays a note for the owner; real Safari and TauriTavern were not tried, and there the browser may move the focus to its own controls before the page can bring it back.
