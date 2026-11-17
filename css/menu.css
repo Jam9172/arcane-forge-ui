@@ -46,6 +46,37 @@ body.forge-ui.forge-menu #forge-menu .forge-menu-panel {
     color: var(--forge-text);
 }
 
+/* ---------- Motion (bible section 4) ----------
+   The backdrop fades in and the panel fades in while it grows from 0.98 to its size, over --forge-fast.
+   Nothing else moves: the open menu is SillyTavern's and appears at once, and closing is at once. The two
+   parts animate rather than #forge-menu itself, because opacity on it would make it one layer at the page's
+   level while it faded, under the chat. @starting-style gives the look they start from each time the frame
+   stops being hidden. css/tokens.css makes --forge-fast 0ms for the system's reduced motion setting;
+   menu.js marks the frame for SillyTavern's own. */
+body.forge-ui.forge-menu #forge-menu .forge-menu-backdrop {
+    transition: opacity var(--forge-fast) ease-out;
+}
+
+body.forge-ui.forge-menu #forge-menu .forge-menu-panel {
+    transition: opacity var(--forge-fast) ease-out, transform var(--forge-fast) ease-out;
+}
+
+@starting-style {
+    body.forge-ui.forge-menu #forge-menu .forge-menu-backdrop {
+        opacity: 0;
+    }
+
+    body.forge-ui.forge-menu #forge-menu .forge-menu-panel {
+        opacity: 0;
+        transform: scale(0.98);
+    }
+}
+
+/* SillyTavern's Reduced Motion setting is on: no transition at all, as tokens.css does for the system's */
+body.forge-ui.forge-menu #forge-menu.forge-menu-still {
+    --forge-fast: 0ms;
+}
+
 body.forge-ui.forge-menu #forge-menu .forge-menu-nav {
     grid-column: 1;
     grid-row: 1 / -1;
@@ -83,7 +114,10 @@ body.forge-ui.forge-menu #forge-menu .forge-menu-section:hover {
     color: var(--forge-text);
 }
 
-body.forge-ui.forge-menu #forge-menu .forge-menu-section[aria-current="page"] {
+/* .forge-menu-nav in the selector: SillyTavern copies every :hover rule into a :focus-visible one
+   (scripts/dynamic-styles.js), and the current section has the focus when the frame opens, so the copy of
+   the hover rule above must not outweigh this one */
+body.forge-ui.forge-menu #forge-menu .forge-menu-nav > .forge-menu-section[aria-current="page"] {
     background: var(--forge-ember);
     color: var(--forge-bg);
 }

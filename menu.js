@@ -24,8 +24,13 @@
 // panel is active their pins are off and hidden: the ones that were on are recorded in menuPins and turned
 // off with their own checkboxes, and turned on again the same way when the menu panel stops being active.
 // None of that happens before SillyTavern's pin checkboxes answer clicks (see pinsReady).
+//
+// By keyboard (bible section 11) the frame is a dialog: opening it moves the focus to the open section's nav
+// button, Tab goes round the frame and the open menu, Escape closes it, and closing gives the focus back to
+// what opened it. Its two key listeners are on body, and only while the frame is shown.
 import { saveSettingsDebounced, eventSource, event_types } from '../../../../script.js';
 import { extension_settings } from '../../../extensions.js';
+import { Popup } from '../../../popup.js';
 import { accountStorage } from '../../../util/AccountStorage.js';
 
 export const id = 'menu';
@@ -52,6 +57,13 @@ const PINS = new Map([['lm_button_panel_pin', 'LNavLockOn'], ['rm_button_panel_p
 const STATUS_ICON = 'API-status-top';
 const NO_CONNECTION = 'fa-plug-circle-exclamation';
 const SVG = 'http://www.w3.org/2000/svg';
+// SillyTavern's own windows that can open over the panel and that its Escape handler (processHotkeys in
+// RossAscends-mods.js) closes itself. Its newer popups are <dialog>s, which the browser closes on Escape.
+const WINDOWS = '#dialogue_popup, #select_chat_popup, #character_popup';
+// What Tab can stop at, before the checks in isTabStop
+const TABBABLE = 'a[href], area[href], button, input:not([type="hidden"]), select, textarea, summary, iframe, audio[controls], video[controls], [contenteditable]:not([contenteditable="false"]), [tabindex]';
+// Set on the frame while SillyTavern's own Reduced Motion setting is on; css/menu.css then moves nothing
+const STILL = 'forge-menu-still';
 // The round buttons' line icons: Characters is the address card the top bar shows for that drawer, Menu
 // three lines
 const CHARACTERS_ICON = 'M3 5h18v14H3z M9 8.5a2 2 0 1 0 0 4a2 2 0 1 0 0-4z M5.5 16.5c.6-1.8 1.9-2.6 3.5-2.6s2.9.8 3.5 2.6 M15 9h3 M15 12h3 M15 15h2';
@@ -77,6 +89,8 @@ let hideTimer = 0;
 // Whether SillyTavern's pin checkboxes answer clicks yet, and whether something waits for that
 let pinsAnswer = false;
 let pinsWait = false;
+// How to find again what had the focus when the frame opened: a selector, not the element (bible section 9)
+let opener = null;
 
 // The buttons' switch only means something with the panel on, so it is greyed out (disabled) while the
 // panel is off
@@ -120,6 +134,7 @@ export function apply(s) {
 function turnOn(s) {
     document.body.classList.add('forge-menu');
     if (!document.getElementById(FRAME_ID)) document.body.append(buildFrame());
+    syncMotion(document.getElementById(FRAME_ID));
     const holder = document.getElementById('top-settings-holder');
     if (!observer && holder) {
         // SillyTavern opens and closes a menu by switching classes on its .drawer-content, and marks the
@@ -142,6 +157,8 @@ function turnOff(s) {
     observer?.disconnect();
     observer = null;
     clearTimeout(hideTimer);
+    stopKeys();
+    opener = null;
     document.getElementById(FRAME_ID)?.remove();
     document.body.classList.remove('forge-menu');
     repin(s);
@@ -184,19 +201,28 @@ function pinnedBySillyTavern(pin) {
 // click handlers and then sets each box from the pin it saved. A click before that changes the box alone,
 // and initRossMods then sets it back, so a pin put back that early is lost. SillyTavern emits
 // APP_INITIALIZED right after initRossMods, and hands that event at once to a listener added later. Until
-// then this says no, and has the panel applied again when it comes. (APP_READY comes too late: by then
-// SillyTavern may have reopened a pinned panel that was open, 300ms after initRossMods.)
+// then this says no, and has the panel applied again when it comes. (APP_READY alone comes too late: by
+// then SillyTavern may have reopened a pinned panel that was open, 300ms after initRossMods.)
+// APP_READY is the second chance. SillyTavern's emit takes its list of listeners when it starts and
+// remembers the event for later listeners only once the last of them has finished, so a listener added
+// while another extension's slow APP_INITIALIZED listener is still running hears neither. APP_READY is
+// emitted only after that, so it always comes; whichever is heard first answers and removes both.
 function pinsReady() {
-    const event = event_types.APP_INITIALIZED;
-    if (pinsAnswer || !event) return true;
+    const events = [event_types.APP_INITIALIZED, event_types.APP_READY].filter(Boolean);
+    if (pinsAnswer || !events.length) return true;
     if (!pinsWait) {
         pinsWait = true;
-        // Inside once() when the event has already come; only a later call applies the panel again
+        // Called inside on() when the event has already come; only a later call applies the panel again
         let later = false;
-        eventSource.once(event, () => {
+        const answer = () => {
+            if (pinsAnswer) return;
             pinsAnswer = true;
+            for (const event of events) eventSource.removeListener(event, answer);
             if (later && extension_settings[MODULE]) apply(extension_settings[MODULE]);
-        });
+        };
+        for (const event of events) {
+            if (!pinsAnswer) eventSource.on(event, answer);
+        }
         later = true;
     }
     return pinsAnswer;
@@ -272,15 +298,16 @@ function sync(now = false) {
     // Moving to another menu, SillyTavern closes the open one, waits its animation duration, then opens the
     // next. Hiding at once would make the frame blink between sections, so a close it did not come from the
     // frame is given twice that long to turn out to be a change of section.
-    if (now) frame.hidden = true;
+    if (now) hide(frame);
     else hideTimer = setTimeout(() => sync(true), animationMs() * 2);
 }
 
 function show(frame, drawer) {
+    const opening = frame.hidden;
     const nav = frame.querySelector('.forge-menu-nav');
     const key = keyOf(drawer);
     // Rebuilt each time the frame opens, so a drawer another extension added since is listed too
-    if (frame.hidden || ![...nav.children].some((b) => b.dataset.forgeDrawer === key)) {
+    if (opening || ![...nav.children].some((b) => b.dataset.forgeDrawer === key)) {
         nav.replaceChildren(...sections().map(sectionButton));
     }
     for (const button of nav.children) {
@@ -293,8 +320,193 @@ function show(frame, drawer) {
     const menuId = drawer.querySelector(':scope > .drawer-content')?.id;
     if (menuId) panel.setAttribute('aria-owns', menuId);
     else panel.removeAttribute('aria-owns');
-    frame.hidden = false;
+    if (opening) {
+        // Before the frame is drawn, so it fades in, or appears at once, as the settings ask
+        syncMotion(frame);
+        // What closing gives the focus back to: what had it, or, when that cannot be found again, the control
+        // that opens this section. A click leaves nothing to find in WebKit: buttons do not take the focus when
+        // clicked there, and the press has already taken it from where it was, so after a click on a round
+        // button, or on a top bar icon's edge, the focus is nowhere.
+        opener = findAgain(document.activeElement) ?? openerOf(drawer);
+        frame.hidden = false;
+        // Capture first, so that it notes each Tab before anything in the menu can stop it
+        document.body.addEventListener('keydown', noteTab, true);
+        document.body.addEventListener('keydown', onKey);
+        nav.querySelector('[aria-current="page"]')?.focus();
+    }
     remember(drawer);
+}
+
+function hide(frame) {
+    frame.hidden = true;
+    stopKeys();
+    const back = opener && document.querySelector(opener);
+    opener = null;
+    // Only when the focus went with the frame or the menu; not when it was moved somewhere on purpose
+    if (back && focusLost(frame)) back.focus();
+}
+
+// ---------- Keys, while the frame is shown ----------
+
+function stopKeys() {
+    document.body.removeEventListener('keydown', noteTab, true);
+    document.body.removeEventListener('keydown', onKey);
+}
+
+// Escape closes the panel and Tab goes round it. Keys that something inside the panel has already dealt with
+// are left alone, and so is everything while one of SillyTavern's windows is open over the panel: that window
+// gets the keys.
+function onKey(event) {
+    if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey) return;
+    if (event.key === 'Escape') {
+        if (event.altKey) return;
+        if (windowOnTop()) {
+            // The window closes itself: a <dialog> by the browser's default for Escape, SillyTavern's older
+            // windows by its own Escape handler (processHotkeys in RossAscends-mods.js, on document). That
+            // handler stands back while one of SillyTavern's popups is open (Popup.util.isPopupOpen()), but for
+            // any other dialog it would close the menu behind it too; for those, and only those, the key goes no
+            // further than here. Over SillyTavern's own popups the key goes on as it does with the panel off,
+            // so script.js's own Escape (stop generating, say) still acts in the same press.
+            if (dialogOnTop() && !Popup.util.isPopupOpen()) event.stopPropagation();
+            return;
+        }
+        // The key is spent: SillyTavern's handler would otherwise close something else behind the panel
+        event.preventDefault();
+        event.stopPropagation();
+        closeMenu();
+    } else if (event.key === 'Tab') {
+        // Alt+Tab too: in WebKit that is "Tab to every control"
+        if (windowOnTop()) return;
+        const stops = tabStops();
+        const next = nextStop(stops, document.activeElement, event.shiftKey);
+        if (next === undefined) return;
+        event.preventDefault();
+        next?.focus();
+    }
+}
+
+// Each Tab on its way in, before anything in the page has seen it. Nothing is changed here: once the browser
+// has dealt with the key, keepTab checks where the focus went.
+function noteTab(event) {
+    if (event.key !== 'Tab' || event.ctrlKey || event.metaKey) return;
+    const from = document.activeElement;
+    setTimeout(() => keepTab(event, from));
+}
+
+// A Tab that something in the menu kept from onKey is left to the browser: Select2's search field, for one, stops
+// every key it gets. The browser then moves the focus by its own rules, which can take it out of the frame and the
+// menu, or out of the page. Unless the key's default was prevented (onKey, or the control itself, moved the focus),
+// a focus that went nowhere, or that left the frame and the open menu for somewhere else, is put on the next stop
+// from where it was. Focus that was already elsewhere (a dropdown or a window over the panel) and stays elsewhere
+// is left alone, and so is everything while a window is open over the panel.
+function keepTab(event, from) {
+    const frame = document.getElementById(FRAME_ID);
+    if (event.defaultPrevented || !frame || frame.hidden || windowOnTop()) return;
+    const stops = tabStops();
+    const inside = (element) => stops.roots.some((root) => root.contains(element));
+    const active = document.activeElement;
+    if (inside(active) || !(nowhere(active) || inside(from))) return;
+    nextStop(stops, inside(from) ? from : null, event.shiftKey)?.focus();
+}
+
+// An open <dialog> (SillyTavern's popups, or another extension's), or one of SillyTavern's older windows
+function windowOnTop() {
+    return dialogOnTop() || [...document.querySelectorAll(WINDOWS)].some(drawn);
+}
+
+function dialogOnTop() {
+    return [...document.querySelectorAll('dialog[open]')].some(drawn);
+}
+
+function drawn(element) {
+    return element.getClientRects().length > 0 && getComputedStyle(element).visibility === 'visible';
+}
+
+// What Tab stops at: the frame's buttons (the nav, then the close button), then the open menu's controls,
+// each in page order. Looked up on every press, so a control the menu shows or hides meanwhile counts.
+function tabStops() {
+    const panel = document.querySelector(`#${FRAME_ID} .forge-menu-panel`);
+    const menu = document.querySelector(OPEN_MENU);
+    const roots = [panel, menu].filter(Boolean);
+    return { roots, list: roots.flatMap((root) => [...root.querySelectorAll(TABBABLE)].filter(isTabStop)) };
+}
+
+// The browser's own rules for Tab, as far as the panel needs them: focusable, not disabled, not inert, drawn,
+// and one stop per radio group. WebKit's Tab normally skips buttons and links; here it does not.
+function isTabStop(element) {
+    if (element.tabIndex < 0 || element.matches(':disabled') || element.closest('[inert]')) return false;
+    if (element.matches('input[type="radio"]') && element.name && !element.checked) {
+        const group = [...(element.form ?? document).querySelectorAll(`input[type="radio"][name="${CSS.escape(element.name)}"]`)];
+        if (group.some((radio) => radio.checked) || group[0] !== element) return false;
+    }
+    return drawn(element);
+}
+
+// The stop after (or before) the focused element, going round. undefined when the focus is somewhere else on
+// top of the panel (a dropdown, say), which then keeps its own Tab; null when there is nothing to stop at.
+function nextStop({ roots, list }, active, back) {
+    const where = roots.findIndex((root) => root.contains(active));
+    if (where < 0 && !astray(active)) return undefined;
+    if (!list.length) return null;
+    if (where < 0) return back ? list.at(-1) : list[0];
+    const at = list.indexOf(active);
+    if (at >= 0) return list[(at + (back ? list.length - 1 : 1)) % list.length];
+    // Focus on something Tab does not stop at: count the stops that come before it
+    const rootOf = (element) => roots.findIndex((root) => root.contains(element));
+    const before = list.filter((element) => rootOf(element) < where
+        || (rootOf(element) === where && Boolean(element.compareDocumentPosition(active) & Node.DOCUMENT_POSITION_FOLLOWING))).length;
+    return back ? (list[before - 1] ?? list.at(-1)) : (list[before] ?? list[0]);
+}
+
+// Focus outside the frame and the open menu that Tab brings into them: nowhere, or on what opens the panel. With
+// the buttons off, the top bar is above the frame, so its icons can be clicked while the panel is open.
+function astray(element) {
+    return nowhere(element) || Boolean(element.closest(`#${BUTTONS_ID}, ${DRAWERS} > .drawer-toggle`));
+}
+
+function nowhere(element) {
+    return !element || element === document.body || element === document.documentElement;
+}
+
+// ---------- Focus and motion ----------
+
+// A way to find the element again when the frame closes: its id, or our round button's or the top bar
+// icon's place. null for anything else (show then falls back on openerOf).
+function findAgain(element) {
+    if (!element || element === document.body || element.closest(`#${FRAME_ID}`)) return null;
+    // A control inside a menu is hidden once that menu closes
+    if (element.closest(MENUS)) return null;
+    if (element.id) return `#${CSS.escape(element.id)}`;
+    const round = [...element.classList].find((name) => name.startsWith('forge-menu-round-'));
+    if (round && element.closest(`#${BUTTONS_ID}`)) return `#${BUTTONS_ID} .${round}`;
+    const toggle = element.closest(`${DRAWERS} > .drawer-toggle`);
+    const drawerId = toggle?.parentElement.id;
+    if (!drawerId) return null;
+    if (element === toggle) return `#${CSS.escape(drawerId)} > .drawer-toggle`;
+    return element.matches('.drawer-icon') ? `#${CSS.escape(drawerId)} > .drawer-toggle .drawer-icon` : null;
+}
+
+// The control that opens a section, as findAgain would give it: its round button (Characters for Characters,
+// Menu for the others), or, with the buttons off, its top bar icon
+function openerOf(drawer) {
+    if (extension_settings[MODULE]?.menuButtons) {
+        return `#${BUTTONS_ID} .forge-menu-round-${drawer.id === CHARACTERS ? 'characters' : 'menu'}`;
+    }
+    return findAgain(iconOf(drawer));
+}
+
+// The focus went with the frame: it is nowhere, in the frame, or in a menu that is no longer drawn
+function focusLost(frame) {
+    const active = document.activeElement;
+    if (nowhere(active) || frame.contains(active)) return true;
+    return Boolean(active.closest(MENUS)) && !active.getClientRects().length;
+}
+
+// SillyTavern's own Reduced Motion setting (bible section 4), read where the bible says each time the frame
+// opens, so a change made while it was closed counts. The system setting is css/tokens.css's.
+function syncMotion(frame) {
+    const still = Boolean(globalThis.SillyTavern?.getContext?.()?.powerUserSettings?.reduced_motion);
+    frame.classList.toggle(STILL, still);
 }
 
 // The section the Menu button opens next time (bible section 7). Characters has a button of its own.
