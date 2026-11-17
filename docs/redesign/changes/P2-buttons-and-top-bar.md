@@ -1,1 +1,0 @@
-- Menu panel: the row of icons across the top is replaced by **two round buttons** at the top right, one for your characters and one for every other menu. A red dot on the menu button means there is no API connection. Turn the buttons off under Menus to keep the top bar.

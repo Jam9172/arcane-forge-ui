@@ -1,1 +1,0 @@
-- New **menu panel** for desktop (off by default; turn it on under Menus): every SillyTavern menu opens in one centred panel, with the menus listed down its left side so you can move between them without closing it.

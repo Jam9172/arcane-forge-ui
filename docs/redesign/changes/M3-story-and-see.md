@@ -1,1 +1,0 @@
-- **Story** puts what you type into the chat as narration and the AI carries on from it. **See** asks what something looks like ("the door" becomes "You look at the door."), or asks Image Generation for a picture if you choose that under Message box.

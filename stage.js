@@ -61,10 +61,12 @@ const SHADE_RANGE_ID = 'forge-ui-stage-shade';
 const SHADE_VALUE_ID = 'forge-ui-stage-shade-value';
 // The settings that only mean something in the stage layout, so they are greyed out in the classic one
 const STAGE_CONTROLS = [RANGE_ID, PLATE_BOX_ID, SPRITE_BOX_ID, SHADE_RANGE_ID];
+// The title a greyed-out control carries, saying which setting it needs
+const STAGE_NEED = 'Needs "Forge layout: Stage (desktop)"';
 
 const LAYOUTS = {
-    classic: "Classic (SillyTavern's own)",
-    stage: 'Stage (art on the left, chat on the right)',
+    classic: 'Classic',
+    stage: 'Stage (desktop)',
 };
 
 // The keys the spine answers to (bible section 5.1): Left widens the chat, Right narrows it, Home and End go to
@@ -88,7 +90,7 @@ export function settingsHtml(s) {
         .join('');
     const share = Math.round(chatShare(s.stageChat));
     const shade = shadeShare(s.stageShade);
-    const off = s.layout === 'stage' ? '' : ' disabled';
+    const off = s.layout === 'stage' ? '' : ` disabled title="${STAGE_NEED.replaceAll('"', '&quot;')}"`;
     return `
                 <h4>Layout</h4>
                 <label class="forge-ui-select">
@@ -118,7 +120,7 @@ export function settingsHtml(s) {
 export function bindSettings($root, s, save) {
     $root.find('#forge-ui-layout').on('change', function () {
         s.layout = Object.hasOwn(LAYOUTS, this.value) ? this.value : defaults.layout;
-        for (const control of STAGE_CONTROLS) $root.find(`#${control}`).prop('disabled', s.layout !== 'stage');
+        for (const control of STAGE_CONTROLS) $root.find(`#${control}`).prop('disabled', s.layout !== 'stage').attr('title', s.layout === 'stage' ? null : STAGE_NEED);
         save();
     });
     $root.find(`#${RANGE_ID}`).on('input', function () {

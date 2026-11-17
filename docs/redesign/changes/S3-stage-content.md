@@ -1,1 +1,0 @@
-- Stage layout: the stage shows the character's name on a plate, the character's sprite when it has one, and can be darkened with **Darken the stage art**. Each can be turned off under Layout.

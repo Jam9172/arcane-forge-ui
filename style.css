@@ -789,6 +789,12 @@ body.forge-ui.forge-user-layout #user-settings-block-content .menu_button {
     justify-content: space-between;
 }
 
+/* A setting greyed out because it needs another one on: its label dims too, not only the control (the control's
+   title says which setting it needs) */
+.arcane-forge-ui-settings label:has(:disabled) {
+    opacity: 0.55;
+}
+
 .arcane-forge-ui-settings .forge-ui-colors {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
