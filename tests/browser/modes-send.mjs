@@ -60,6 +60,16 @@ got = await transform("'hi there'", 'say');
 check('Say takes off single quotes round the whole text', got === 'You say, "Hi there."', JSON.stringify(got));
 got = await transform('pay $& go', 'do');
 check('nothing in the text is read as a replacement pattern', got === 'You pay $& go.', JSON.stringify(got));
+got = await transform('My leg hurts and bleeds on the ground.', 'do');
+check('Do leaves a sentence that starts with My as typed', got === 'My leg hurts and bleeds on the ground.', JSON.stringify(got));
+got = await transform('my leg hurts', 'do', { modesVoice: 'first' });
+check('Do in the first person puts no I before my', got === 'My leg hurts.', JSON.stringify(got));
+got = await transform('the door creaks open', 'do');
+check('Do leaves a sentence that starts with The as typed', got === 'The door creaks open.', JSON.stringify(got));
+got = await transform('theatrically bow', 'do');
+check('a word that only starts with "the" still gets You', got === 'You theatrically bow.', JSON.stringify(got));
+got = await transform('the door', 'see');
+check('See still looks at "the door"', got === 'You look at the door.', JSON.stringify(got));
 got = await transform('Ice the cake', 'do');
 check('a word that only starts with "I" is not the word I', got === 'You ice the cake.', JSON.stringify(got));
 // (Story and See are shaped since M3; tests/browser/modes-story-see.mjs checks them)

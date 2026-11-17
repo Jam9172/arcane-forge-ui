@@ -50,6 +50,9 @@ const END_MARKS = ['.', '!', '?', '…', '"', "'", '”', '’', '*', ')', ']', 
 const QUOTE_PAIRS = [['"', '"'], ['“', '”'], ["'", "'"]];
 // "you" or "I" as a whole word at the start (so "I'm" counts, "Isla" and "your" do not)
 const STARTS_WITH_SELF = /^(?:you|i)(?![\p{L}\p{N}_])/iu;
+// Do only: the text is a sentence with its own subject ("My leg hurts.", "The door creaks open."), not an
+// action for You or I to do, so nothing goes in front of it. See is left out: "the door" is what it looks at.
+const STARTS_WITH_SUBJECT = /^(?:my|mine|your|yours|our|ours|we|he|she|they|it|its|his|her|hers|their|theirs|the|a|an|this|that|these|those|there)(?![\p{L}\p{N}_])/iu;
 const STARTS_WITH_SELF_SAY = /^(?:you|i)\s+say(?![\p{L}\p{N}_])/iu;
 
 const VOICES = { second: 'You …', first: 'I …' };
@@ -249,7 +252,7 @@ export function transform(text, mode, s = {}) {
     if (!typed) return text;
     if (mode === 'do' || mode === 'see') {
         // Rule 3: already "you …" or "I …", so no You or I goes in front
-        if (STARTS_WITH_SELF.test(typed)) return endMark(upperFirst(typed));
+        if (STARTS_WITH_SELF.test(typed) || (mode === 'do' && STARTS_WITH_SUBJECT.test(typed))) return endMark(upperFirst(typed));
         return fill(template, endMark(startsWithCapitals(typed) ? typed : lowerFirst(typed)));
     }
     // Rule 4: "you say …" and "I say …" are left as typed, apart from rules 1 and 2
