@@ -27,9 +27,10 @@
 //
 // By keyboard (bible section 11) the frame is a dialog: opening it moves the focus to the open section's nav
 // button, Tab goes round the frame and the open menu, Escape closes it, and closing gives the focus back to
-// what had it before. The one key listener for that is on body, and only while the frame is shown.
+// what opened it. Its two key listeners are on body, and only while the frame is shown.
 import { saveSettingsDebounced, eventSource, event_types } from '../../../../script.js';
 import { extension_settings } from '../../../extensions.js';
+import { Popup } from '../../../popup.js';
 import { accountStorage } from '../../../util/AccountStorage.js';
 
 export const id = 'menu';
@@ -156,7 +157,7 @@ function turnOff(s) {
     observer?.disconnect();
     observer = null;
     clearTimeout(hideTimer);
-    document.body.removeEventListener('keydown', onKey);
+    stopKeys();
     opener = null;
     document.getElementById(FRAME_ID)?.remove();
     document.body.classList.remove('forge-menu');
@@ -322,8 +323,14 @@ function show(frame, drawer) {
     if (opening) {
         // Before the frame is drawn, so it fades in, or appears at once, as the settings ask
         syncMotion(frame);
-        opener = findAgain(document.activeElement);
+        // What closing gives the focus back to: what had it, or, when that cannot be found again, the control
+        // that opens this section. A click leaves nothing to find in WebKit: buttons do not take the focus when
+        // clicked there, and the press has already taken it from where it was, so after a click on a round
+        // button, or on a top bar icon's edge, the focus is nowhere.
+        opener = findAgain(document.activeElement) ?? openerOf(drawer);
         frame.hidden = false;
+        // Capture first, so that it notes each Tab before anything in the menu can stop it
+        document.body.addEventListener('keydown', noteTab, true);
         document.body.addEventListener('keydown', onKey);
         nav.querySelector('[aria-current="page"]')?.focus();
     }
@@ -332,7 +339,7 @@ function show(frame, drawer) {
 
 function hide(frame) {
     frame.hidden = true;
-    document.body.removeEventListener('keydown', onKey);
+    stopKeys();
     const back = opener && document.querySelector(opener);
     opener = null;
     // Only when the focus went with the frame or the menu; not when it was moved somewhere on purpose
@@ -340,6 +347,11 @@ function hide(frame) {
 }
 
 // ---------- Keys, while the frame is shown ----------
+
+function stopKeys() {
+    document.body.removeEventListener('keydown', noteTab, true);
+    document.body.removeEventListener('keydown', onKey);
+}
 
 // Escape closes the panel and Tab goes round it. Keys that something inside the panel has already dealt with
 // are left alone, and so is everything while one of SillyTavern's windows is open over the panel: that window
@@ -349,11 +361,13 @@ function onKey(event) {
     if (event.key === 'Escape') {
         if (event.altKey) return;
         if (windowOnTop()) {
-            // The dialog closes itself (the browser's default for Escape). SillyTavern's own Escape handler,
-            // on document, would also close the menu behind it, because it only stands back for its own
-            // popups; so the key goes no further than here. Its older windows it closes itself, so they are
-            // left to it.
-            if (dialogOnTop()) event.stopPropagation();
+            // The window closes itself: a <dialog> by the browser's default for Escape, SillyTavern's older
+            // windows by its own Escape handler (processHotkeys in RossAscends-mods.js, on document). That
+            // handler stands back while one of SillyTavern's popups is open (Popup.util.isPopupOpen()), but for
+            // any other dialog it would close the menu behind it too; for those, and only those, the key goes no
+            // further than here. Over SillyTavern's own popups the key goes on as it does with the panel off,
+            // so script.js's own Escape (stop generating, say) still acts in the same press.
+            if (dialogOnTop() && !Popup.util.isPopupOpen()) event.stopPropagation();
             return;
         }
         // The key is spent: SillyTavern's handler would otherwise close something else behind the panel
@@ -369,6 +383,30 @@ function onKey(event) {
         event.preventDefault();
         next?.focus();
     }
+}
+
+// Each Tab on its way in, before anything in the page has seen it. Nothing is changed here: once the browser
+// has dealt with the key, keepTab checks where the focus went.
+function noteTab(event) {
+    if (event.key !== 'Tab' || event.ctrlKey || event.metaKey) return;
+    const from = document.activeElement;
+    setTimeout(() => keepTab(event, from));
+}
+
+// A Tab that something in the menu kept from onKey is left to the browser: Select2's search field, for one, stops
+// every key it gets. The browser then moves the focus by its own rules, which can take it out of the frame and the
+// menu, or out of the page. Unless the key's default was prevented (onKey, or the control itself, moved the focus),
+// a focus that went nowhere, or that left the frame and the open menu for somewhere else, is put on the next stop
+// from where it was. Focus that was already elsewhere (a dropdown or a window over the panel) and stays elsewhere
+// is left alone, and so is everything while a window is open over the panel.
+function keepTab(event, from) {
+    const frame = document.getElementById(FRAME_ID);
+    if (event.defaultPrevented || !frame || frame.hidden || windowOnTop()) return;
+    const stops = tabStops();
+    const inside = (element) => stops.roots.some((root) => root.contains(element));
+    const active = document.activeElement;
+    if (inside(active) || !(nowhere(active) || inside(from))) return;
+    nextStop(stops, inside(from) ? from : null, event.shiftKey)?.focus();
 }
 
 // An open <dialog> (SillyTavern's popups, or another extension's), or one of SillyTavern's older windows
@@ -407,9 +445,8 @@ function isTabStop(element) {
 // The stop after (or before) the focused element, going round. undefined when the focus is somewhere else on
 // top of the panel (a dropdown, say), which then keeps its own Tab; null when there is nothing to stop at.
 function nextStop({ roots, list }, active, back) {
-    const lost = !active || active === document.body || active === document.documentElement;
-    const where = lost ? -1 : roots.findIndex((root) => root.contains(active));
-    if (where < 0 && !lost) return undefined;
+    const where = roots.findIndex((root) => root.contains(active));
+    if (where < 0 && !astray(active)) return undefined;
     if (!list.length) return null;
     if (where < 0) return back ? list.at(-1) : list[0];
     const at = list.indexOf(active);
@@ -421,10 +458,20 @@ function nextStop({ roots, list }, active, back) {
     return back ? (list[before - 1] ?? list.at(-1)) : (list[before] ?? list[0]);
 }
 
+// Focus outside the frame and the open menu that Tab brings into them: nowhere, or on what opens the panel. With
+// the buttons off, the top bar is above the frame, so its icons can be clicked while the panel is open.
+function astray(element) {
+    return nowhere(element) || Boolean(element.closest(`#${BUTTONS_ID}, ${DRAWERS} > .drawer-toggle`));
+}
+
+function nowhere(element) {
+    return !element || element === document.body || element === document.documentElement;
+}
+
 // ---------- Focus and motion ----------
 
 // A way to find the element again when the frame closes: its id, or our round button's or the top bar
-// icon's place. Anything else, and the focus is left where closing leaves it.
+// icon's place. null for anything else (show then falls back on openerOf).
 function findAgain(element) {
     if (!element || element === document.body || element.closest(`#${FRAME_ID}`)) return null;
     // A control inside a menu is hidden once that menu closes
@@ -439,10 +486,19 @@ function findAgain(element) {
     return element.matches('.drawer-icon') ? `#${CSS.escape(drawerId)} > .drawer-toggle .drawer-icon` : null;
 }
 
+// The control that opens a section, as findAgain would give it: its round button (Characters for Characters,
+// Menu for the others), or, with the buttons off, its top bar icon
+function openerOf(drawer) {
+    if (extension_settings[MODULE]?.menuButtons) {
+        return `#${BUTTONS_ID} .forge-menu-round-${drawer.id === CHARACTERS ? 'characters' : 'menu'}`;
+    }
+    return findAgain(iconOf(drawer));
+}
+
 // The focus went with the frame: it is nowhere, in the frame, or in a menu that is no longer drawn
 function focusLost(frame) {
     const active = document.activeElement;
-    if (!active || active === document.body || active === document.documentElement || frame.contains(active)) return true;
+    if (nowhere(active) || frame.contains(active)) return true;
     return Boolean(active.closest(MENUS)) && !active.getClientRects().length;
 }
 

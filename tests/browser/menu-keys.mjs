@@ -5,7 +5,9 @@
 //
 // WebKit's Tab normally skips buttons and links (Safari's "Press Tab to highlight each item" is off). The panel
 // moves the focus itself on Tab, so plain Tab presses are what this test sends; it never changes a browser or
-// system setting.
+// system setting. It also opens the panel with the mouse (WebKit's buttons do not take the focus when clicked),
+// goes round Lorebooks, whose active-worlds box (Select2) keeps every key from the panel, and puts SillyTavern's
+// popups and another <dialog> over the panel while a stand-in for generating is running.
 // Usage: node tests/browser/menu-keys.mjs [phone]
 import { openForge, setForge } from './_harness.mjs';
 
@@ -50,6 +52,41 @@ const closeFrame = async () => {
     if (await frameShown()) await page.click('#forge-menu .forge-menu-close');
     await page.waitForTimeout(400);
 };
+// Lorebooks' active-worlds box: Select2's search field, which stops every key it gets
+const WORLDS_BOX = '#WorldInfo .select2-search__field';
+// Presses a key until the focus is back on the first nav button (at most 200 times), noting every press that
+// left the frame and the open menu, and whether the active-worlds box was on the way. A short wait after each
+// press lets anything that runs once the browser has moved the focus have its turn.
+const lap = async (key) => {
+    await page.focus(NAV('rightNavHolder'));
+    const result = { presses: 0, round: false, box: false, strays: [] };
+    while (result.presses < 200 && !result.round) {
+        result.presses++;
+        await page.keyboard.press(key);
+        await page.waitForTimeout(40);
+        const f = await focus();
+        if (!f.inFrame && !f.inMenu) result.strays.push(`${key} ${result.presses}: ${f.name}`);
+        if (await isFocused(WORLDS_BOX)) result.box = true;
+        result.round = await isFocused(NAV('rightNavHolder'));
+    }
+    return result;
+};
+// Opens what a control opens with a mouse click, from the message box, and closes it again by Escape, the close
+// button or the backdrop; says where the focus went
+const byMouse = async (click, way) => {
+    await page.focus('#send_textarea');
+    await click();
+    await page.waitForTimeout(SETTLE);
+    const opened = await frameShown();
+    if (way === 'Escape') await press('Escape', 400);
+    else if (way === 'the close button') await page.click('#forge-menu .forge-menu-close');
+    else await page.mouse.click(30, 450);
+    await page.waitForTimeout(400);
+    return { opened, closed: !(await frameShown()) && (await openMenus()).length === 0, focus: (await focus()).name };
+};
+// A stand-in for SillyTavern generating: its Stop button shown, with every GENERATION_STOPPED counted
+const generating = (on) => page.evaluate((on) => { document.getElementById('mes_stop').style.display = on ? 'flex' : 'none'; }, on);
+const stops = () => page.evaluate(() => globalThis.forgeTestStops);
 // The transition durations of the frame's two parts, the backdrop and the panel
 const durations = () => page.evaluate(() => ['.forge-menu-backdrop', '.forge-menu-panel']
     .map((part) => getComputedStyle(document.querySelector(`#forge-menu ${part}`)).transitionDuration.split(',').map((d) => d.trim())));
@@ -131,7 +168,8 @@ if (!phone) {
         return { ember: getComputedStyle(button).backgroundColor === ember, ring: getComputedStyle(button).outlineStyle !== 'none' };
     });
     check('1. focused, the current section keeps its --forge-ember fill, inside the existing focus ring', fill.ember && fill.ring, JSON.stringify(fill));
-    check('1. one key listener of ours is in place, on body', (await ourKeys()).live === 1 && (await ourKeys()).where.join() === 'body', JSON.stringify(await ourKeys()));
+    // Two: one that acts on Escape and Tab, and one that notes each Tab on its way in
+    check('1. our two key listeners are in place, both on body', (await ourKeys()).live === 2 && (await ourKeys()).where.join() === 'body', JSON.stringify(await ourKeys()));
 
     // 2. A modal dialog labelled by its title; the nav is a nav named Menus
     const roles = await page.evaluate(() => {
@@ -184,6 +222,19 @@ if (!phone) {
     f = await focus();
     check('a nav button by keyboard changes the section, and the focus stays on it, now current', (await frameShown()) && (await openMenus()).join() === 'WorldInfo' && f.section === 'Lorebooks' && f.current === 'page', `${(await openMenus()).join(', ')} ${JSON.stringify(f)}`);
 
+    // Lorebooks, round and round: its active-worlds box is Select2's, whose search field keeps every key from the
+    // panel, so there the browser moves the focus by its own rules
+    check('Lorebooks: the active-worlds box is a tab stop in the open menu', await page.evaluate((box) => {
+        const field = document.querySelector(box);
+        return !!field && field.tabIndex >= 0 && field.getClientRects().length > 0;
+    }, WORLDS_BOX));
+    for (const key of ['Shift+Tab', 'Tab']) {
+        const round = await lap(key);
+        check(`Lorebooks: ${key} goes round from the first nav button back to it, through the active-worlds box, and never leaves the frame or the open menu`,
+            round.round && round.box && round.strays.length === 0, `${round.presses} presses, box ${round.box}${round.strays.length ? `; ${round.strays.length} outside: ${round.strays.slice(0, 3).join('; ')}` : ''}`);
+    }
+    await page.focus(NAV('WI-SP-button'));
+
     // 4. Escape: the frame closes and the focus is back on Menu
     await press('Escape', 400);
     check('4. Escape closes the frame', !(await frameShown()) && (await openMenus()).length === 0, (await openMenus()).join(', '));
@@ -195,6 +246,15 @@ if (!phone) {
     check('5. Characters by keyboard opens the Characters section', (await frameShown()) && (await openMenus()).join() === 'right-nav-panel' && (await focus()).section === 'Characters');
     await press('Escape', 400);
     check('5. Escape: the frame is closed and the focus is on the Characters round button', !(await frameShown()) && (await isFocused(CHARACTERS)), (await focus()).name);
+
+    // By mouse: in WebKit a click does not give a button the focus (the press takes it away from the message box
+    // to nowhere), and closing still gives it to the round button that was clicked
+    for (const [name, button] of [['Menu', MENU], ['Characters', CHARACTERS]]) {
+        for (const way of ['Escape', 'the close button', 'the backdrop']) {
+            const r = await byMouse(() => page.click(button), way);
+            check(`mouse: ${name} clicked, then closed by ${way}: the focus is back on ${name}`, r.opened && r.closed && (await isFocused(button)), JSON.stringify(r));
+        }
+    }
 
     // 6. A <dialog> over the panel takes Escape; the next Escape closes the panel
     await openWith(MENU);
@@ -231,6 +291,60 @@ if (!phone) {
     check('a SillyTavern popup: Escape closes it, and the panel stays open', (await popup.count()) === 0 && (await frameShown()) && (await openMenus()).length === 1, (await openMenus()).join(', '));
     await press('Escape', 400);
     check('a SillyTavern popup: then Escape closes the panel', !(await frameShown()) && (await isFocused(MENU)), (await focus()).name);
+
+    // While SillyTavern is generating (a stand-in): with the panel off, one Escape on its popup closes the popup and
+    // stops generating. Over the open panel it does the same, and the panel stays open. Another <dialog> over the
+    // panel takes only its own Escape: the menu behind it and the generating are left alone.
+    await page.evaluate(() => {
+        globalThis.forgeTestStops = 0;
+        globalThis.forgeTestOnStop = () => { globalThis.forgeTestStops++; };
+        const { eventSource, eventTypes } = globalThis.SillyTavern.getContext();
+        eventSource.on(eventTypes.GENERATION_STOPPED, globalThis.forgeTestOnStop);
+    });
+    await openWith(MENU);
+    const behind = (await openMenus()).join();
+    await generating(true);
+    await page.evaluate(async () => {
+        const { callGenericPopup, POPUP_TYPE } = await import('/scripts/popup.js');
+        callGenericPopup('Forge test popup while generating', POPUP_TYPE.TEXT);
+    });
+    await page.waitForTimeout(SETTLE);
+    const busyPopup = page.locator('dialog.popup[open]', { hasText: 'Forge test popup while generating' });
+    let stopped = await stops();
+    await press('Escape');
+    const afterPopup = { popup: await busyPopup.count(), stopped: (await stops()) - stopped, frame: await frameShown(), menu: (await openMenus()).join() };
+    check('generating: one Escape on a SillyTavern popup over the panel closes the popup and stops generating, and the panel stays open',
+        afterPopup.popup === 0 && afterPopup.stopped === 1 && afterPopup.frame && afterPopup.menu === behind, JSON.stringify(afterPopup));
+    await generating(true);
+    await page.evaluate(() => {
+        const dialog = document.createElement('dialog');
+        dialog.id = 'forge-test-dialog';
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = 'Stand-in';
+        dialog.append(button);
+        document.body.append(dialog);
+        dialog.showModal();
+    });
+    await page.waitForTimeout(300);
+    stopped = await stops();
+    await press('Escape');
+    const afterDialog = {
+        dialog: await page.evaluate(() => document.getElementById('forge-test-dialog').open),
+        stopped: (await stops()) - stopped,
+        frame: await frameShown(),
+        menu: (await openMenus()).join(),
+    };
+    check('generating: Escape on another <dialog> over the panel closes only that dialog (the menu behind it stays open, nothing is stopped)',
+        !afterDialog.dialog && afterDialog.stopped === 0 && afterDialog.frame && afterDialog.menu === behind, JSON.stringify(afterDialog));
+    await generating(false);
+    await page.evaluate(() => {
+        document.getElementById('forge-test-dialog').remove();
+        const { eventSource, eventTypes } = globalThis.SillyTavern.getContext();
+        eventSource.removeListener(eventTypes.GENERATION_STOPPED, globalThis.forgeTestOnStop);
+    });
+    await press('Escape', 400);
+    check('generating: then Escape closes the panel', !(await frameShown()) && (await openMenus()).length === 0, (await openMenus()).join(', '));
 
     // SillyTavern's older kind of window, the advanced definitions: its Escape is SillyTavern's own
     await openWith(CHARACTERS);
@@ -317,9 +431,38 @@ if (!phone) {
     await press('Escape', 400);
     check('10. Escape: the frame is closed and the focus is back on that icon', !(await frameShown()) && (await isFocused(SETTINGS_ICON)), (await focus()).name);
 
+    // Buttons off, by mouse: a click on a top bar icon, or on the edge of its toggle below the icon (where the
+    // click gives nothing the focus), and closing gives the focus to that icon
+    let r = await byMouse(() => page.click(SETTINGS_ICON), 'the backdrop');
+    check('buttons off: the Settings icon clicked, then closed by the backdrop: the focus is back on the icon', r.opened && r.closed && (await isFocused(SETTINGS_ICON)), JSON.stringify(r));
+    r = await byMouse(async () => {
+        const toggle = await page.locator('#user-settings-button > .drawer-toggle').boundingBox();
+        await page.mouse.click(toggle.x + toggle.width / 2, toggle.y + toggle.height - 1);
+    }, 'the close button');
+    check('buttons off: the edge of the Settings toggle clicked, then closed by the close button: the focus is on the icon', r.opened && r.closed && (await isFocused(SETTINGS_ICON)), JSON.stringify(r));
+
+    // Buttons off: the top bar is above the frame, so its icons can be clicked while the panel is open. One clicked
+    // changes the section and has the focus; Tab and Shift+Tab from it go into the frame and the open menu.
+    for (const key of ['Shift+Tab', 'Tab']) {
+        await openWith(SETTINGS_ICON);
+        await page.click('#leftNavDrawerIcon');
+        await page.waitForTimeout(SETTLE * 2);
+        const clicked = { section: (await openMenus()).join(), onIcon: await isFocused('#leftNavDrawerIcon') };
+        const strays = [];
+        for (let i = 1; i <= 4; i++) {
+            await page.keyboard.press(key);
+            await page.waitForTimeout(40);
+            f = await focus();
+            if (!f.inFrame && !f.inMenu) strays.push(`${key} ${i}: ${f.name}`);
+        }
+        check(`buttons off: a top bar icon clicked while the panel is open, then ${key} four times: the focus stays in the frame and the open menu`,
+            clicked.section === 'left-nav-panel' && clicked.onIcon && strays.length === 0, `${JSON.stringify(clicked)}; ${strays.join('; ') || 'none outside'}`);
+        await press('Escape', 400);
+    }
+
     // Forge UI's main switch off while the frame is open takes the key listener with it
     await openWith(SETTINGS_ICON);
-    check('main switch: the frame is open, with its key listener', (await frameShown()) && (await ourKeys()).live === 1);
+    check('main switch: the frame is open, with its key listeners', (await frameShown()) && (await ourKeys()).live === 2, JSON.stringify(await ourKeys()));
     await setForge(page, { enabled: false });
     check('main switch off: nothing of the panel, and no key listener of ours', (await ours()).length === 0 && (await ourKeys()).live === 0, `${(await ours()).join(', ')} ${JSON.stringify(await ourKeys())}`);
     await setForge(page, { enabled: true });

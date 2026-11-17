@@ -3,12 +3,12 @@
 ## Built
 
 - `menu.js`:
-  - **One key listener, only while the frame is shown.** `onKey` is added to `document.body` (`keydown`, bubbling) when the frame goes from hidden to shown, and removed when it hides, when the panel turns off for any reason (its switch, the main switch, the window at 1000px or less) and on Reset. Nothing is ever added to `document` or `window`, and nothing of ours listens for keys while the panel is closed.
+  - **One key listener, only while the frame is shown.** `onKey` is added to `document.body` (`keydown`, bubbling) when the frame goes from hidden to shown, and removed when it hides, when the panel turns off for any reason (its switch, the main switch, the window at 1000px or less) and on Reset. Nothing is ever added to `document` or `window`, and nothing of ours listens for keys while the panel is closed. (After the check there are two, both on `body` and with the same lifetime: `noteTab` in the capture phase as well. See "Fixes after the check".)
   - **Roles** were already there from P1: the panel is `role="dialog"`, `aria-modal="true"`, `aria-labelledby="forge-menu-title"`, and the nav is `<nav aria-label="Menus">`. Unchanged; the test checks them.
   - **Opening** (the frame goes from hidden to shown): `syncMotion` sets the motion class first (below), the element that has the focus is noted (`findAgain`, below), the frame is shown, the listener is added, and the focus moves to the nav button with `aria-current="page"`. A change of section while the frame is shown is not an opening: the focus stays where it is, which after a nav button is pressed is that button, now current.
   - **Tab** (and Shift+Tab, and Alt+Tab): the panel moves the focus itself. On each press it lists the tab stops afresh: the frame's buttons (the nav in order, then the close button), then the open menu's controls in page order (`tabStops`, `isTabStop`), and focuses the next or previous one, going round from the last to the first and back (`nextStop`). It calls `preventDefault()` so the browser does not move the focus as well.
   - **Escape** closes the panel with `closeMenu()` (P1's: the open drawer's own `.drawer-toggle`), then `preventDefault()` and `stopPropagation()`. It is left alone when something inside the panel has already dealt with it (`defaultPrevented`; SillyTavern's autocomplete and Select2 also stop the key before it reaches `body`), while composing text, and with Ctrl, Cmd or Alt held. While a window is open over the panel, Escape belongs to that window:
-    - an open, drawn `<dialog>` (SillyTavern's popups, or another extension's) closes itself; `onKey` stops the key there, so that SillyTavern's own Escape handler on `document` does not also close the menu behind it (see the choices);
+    - an open, drawn `<dialog>` (SillyTavern's popups, or another extension's) closes itself; `onKey` stops the key there, so that SillyTavern's own Escape handler on `document` does not also close the menu behind it (see the choices; after the check, only for a dialog that is not one of SillyTavern's popups);
     - SillyTavern's older windows, `#dialogue_popup`, `#select_chat_popup` and `#character_popup` (the advanced definitions), are closed by SillyTavern's own Escape handler, so the key is let through to it.
   - **Closing** (`hide`, the one place the frame is hidden): the listener is removed and, if the focus went with the frame or the menu, it goes back to what had it when the frame opened.
   - **Motion:** `syncMotion` reads SillyTavern's Reduced Motion setting where bible section 4 names it, `SillyTavern.getContext().powerUserSettings.reduced_motion`, on every `apply` and at every opening, and toggles `forge-menu-still` on `#forge-menu`.
@@ -164,12 +164,12 @@ And `menu-keys.mjs` with `overhaul`'s `menu.js` and `css/menu.css` put in for on
 
 - **The tab stops** (`isTabStop`): elements matching `a[href]`, `area[href]`, `button`, `input` (not hidden), `select`, `textarea`, `summary`, `iframe`, `audio`/`video` with controls, `contenteditable` and `[tabindex]`, that have `tabIndex` 0 or more, are not `:disabled` or inside `[inert]`, are drawn (they have a box and `visibility: visible`), and, for a named radio group, only its checked radio (or its first, when none is checked). Positive `tabindex` order is not followed; SillyTavern's `index.html` has no positive `tabindex`. Elements Select2 hides keep their `tabindex="-1"`, so they are skipped.
 - **The order:** the frame first (the nav, then the close button), then the open menu. In the page the menu comes before the frame; the frame first follows how it reads: the list on the left, the head, then the content.
-- **Focus on something Tab does not stop at** (a `tabindex="-1"` element, the title) counts from where it is: Tab goes to the next stop after it in the same order. **Focus nowhere** (`body`): Tab goes to the first stop, Shift+Tab to the last. **Focus outside both parts**, for example in a Select2 dropdown or a window over the panel: `onKey` does not touch Tab, so that control keeps its own.
+- **Focus on something Tab does not stop at** (a `tabindex="-1"` element, the title) counts from where it is: Tab goes to the next stop after it in the same order. **Focus nowhere** (`body`): Tab goes to the first stop, Shift+Tab to the last. **Focus outside both parts**, for example in a Select2 dropdown or a window over the panel: `onKey` does not touch Tab, so that control keeps its own. (After the check, a round button or a top bar icon counts as nowhere, and a Tab that ends nowhere is put back: see "Fixes after the check".)
 - **Escape is spent when it closes the panel.** Without `stopPropagation()`, SillyTavern's own Escape handler (`processHotkeys` in `RossAscends-mods.js`, on `document`) would run after ours in the same press and close the next thing on its list: a floating panel such as Author's Note, the delete-messages bar, and so on. So while the panel is open, SillyTavern's own Escape shortcuts (stop generating, close the message editor, cancel deleting messages, close floating panels) wait for the next press. The panel is modal and covers all of them. With the panel closed, nothing of this runs.
-- **Escape with a `<dialog>` over the panel goes no further than `body`.** The brief's stand-in is a plain `<dialog>`. SillyTavern's Escape handler stands back only for its own popups (`Popup.util.isPopupOpen()`), so for any other dialog it would close the menu behind it too. A scratch run with that one line taken out showed it: Escape closed the stand-in dialog and the AI response menu behind it. With the line, the menu stays open. The dialog's own handling is untouched: its own listeners run before ours, and the browser's closing is the key's default action, which is not prevented. For SillyTavern's own popups this also keeps `script.js`'s Escape (stop generating, message editor) from acting behind the popup while the panel is open.
+- **Escape with a `<dialog>` over the panel goes no further than `body`.** (After the check, this holds only for a dialog that is not one of SillyTavern's popups: see "Fixes after the check".) The brief's stand-in is a plain `<dialog>`. SillyTavern's Escape handler stands back only for its own popups (`Popup.util.isPopupOpen()`), so for any other dialog it would close the menu behind it too. A scratch run with that one line taken out showed it: Escape closed the stand-in dialog and the AI response menu behind it. With the line, the menu stays open. The dialog's own handling is untouched: its own listeners run before ours, and the browser's closing is the key's default action, which is not prevented. For SillyTavern's own popups this also keeps `script.js`'s Escape (stop generating, message editor) from acting behind the popup while the panel is open.
 - **SillyTavern's older windows are left to SillyTavern** even in the one case where the panel is above one: with the advanced definitions window open, opening Lorebooks from the nav lifts the frame over it (P3). Escape then closes the window first (SillyTavern's own order), and the next Escape closes the panel.
 - **Shift+Escape closes the panel; Ctrl, Cmd or Alt with Escape is left alone,** as are Ctrl+Tab and Cmd+Tab (the browser's and the system's).
-- **What "whatever opened the panel" is:** the element that had the focus when the frame opened. It is kept as a way to find it again (`findAgain`), not as the element (bible section 9): its id; our round button by its class; a top bar icon or toggle by its drawer's id. A control inside a menu is not kept (that menu is hidden once it closes), nor is anything else. With the mouse in WebKit, buttons do not take the focus when clicked, so after a click on a round button the focus goes back to what had it before (the message box, for example), or stays where it is.
+- **What "whatever opened the panel" is:** the element that had the focus when the frame opened. It is kept as a way to find it again (`findAgain`), not as the element (bible section 9): its id; our round button by its class; a top bar icon or toggle by its drawer's id. A control inside a menu is not kept (that menu is hidden once it closes), nor is anything else. **Corrected after the check:** this said that after a click on a round button the focus goes back to what had it before (the message box, for example). It did not: in WebKit the press on a button takes the focus away to nowhere and the button does not take it, so nothing was kept and the focus ended on `body`. Now, when what had the focus cannot be found again, the panel keeps the control that opens the section instead (`openerOf`), so after a click the focus goes back to the round button or top bar icon that was clicked.
 - **The focus goes back only if it went with the frame:** it is nowhere, in the frame, or in a menu that is no longer drawn. If it was moved somewhere on purpose before the frame closed (a top bar icon clicked while the buttons are off, say), it stays there.
 - **The focus moves into the panel at every opening,** whatever opened it: the round buttons, the top bar, another extension, a command, or ticking the switch while a menu is open. The panel is a modal dialog, and that is where its keys work.
 - **Closing does not animate.** The brief and the bible describe the opening. SillyTavern's menu disappears at once when it closes, and a frame fading out behind a menu that has already gone would be a second kind of motion. It also keeps P1's hide timing as it was.
@@ -190,7 +190,7 @@ And `menu-keys.mjs` with `overhaul`'s `menu.js` and `css/menu.css` put in for on
 - **Select2 in a menu:** in Lorebooks, Escape in the active-worlds box's open dropdown closes the dropdown and leaves the panel open (Select2 keeps the key to itself). Tab there is Select2's own.
 - **Crossing 1000px with the frame open:** at 900px the frame is gone and no key listener of ours is left; back at 1440px the frame is there again with one.
 - **Five applies with the frame open:** one frame, one key listener.
-- **Mouse:** opening with a click on Menu moves the focus to the current section; closing with a click on the backdrop leaves the focus nowhere (in WebKit the clicked button never had it).
+- **Mouse:** opening with a click on Menu moves the focus to the current section; closing with a click on the backdrop leaves the focus nowhere (in WebKit the clicked button never had it). (After the check, closing gives it to the button that was clicked.)
 - **The fade itself:** sampled every 30ms after opening, the backdrop's and the panel's opacity went 0, 0.34, 0.60, 0.80, 0.95, 1.00 and the panel's scale 0.98 to 1.00.
 
 ## Asked of other files
@@ -316,3 +316,217 @@ Probe A: in each of the nine sections, 120 Tab, 60 Shift+Tab and 10 Alt+Tab, che
 - **The focus moves in at every opening:** accepted. It is what makes problem 2 matter.
 - **The phone variant:** right, by bible section 12.
 - **The tab-stop rules and the order** (the frame first, then the menu): reasonable. The holes are problems 1 and 3.
+
+## Fixes after the check
+
+### What failed
+
+- **Problem 1 (FAIL): Shift+Tab left the panel from Lorebooks' active-worlds box.** Select2 stops every key on its inline search field (`textarea.select2-search__field`), so `onKey` on `body` never saw that Tab. WebKit's own Shift+Tab found nothing before the field that it stops at, and took the focus out of the page (`body`). On the old code the new lap check never came round: in 200 Shift+Tabs the focus went to `body` 11 times, every 18th press, and the next press took it to the menu's last stop, so it never got back to the first nav button.
+- **Problem 2 (FAIL): no focus back after opening with the mouse.** In WebKit the press on a round button takes the focus away to nowhere, and the button does not take it. `findAgain(document.activeElement)` got `body` and kept nothing, so closing by Escape, the close button or the backdrop left the focus on `body`. With the buttons off, a click on the edge of a top bar toggle, just below its icon, did the same (the toggle is 33px tall and its icon 29px). A click on the icon itself worked: SillyTavern gives the icon `tabindex="0"`, and WebKit focuses that on a click.
+- **Problem 3: with the buttons off, Shift+Tab from a top bar icon clicked while the panel was open left the page.** The icon is outside the frame and the menu, and focus outside both parts kept the page's own Tab.
+- **Problem 4: Escape on a SillyTavern popup over the open panel did not reach SillyTavern's own chat-level Escape.** `onKey` stopped the key for every dialog on top, SillyTavern's popups included, so stop generating waited for a third press.
+
+### What changed
+
+**`menu.js`**
+
+- **Tab, whatever a menu's widgets do with it (problem 1).** A second key listener, `noteTab`, on `body` in the capture phase. It is added and removed with `onKey`, so it exists only while the frame is shown.
+  - It changes nothing. For each Tab it notes the focused element and the direction, before anything in the page sees the key, and sets a timer with no delay.
+  - When the timer runs, the browser has dealt with the key, and `keepTab` looks where the focus went.
+  - If the key's default was prevented, it does nothing. That is `onKey`, which moved the focus itself, or the control: Select2's open dropdown takes Tab to pick a result.
+  - Otherwise, if the focus went nowhere, or left the frame and the open menu for somewhere else, it goes on the next stop from where it was, in the order `onKey` uses.
+  - Focus that was already outside and stays outside (a dropdown, another extension's window) is left alone. Nothing is done while a window is open over the panel, or once the frame is hidden.
+- **Why the check is tied to Tab, not a guard on the focus itself.** The checker suggested `focusin`/`focusout` on the frame and the open menu. Two reasons against it:
+  - The focus can leave the frame and the menu on purpose, with no Tab: a click, SillyTavern or another extension focusing something, another extension's own window. A guard on the focus would pull it back in those cases too.
+  - A `focusout` alone does not say which way the person went. A focus that went nowhere after Shift+Tab could only be put back on the field it left, and Shift+Tab would then be stuck on that field.
+- **Why not take Tab in the capture phase.** The menus' own widgets would lose it: Select2 picks a result with Tab while its dropdown is open, and SillyTavern's autocomplete uses Tab too. The brief leaves keys inside SillyTavern's menus alone, so the capture listener only takes notes. A scratch probe compared Select2 in Lorebooks with the panel off and on: a click on the box, Escape, Shift+Tab with the dropdown closed and with it open, and Escape again. After each, the dropdown, the focus, the menu and the chosen worlds were the same both ways.
+- **The focus back after a click (problem 2).** When the frame opens and what has the focus cannot be found again (`findAgain` gives null, as it does for `body`), the panel keeps the control that opens the section instead (`openerOf`):
+  - with the buttons on, the Characters round button for Characters and the Menu round button for every other section. Menu never opens Characters and Characters opens nothing else, so this is the button that was clicked;
+  - with the buttons off, the section's top bar icon.
+  - The rest is as before: closing gives that control the focus only if the focus went with the frame.
+  - A side effect: a section opened by code while the focus was nowhere (another extension, a command) now gives the focus to that section's button on closing. Before, it was left on `body`.
+- **Shift+Tab from a top bar icon (problem 3).** In `nextStop`, focus on a round button or a top bar toggle or icon (`astray`) now counts as nowhere: Tab goes to the first stop and Shift+Tab to the last, and `onKey` moves the focus there. It did not fall out of the Tab check alone. From the first icon, Shift+Tab ends nowhere, which `keepTab` would catch. From any other icon it goes to the icon before it: outside, but somewhere, so the focus would walk along the top bar first. (A scratch probe with the panel off: the browser's own Shift+Tab from the Lorebooks icon went to the Formatting icon, then Connection, then AI response.)
+- **Escape on SillyTavern's popups (problem 4).** `onKey` now stops Escape only when the dialog on top is not one of SillyTavern's popups: `dialogOnTop() && !Popup.util.isPopupOpen()`.
+  - `Popup` is imported from SillyTavern's `scripts/popup.js`. `Popup.util.isPopupOpen()` is the very test with which `processHotkeys` stands back.
+  - Over one of SillyTavern's popups, the key now goes on as it does with the panel off: the popup closes, `script.js`'s own Escape stops generating in the same press, and `processHotkeys` closes nothing behind it.
+  - Over any other `<dialog>`, the key still goes no further than `body`, and the menu behind it stays open (brief step 6). That also keeps `script.js`'s Escape from acting in that press, as before.
+- Small: `stopKeys` removes both listeners, from `hide` and `turnOff`. `nowhere` is shared by `nextStop`, `keepTab` and `focusLost`. The header comment and `findAgain`'s comment say what they do now.
+
+**`tests/browser/menu-keys.mjs`.** New checks:
+
+- **Lorebooks:** its active-worlds box is a tab stop. Shift+Tab, then Tab, go round from the first nav button back to it (at most 200 presses), pass through the box, and never leave the frame and the open menu. Each press is followed by a 40ms wait.
+- **Mouse:** Menu and Characters, each clicked with the focus in the message box, then closed by Escape, by the close button and by the backdrop (six checks). Each time, the focus is back on the button that was clicked.
+- **Buttons off, by mouse:** the Settings icon clicked, then closed by the backdrop: the focus is on the icon. The edge of its toggle below the icon clicked, then closed by the close button: the focus is on the icon.
+- **Buttons off, Tab:** a top bar icon clicked while the panel is open, then Shift+Tab four times, and in a second round Tab four times. The focus stays in the frame and the open menu.
+- **Generating** (a stand-in: SillyTavern's Stop button shown, `GENERATION_STOPPED` counted):
+  - one Escape on a SillyTavern popup over the open panel closes the popup and stops generating, and the panel stays open on the same section;
+  - one Escape on another `<dialog>` closes only that dialog: the menu stays open and nothing is stopped;
+  - then Escape closes the panel.
+- **Changed:** "one key listener of ours is in place, on body" is now "our two key listeners are in place, both on body", and the main switch check counts two.
+
+### Left as they were
+
+- **Problem 5, a note for the owner.** With another extension's slow `APP_INITIALIZED` listener, a pinned Characters panel that was open is put away only at `APP_READY`. By then SillyTavern has reopened it, so it shows in the frame at load. The pin is still recorded and comes back when the panel turns off. Not changed here.
+- **Problem 6, kept:** SillyTavern 1.19.0's `switchReducedMotion` does toggle `reduced-motion` on `body`, so bible section 4's "puts no class on body" is out of date. Reading the value, as built, is still right.
+- **Focus that code puts behind the panel keeps the page's own Tab, as before.** A scratch probe focused the message box from code with the panel open, and Tab then went to the next control in the page, behind the backdrop. Only code (or a click on something above the frame) can put the focus outside, and a window from another extension can sit above the frame, so Tab from an unknown place outside is not taken.
+
+### Also checked, with scratch scripts outside the repository
+
+- **All nine sections,** as in the check's probe A but with no wait between presses: 120 Tab, 60 Shift+Tab, 10 Alt+Tab and 10 Alt+Shift+Tab each. The focus never left the frame and the open menu; before, it left in Lorebooks.
+- **Tab, then Escape at once:** the panel closes and the focus is on Menu. A timer that runs after the frame is hidden does nothing.
+- **A click on the panel's title, then Tab:** the click leaves the focus nowhere, and Tab goes to the first stop.
+- **Mouse open, a click into the menu, then the backdrop:** the focus is on Menu.
+- **Opened by code with the focus nowhere** (the Characters toggle clicked from a script): Escape gives the focus to the Characters round button.
+
+### Not tried
+
+Safari itself and TauriTavern. When WebKit's own Tab leaves the page there, the browser may take the focus to its own controls before the page can act. Whether `focus()` from the page brings it back then was not tried. The test browser leaves the focus on `body`, and from there it is put back.
+
+### The new checks on the old code
+
+The final `menu-keys.mjs`, run with `menu.js` as it was at `da20caa` (the same `menu.js` as `766f2db`, the commit the check looked at). The new and changed checks:
+
+```
+FAIL 1. our two key listeners are in place, both on body ({"live":1,"where":["body"]})
+ok   Lorebooks: the active-worlds box is a tab stop in the open menu
+FAIL Lorebooks: Shift+Tab goes round from the first nav button back to it, through the active-worlds box, and never leaves the frame or the open menu (200 presses, box true; 11 outside: Shift+Tab 18: body.no-blur.drop_target; Shift+Tab 36: body.no-blur.drop_target; Shift+Tab 54: body.no-blur.drop_target)
+ok   Lorebooks: Tab goes round from the first nav button back to it, through the active-worlds box, and never leaves the frame or the open menu (28 presses, box true)
+FAIL mouse: Menu clicked, then closed by Escape: the focus is back on Menu ({"opened":true,"closed":true,"focus":"body.no-blur.drop_target"})
+FAIL mouse: Menu clicked, then closed by the close button: the focus is back on Menu ({"opened":true,"closed":true,"focus":"body.no-blur.drop_target"})
+FAIL mouse: Menu clicked, then closed by the backdrop: the focus is back on Menu ({"opened":true,"closed":true,"focus":"body.no-blur.drop_target"})
+FAIL mouse: Characters clicked, then closed by Escape: the focus is back on Characters ({"opened":true,"closed":true,"focus":"body.no-blur.drop_target"})
+FAIL mouse: Characters clicked, then closed by the close button: the focus is back on Characters ({"opened":true,"closed":true,"focus":"body.no-blur.drop_target"})
+FAIL mouse: Characters clicked, then closed by the backdrop: the focus is back on Characters ({"opened":true,"closed":true,"focus":"body.no-blur.drop_target"})
+FAIL generating: one Escape on a SillyTavern popup over the panel closes the popup and stops generating, and the panel stays open ({"popup":0,"stopped":0,"frame":true,"menu":"WorldInfo"})
+ok   generating: Escape on another <dialog> over the panel closes only that dialog (the menu behind it stays open, nothing is stopped) ({"dialog":false,"stopped":0,"frame":true,"menu":"WorldInfo"})
+ok   generating: then Escape closes the panel
+ok   buttons off: the Settings icon clicked, then closed by the backdrop: the focus is back on the icon ({"opened":true,"closed":true,"focus":"div.drawer-icon.fa-solid"})
+FAIL buttons off: the edge of the Settings toggle clicked, then closed by the close button: the focus is on the icon ({"opened":true,"closed":true,"focus":"body.no-blur.drop_target"})
+FAIL buttons off: a top bar icon clicked while the panel is open, then Shift+Tab four times: the focus stays in the frame and the open menu ({"section":"left-nav-panel","onIcon":true}; Shift+Tab 1: body.no-blur.drop_target)
+ok   buttons off: a top bar icon clicked while the panel is open, then Tab four times: the focus stays in the frame and the open menu ({"section":"left-nav-panel","onIcon":true}; none outside)
+FAIL main switch: the frame is open, with its key listeners ({"live":1,"where":["body"]})
+
+(50 ok and 12 FAIL in all, exit 1. Every other check passed, as before.)
+```
+
+The new checks that pass on the old code too are kept for what they guard:
+
+- **The Tab lap through Lorebooks:** the browser's own Tab from the active-worlds box lands on the next stop in the menu. It stays beside the Shift+Tab lap so that both ways are covered. (The line before it only checks that the box is a tab stop, so that the laps mean something.)
+- **Tab from a clicked top bar icon:** the browser's own Tab lands in that icon's menu, which comes next in the page. It stays beside the Shift+Tab check.
+- **A click on the Settings icon itself:** WebKit focuses the icon on a click, so this worked before. It stays beside the click on the toggle's edge, which did not.
+- **Another `<dialog>` over the panel closes only itself, and the next Escape closes the panel:** as before. They guard brief step 6 against the change made for SillyTavern's popups.
+
+### Test output
+
+Final runs, on the code as committed.
+
+```
+$ node tests/browser/menu-keys.mjs
+ok   before: SillyTavern's Escape closes Settings, opened from its icon by keyboard ({"opened":"user-settings-block","after":"","focus":"div.drawer-icon.fa-solid"})
+ok   1. Menu by keyboard opens the frame on AI response (left-nav-panel)
+ok   1. the focus is on the nav button with aria-current="page", AI response's ({"inFrame":true,"inMenu":false,"name":"button.forge-menu-section","current":"page","section":"AI response"})
+ok   1. focused, the current section keeps its --forge-ember fill, inside the existing focus ring ({"ember":true,"ring":true})
+ok   1. our two key listeners are in place, both on body ({"live":2,"where":["body"]})
+ok   2. the panel has role="dialog" and aria-modal="true", and its aria-labelledby names the section ({"role":"dialog","modal":"true","title":"AI response","nav":"Menus","navHolds":9})
+ok   2. the nav is a <nav> with aria-label="Menus" that holds the section buttons ({"role":"dialog","modal":"true","title":"AI response","nav":"Menus","navHolds":9})
+ok   3. 60 Tabs: the focus is always inside #forge-menu or the open menu ({"frame":8,"menu":52})
+ok   3. Tab stops at the frame's buttons and then at the menu's controls (buttons too, in WebKit) ({"frame":8,"menu":52})
+ok   3. 10 Shift+Tabs: the same (none outside)
+ok   3. Shift+Tab on the first nav button goes round to the open menu, and Tab comes back to it (div#new_oai_preset.menu_button.menu_button_icon then button.forge-menu-section)
+ok   3. Tab from the last nav button reaches the close button (button.forge-menu-close)
+ok   a nav button by keyboard changes the section, and the focus stays on it, now current (WorldInfo {"inFrame":true,"inMenu":false,"name":"button.forge-menu-section","current":"page","section":"Lorebooks"})
+ok   Lorebooks: the active-worlds box is a tab stop in the open menu
+ok   Lorebooks: Shift+Tab goes round from the first nav button back to it, through the active-worlds box, and never leaves the frame or the open menu (28 presses, box true)
+ok   Lorebooks: Tab goes round from the first nav button back to it, through the active-worlds box, and never leaves the frame or the open menu (28 presses, box true)
+ok   4. Escape closes the frame
+ok   4. the focus is back on the Menu round button (button.forge-menu-round.forge-menu-round-menu)
+ok   4. no key listener of ours is left ({"live":0,"where":["body"]})
+ok   5. Characters by keyboard opens the Characters section
+ok   5. Escape: the frame is closed and the focus is on the Characters round button (button.forge-menu-round.forge-menu-round-characters)
+ok   mouse: Menu clicked, then closed by Escape: the focus is back on Menu ({"opened":true,"closed":true,"focus":"button.forge-menu-round.forge-menu-round-menu"})
+ok   mouse: Menu clicked, then closed by the close button: the focus is back on Menu ({"opened":true,"closed":true,"focus":"button.forge-menu-round.forge-menu-round-menu"})
+ok   mouse: Menu clicked, then closed by the backdrop: the focus is back on Menu ({"opened":true,"closed":true,"focus":"button.forge-menu-round.forge-menu-round-menu"})
+ok   mouse: Characters clicked, then closed by Escape: the focus is back on Characters ({"opened":true,"closed":true,"focus":"button.forge-menu-round.forge-menu-round-characters"})
+ok   mouse: Characters clicked, then closed by the close button: the focus is back on Characters ({"opened":true,"closed":true,"focus":"button.forge-menu-round.forge-menu-round-characters"})
+ok   mouse: Characters clicked, then closed by the backdrop: the focus is back on Characters ({"opened":true,"closed":true,"focus":"button.forge-menu-round.forge-menu-round-characters"})
+ok   6. the stand-in dialog is open over the panel
+ok   6. Escape closes the dialog
+ok   6. and the panel is still open, on the same section (WorldInfo then WorldInfo)
+ok   6. Escape again closes the panel, and the focus is back on Menu (button.forge-menu-round.forge-menu-round-menu)
+ok   a SillyTavern popup opens over the panel
+ok   a SillyTavern popup: Escape closes it, and the panel stays open (WorldInfo)
+ok   a SillyTavern popup: then Escape closes the panel (button.forge-menu-round.forge-menu-round-menu)
+ok   generating: one Escape on a SillyTavern popup over the panel closes the popup and stops generating, and the panel stays open ({"popup":0,"stopped":1,"frame":true,"menu":"WorldInfo"})
+ok   generating: Escape on another <dialog> over the panel closes only that dialog (the menu behind it stays open, nothing is stopped) ({"dialog":false,"stopped":0,"frame":true,"menu":"WorldInfo"})
+ok   generating: then Escape closes the panel
+ok   the advanced definitions window opens over the Characters section
+ok   the advanced definitions window: Escape closes it (SillyTavern's own Escape), and Characters stays open in the frame (right-nav-panel)
+ok   the advanced definitions window: then Escape closes the panel
+ok   7. with the panel closed, Escape clicks no .drawer-toggle (0 clicks)
+ok   7. and Escape and Tab reach document untouched, with no key listener of ours in place (Escape false, Escape false, Escape false, Escape false, Tab false, Tab false; {"live":0,"where":["body"]})
+ok   7. no menu opened
+ok   8. open: the backdrop's and the panel's transition-duration is 0.16s ([["0.16s"],["0.16s","0.16s"]])
+ok   8. opening fades the backdrop in, and fades the panel in while it grows from 0.98; nothing else in the frame or the menu moves (forge-menu-backdrop opacity from 0, forge-menu-panel opacity from 0, forge-menu-panel transform from scale(0.98))
+ok   8. reduced motion (the system's): the transition-duration is 0s ([["0s"],["0s","0s"]])
+ok   8. reduced motion (the system's): opening moves nothing
+ok   9. SillyTavern's Reduced Motion on: the transition-duration is 0s ([["0s"],["0s","0s"]])
+ok   9. SillyTavern's Reduced Motion on: opening moves nothing
+ok   9. switched back: 0.16s again ([["0.16s"],["0.16s","0.16s"]], was false)
+ok   10. buttons off: the Settings icon by keyboard opens the frame, with the focus on Settings in the nav ({"inFrame":true,"inMenu":false,"name":"button.forge-menu-section","current":"page","section":"Settings"})
+ok   10. Escape: the frame is closed and the focus is back on that icon (div.drawer-icon.fa-solid)
+ok   buttons off: the Settings icon clicked, then closed by the backdrop: the focus is back on the icon ({"opened":true,"closed":true,"focus":"div.drawer-icon.fa-solid"})
+ok   buttons off: the edge of the Settings toggle clicked, then closed by the close button: the focus is on the icon ({"opened":true,"closed":true,"focus":"div.drawer-icon.fa-solid"})
+ok   buttons off: a top bar icon clicked while the panel is open, then Shift+Tab four times: the focus stays in the frame and the open menu ({"section":"left-nav-panel","onIcon":true}; none outside)
+ok   buttons off: a top bar icon clicked while the panel is open, then Tab four times: the focus stays in the frame and the open menu ({"section":"left-nav-panel","onIcon":true}; none outside)
+ok   main switch: the frame is open, with its key listeners ({"live":2,"where":["body"]})
+ok   main switch off: nothing of the panel, and no key listener of ours ( {"live":0,"where":["body"]})
+ok   off: nothing of the panel is in the page
+ok   off: Escape on Settings does what it did before the panel was on ({"opened":"user-settings-block","after":"","focus":"div.drawer-icon.fa-solid"} vs {"opened":"user-settings-block","after":"","focus":"div.drawer-icon.fa-solid"})
+ok   off: no key listener of ours, and none was ever put on document or window ({"live":0,"where":["body"]})
+ok   no script errors
+
+$ node tests/browser/menu-keys.mjs phone
+ok   phone: no #forge-menu and no forge-menu class
+ok   phone: with the panel on, Escape on Settings does what it does with it off ({"opened":"user-settings-block","after":"","focus":"div.drawer-icon.fa-solid"} vs {"opened":"user-settings-block","after":"","focus":"div.drawer-icon.fa-solid"})
+ok   phone: no key listener of ours was ever added ({"live":0,"where":[]})
+ok   no script errors
+
+$ node tests/run.mjs menu
+ok       menu-buttons  55 checks, 32s
+ok       menu-buttons phone  4 checks, 11s
+ok       menu-characters  63 checks, 80s
+ok       menu-characters phone  11 checks, 24s
+ok       menu-frame  49 checks, 25s
+ok       menu-frame phone  5 checks, 14s
+ok       menu-keys  62 checks, 64s
+ok       menu-keys phone  4 checks, 15s
+
+8 passed, 0 failed
+
+$ node tests/run.mjs
+ok       foundation  18 checks, 14s
+ok       foundation phone  15 checks, 14s
+ok       harness  8 checks, 12s
+ok       harness phone  8 checks, 11s
+ok       menu-buttons  55 checks, 33s
+ok       menu-buttons phone  4 checks, 11s
+ok       menu-characters  63 checks, 83s
+ok       menu-characters phone  11 checks, 26s
+ok       menu-frame  49 checks, 26s
+ok       menu-frame phone  5 checks, 15s
+ok       menu-keys  62 checks, 65s
+ok       menu-keys phone  4 checks, 15s
+ok       modes-bar  47 checks, 19s
+ok       modes-bar phone  50 checks, 19s
+ok       modes-send  70 checks, 34s
+ok       stage-column  35 checks, 20s
+ok       stage-column phone  10 checks, 14s
+ok       stage-content  64 checks, 25s
+ok       stage-content phone  22 checks, 17s
+ok       stage-spine  52 checks, 23s
+ok       stage-spine phone  12 checks, 15s
+
+21 passed, 0 failed
+```
+
+Each run above finished on its own; none was cut off by the runner's time limit.
