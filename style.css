@@ -2,6 +2,7 @@
 @import url("css/stage.css");
 @import url("css/menu.css");
 @import url("css/modes.css");
+@import url("css/columns.css");
 /* Arcane Forge UI: carries RPG Companion's Forge look across SillyTavern.
    Everything is scoped to body.forge-ui, so turning the setting off restores the user's theme. */
 

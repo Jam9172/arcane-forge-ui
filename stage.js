@@ -67,6 +67,7 @@ const STAGE_NEED = 'Needs "Forge layout: Stage (desktop)"';
 const LAYOUTS = {
     classic: 'Classic',
     stage: 'Stage (desktop)',
+    columns: 'Three columns (desktop)',
 };
 
 // The keys the spine answers to (bible section 5.1): Left widens the chat, Right narrows it, Home and End go to
@@ -150,7 +151,8 @@ export function apply(s) {
     // The sprite is placed by css/stage.css alone; with this class off it is wherever SillyTavern puts it
     body.classList.toggle(SPRITE_CLASS, active && Boolean(s.stageSprite));
     followChats(active && Boolean(s.stagePlate));
-    followAside(active);
+    // The Three columns layout (columns.js) leaves the same room for a side panel at the right edge
+    followAside(active || Boolean(s.enabled && s.layout === 'columns' && window.matchMedia(DESKTOP).matches));
     if (active) {
         body.style.setProperty(CHAT_WIDTH, chatWidth(chatShare(s.stageChat)));
         if (!document.getElementById(STAGE_ID)) body.append(stageLayer());

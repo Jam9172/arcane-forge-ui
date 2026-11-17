@@ -125,10 +125,13 @@ export function bindSettings($root, s, save) {
 }
 
 export function apply(s) {
-    const active = Boolean(s.enabled && s.menuPanel) && window.matchMedia(DESKTOP).matches;
+    // The Three columns layout (columns.js) has no top bar: its menus always open in the panel, and the top
+    // bar is hidden the way the round buttons hide it (css/columns.css hides the buttons themselves)
+    const columns = Boolean(s.enabled && s.layout === 'columns');
+    const active = Boolean(s.enabled && (s.menuPanel || columns)) && window.matchMedia(DESKTOP).matches;
     if (active) turnOn(s);
     else turnOff(s);
-    setButtons(active && Boolean(s.menuButtons));
+    setButtons(active && (columns || Boolean(s.menuButtons)));
 }
 
 function turnOn(s) {

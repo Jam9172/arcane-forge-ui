@@ -4,6 +4,7 @@ import { download } from '../../../utils.js';
 import { buildAiTab, restoreAiTab, refreshModelLine, clearOmittedParams, restoreOmittedParams, renameOmittedParamsBackup } from './aiTab.js';
 import { installDeleteModeScrollGuard } from './deleteMode.js';
 import * as stage from './stage.js';
+import * as columns from './columns.js';
 import * as menu from './menu.js';
 import * as modes from './modes.js';
 
@@ -12,7 +13,7 @@ const MODULE = 'arcaneForgeUi';
 // The redesign's features (docs/redesign/BIBLE.md, section 9). Each module brings its own defaults, look keys,
 // settings section and apply(), so a feature reaches the settings, the look file and Reset through its own
 // file alone; nothing here changes when a feature grows.
-const FEATURES = [stage, menu, modes];
+const FEATURES = [stage, columns, menu, modes];
 const FONT_LINK_ID = 'arcane-forge-ui-fonts';
 
 const HEADING_FONTS = {

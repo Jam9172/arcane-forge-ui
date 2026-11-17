@@ -1,0 +1,731 @@
+/* Arcane Forge UI: the Three columns layout (desktop). Characters and chats on the left, the story in a
+   reading column in the middle, the character's profile on the right. Owned by columns.js.
+
+   Every rule in this file starts with body.forge-ui.forge-columns, so with the layout off (or the main
+   switch off) none of it reaches the page. Sizes come from css/tokens.css; the reading column's width,
+   --forge-columns-width, is set on body by columns.js from the Reading width setting. */
+
+body.forge-ui.forge-columns {
+    --forge-columns-left: calc(var(--forge-rail-w) + var(--forge-chats-w));
+    --forge-columns-right: var(--forge-stage-aside, 0px);
+    /* The surfaces: the rail is the darkest, the side panels sit between it and the chat */
+    --forge-columns-rail: color-mix(in srgb, var(--forge-bg) 70%, black);
+    --forge-columns-side: color-mix(in srgb, var(--forge-bg) 88%, var(--forge-card));
+    --forge-columns-line: color-mix(in srgb, var(--forge-border) 45%, var(--forge-card));
+    --forge-columns-hover: color-mix(in srgb, var(--forge-border) 55%, var(--forge-card));
+    /* SillyTavern starts the chat column below --topBarBlockSize; our strip takes the top bar's place */
+    --topBarBlockSize: var(--forge-head-h);
+}
+
+body.forge-ui.forge-columns.forge-columns-profile {
+    --forge-columns-right: calc(var(--forge-profile-w) + var(--forge-stage-aside, 0px));
+}
+
+/* A narrow window has no room for the profile: the chat keeps it */
+@media (max-width: 1279px) {
+    body.forge-ui.forge-columns.forge-columns-profile {
+        --forge-columns-right: var(--forge-stage-aside, 0px);
+    }
+
+    body.forge-ui.forge-columns #forge-profile {
+        display: none;
+    }
+}
+
+/* menu.js hides the top bar for this layout and builds its two round buttons; the rail has those jobs here */
+body.forge-ui.forge-columns #forge-menu-buttons {
+    display: none;
+}
+
+/* ---------- The chat column ---------- */
+
+body.forge-ui.forge-columns #sheld {
+    left: var(--forge-columns-left);
+    right: var(--forge-columns-right);
+    width: auto;
+    max-width: none;
+    margin: 0;
+    background: var(--forge-card);
+}
+
+body.forge-ui.forge-columns #chat {
+    padding: var(--forge-space-4) var(--forge-space-5) var(--forge-space-3);
+    background: var(--forge-card);
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+/* One message: no box, the picture at the left, name and time on one line, then the text */
+body.forge-ui.forge-columns #chat > .mes {
+    width: 100%;
+    max-width: var(--forge-columns-width);
+    margin: 0 auto;
+    padding: var(--forge-space-3) var(--forge-space-2);
+    background: none;
+    border: 0;
+    border-radius: var(--forge-radius-md);
+    box-shadow: none;
+    opacity: 1;
+}
+
+body.forge-ui.forge-columns #chat > .mes:hover {
+    background: color-mix(in srgb, var(--forge-bg) 35%, var(--forge-card));
+}
+
+body.forge-ui.forge-columns #chat > .mes .mesAvatarWrapper {
+    min-width: 0;
+    width: 42px;
+    margin-right: var(--forge-space-3);
+}
+
+body.forge-ui.forge-columns #chat > .mes .mesAvatarWrapper .avatar,
+body.forge-ui.forge-columns #chat > .mes .mesAvatarWrapper .avatar img {
+    width: 42px;
+    height: 42px;
+    border: 0;
+    border-radius: var(--forge-radius-pill);
+    box-shadow: none;
+}
+
+body.forge-ui.forge-columns #chat > .mes .ch_name .name_text {
+    font-size: 0.86em;
+    letter-spacing: 0.02em;
+}
+
+body.forge-ui.forge-columns #chat > .mes[is_user="true"] .ch_name .name_text {
+    color: var(--forge-muted);
+}
+
+body.forge-ui.forge-columns #chat > .mes .mes_text {
+    padding: var(--forge-space-1) 0 0;
+    line-height: 1.62;
+}
+
+body.forge-ui.forge-columns #chat > .mes .mes_text p {
+    margin: 0 0 0.6em;
+}
+
+body.forge-ui.forge-columns #chat > .mes .mes_text p:last-child {
+    margin-bottom: 0;
+}
+
+/* ---------- The message box: one rounded card under the reading column ---------- */
+
+body.forge-ui.forge-columns #form_sheld {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: calc(var(--forge-columns-width) + 2 * var(--forge-space-5));
+    margin: 0 auto;
+    padding: 0 var(--forge-space-5) var(--forge-space-5);
+    background: none;
+}
+
+body.forge-ui.forge-columns #send_form {
+    padding: var(--forge-space-2);
+    background: var(--forge-columns-side);
+    border: 1px solid var(--forge-columns-hover);
+    border-radius: var(--forge-radius-lg);
+    box-shadow: none;
+}
+
+body.forge-ui.forge-columns #send_form:has(#send_textarea:focus-visible) {
+    border-color: color-mix(in srgb, var(--forge-ember) 70%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--forge-ember) 35%, transparent);
+}
+
+body.forge-ui.forge-columns #send_but {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--forge-round);
+    height: var(--forge-round);
+    border-radius: var(--forge-radius-md);
+    background: var(--forge-ember);
+    color: var(--forge-bg);
+    opacity: 1;
+}
+
+/* The arrow is drawn in the page colour on the ember button (style.css colours it ember for the classic look) */
+body.forge-ui.forge-columns #send_form #rightSendForm > #send_but {
+    color: var(--forge-bg);
+}
+
+/* ---------- Shared small parts ---------- */
+
+body.forge-ui.forge-columns #forge-rail,
+body.forge-ui.forge-columns #forge-chats,
+body.forge-ui.forge-columns #forge-chat-head,
+body.forge-ui.forge-columns #forge-profile {
+    position: fixed;
+    z-index: var(--forge-z-columns);
+    box-sizing: border-box;
+    color: var(--forge-text);
+    font-family: var(--forge-body-font);
+}
+
+body.forge-ui.forge-columns :is(#forge-rail, #forge-chats, #forge-chat-head, #forge-profile) p {
+    margin: 0;
+}
+
+body.forge-ui.forge-columns :is(#forge-rail, #forge-chats, #forge-chat-head, #forge-profile) button {
+    font-family: inherit;
+    cursor: pointer;
+}
+
+body.forge-ui.forge-columns .forge-line-icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* A round picture with the name's first letter behind it */
+body.forge-ui.forge-columns .forge-face {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 38px;
+    height: 38px;
+    overflow: hidden;
+    border-radius: var(--forge-radius-pill);
+    background: color-mix(in srgb, var(--forge-crimson) 55%, var(--forge-card));
+    color: var(--forge-text);
+    font-family: var(--forge-heading);
+    font-weight: 700;
+    font-size: 16px;
+}
+
+body.forge-ui.forge-columns .forge-face img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+    object-fit: cover;
+    object-position: center top;
+}
+
+body.forge-ui.forge-columns .forge-icon-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: var(--forge-round);
+    height: var(--forge-round);
+    padding: 0;
+    border: 0;
+    border-radius: var(--forge-radius-md);
+    background: transparent;
+    color: var(--forge-muted);
+    transition: background var(--forge-fast), color var(--forge-fast);
+}
+
+body.forge-ui.forge-columns .forge-icon-button:hover,
+body.forge-ui.forge-columns .forge-icon-button[aria-pressed="true"] {
+    background: var(--forge-columns-hover);
+    color: var(--forge-text);
+}
+
+/* ---------- The rail ---------- */
+
+body.forge-ui.forge-columns #forge-rail {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: var(--forge-rail-w);
+    padding: var(--forge-space-3) 0;
+    background: var(--forge-columns-rail);
+}
+
+body.forge-ui.forge-columns .forge-rail-top,
+body.forge-ui.forge-columns .forge-rail-foot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--forge-space-2);
+    flex-shrink: 0;
+}
+
+body.forge-ui.forge-columns .forge-rail-foot {
+    padding-top: var(--forge-space-2);
+}
+
+body.forge-ui.forge-columns .forge-rail-rule {
+    width: 30px;
+    height: 2px;
+    margin: var(--forge-space-1) 0 var(--forge-space-2);
+    border-radius: 2px;
+    background: var(--forge-columns-hover);
+}
+
+body.forge-ui.forge-columns .forge-rail-list {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--forge-space-2);
+    flex: 1 1 0;
+    width: 100%;
+    min-height: 0;
+    padding: 2px 0;
+    overflow-y: auto;
+    scrollbar-width: none;
+}
+
+body.forge-ui.forge-columns .forge-rail-list::-webkit-scrollbar {
+    display: none;
+}
+
+body.forge-ui.forge-columns .forge-rail-item {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: none;
+}
+
+body.forge-ui.forge-columns .forge-rail-item .forge-face {
+    width: 46px;
+    height: 46px;
+    font-size: 18px;
+    transition: border-radius var(--forge-fast);
+}
+
+body.forge-ui.forge-columns .forge-rail-item:hover .forge-face,
+body.forge-ui.forge-columns .forge-rail-item[aria-current="true"] .forge-face {
+    border-radius: var(--forge-radius-lg);
+}
+
+/* The white pill at the window's edge marks the open character */
+body.forge-ui.forge-columns .forge-rail-item::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 4px;
+    height: 0;
+    border-radius: 0 4px 4px 0;
+    background: var(--forge-text);
+    transform: translateY(-50%);
+    transition: height var(--forge-fast);
+}
+
+body.forge-ui.forge-columns .forge-rail-item:hover::before {
+    height: 18px;
+}
+
+body.forge-ui.forge-columns .forge-rail-item[aria-current="true"]::before {
+    height: 36px;
+}
+
+body.forge-ui.forge-columns .forge-rail-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--forge-radius-pill);
+    background: var(--forge-card);
+    color: var(--forge-brass);
+    transition: background var(--forge-fast), color var(--forge-fast), border-radius var(--forge-fast);
+}
+
+body.forge-ui.forge-columns .forge-rail-button:hover {
+    border-radius: var(--forge-radius-lg);
+    background: var(--forge-columns-hover);
+    color: var(--forge-text);
+}
+
+body.forge-ui.forge-columns .forge-rail-home,
+body.forge-ui.forge-columns .forge-rail-home:hover {
+    border-radius: var(--forge-radius-lg);
+    background: var(--forge-ember);
+    color: var(--forge-bg);
+}
+
+/* ---------- The chat list ---------- */
+
+body.forge-ui.forge-columns #forge-chats {
+    top: 0;
+    bottom: 0;
+    left: var(--forge-rail-w);
+    display: flex;
+    flex-direction: column;
+    width: var(--forge-chats-w);
+    background: var(--forge-columns-side);
+}
+
+body.forge-ui.forge-columns .forge-chats-head {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    height: var(--forge-head-h);
+    padding: 0 var(--forge-space-4);
+    border-bottom: 1px solid var(--forge-columns-line);
+}
+
+body.forge-ui.forge-columns .forge-chats-name {
+    overflow: hidden;
+    font-family: var(--forge-heading);
+    font-weight: 700;
+    font-size: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body.forge-ui.forge-columns .forge-chats-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--forge-space-3);
+    flex: 1 1 0;
+    min-height: 0;
+    padding: var(--forge-space-3) 10px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+
+body.forge-ui.forge-columns .forge-chats-hint,
+body.forge-ui.forge-columns .forge-profile-hint {
+    padding: var(--forge-space-2);
+    color: var(--forge-muted);
+    font-size: 15px;
+    line-height: 1.4;
+}
+
+body.forge-ui.forge-columns .forge-chats-new,
+body.forge-ui.forge-columns .forge-profile-edit {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--forge-space-2);
+    flex-shrink: 0;
+    height: var(--forge-round);
+    border: 1px solid var(--forge-border);
+    border-radius: var(--forge-radius-md);
+    background: transparent;
+    color: var(--forge-brass);
+    font-size: 15px;
+    font-weight: 700;
+    transition: background var(--forge-fast), color var(--forge-fast);
+}
+
+body.forge-ui.forge-columns .forge-chats-new:hover,
+body.forge-ui.forge-columns .forge-profile-edit:hover {
+    background: var(--forge-columns-hover);
+    color: var(--forge-text);
+}
+
+body.forge-ui.forge-columns .forge-chats-new .forge-line-icon {
+    width: 16px;
+    height: 16px;
+    stroke-width: 2;
+}
+
+body.forge-ui.forge-columns .forge-chats-label,
+body.forge-ui.forge-columns .forge-profile-label {
+    color: var(--forge-muted);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+body.forge-ui.forge-columns .forge-chats-label {
+    margin: var(--forge-space-1) 0 0 var(--forge-space-2);
+}
+
+body.forge-ui.forge-columns .forge-chats-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+body.forge-ui.forge-columns .forge-chats-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 9px 10px;
+    border: 0;
+    border-radius: var(--forge-radius-md);
+    background: transparent;
+    color: var(--forge-muted);
+    text-align: left;
+    transition: background var(--forge-fast);
+}
+
+body.forge-ui.forge-columns .forge-chats-item:hover {
+    background: color-mix(in srgb, var(--forge-columns-hover) 55%, transparent);
+}
+
+body.forge-ui.forge-columns .forge-chats-item[aria-current="true"] {
+    background: var(--forge-columns-hover);
+}
+
+body.forge-ui.forge-columns .forge-chats-line {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--forge-space-2);
+}
+
+body.forge-ui.forge-columns .forge-chats-title {
+    overflow: hidden;
+    min-width: 0;
+    color: color-mix(in srgb, var(--forge-text) 85%, var(--forge-muted));
+    font-size: 16px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body.forge-ui.forge-columns .forge-chats-item[aria-current="true"] .forge-chats-title {
+    color: var(--forge-text);
+    font-weight: 700;
+}
+
+body.forge-ui.forge-columns .forge-chats-time {
+    flex-shrink: 0;
+    font-size: 12px;
+}
+
+body.forge-ui.forge-columns .forge-chats-preview {
+    overflow: hidden;
+    font-size: 14px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body.forge-ui.forge-columns .forge-chats-you {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    height: 60px;
+    padding: 0 10px;
+    background: color-mix(in srgb, var(--forge-columns-rail) 60%, var(--forge-columns-side));
+}
+
+body.forge-ui.forge-columns .forge-chats-you-text {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+body.forge-ui.forge-columns .forge-chats-you-name {
+    overflow: hidden;
+    font-size: 15px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body.forge-ui.forge-columns .forge-chats-you-note {
+    color: var(--forge-muted);
+    font-size: 13px;
+}
+
+/* ---------- The strip over the chat ---------- */
+
+body.forge-ui.forge-columns #forge-chat-head {
+    top: 0;
+    left: var(--forge-columns-left);
+    right: var(--forge-columns-right);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--forge-space-4);
+    height: var(--forge-head-h);
+    padding: 0 var(--forge-space-3) 0 var(--forge-space-5);
+    border-bottom: 1px solid var(--forge-columns-line);
+    background: var(--forge-card);
+}
+
+body.forge-ui.forge-columns .forge-head-titles {
+    display: flex;
+    align-items: baseline;
+    gap: var(--forge-space-3);
+    min-width: 0;
+}
+
+body.forge-ui.forge-columns .forge-head-title {
+    overflow: hidden;
+    font-family: var(--forge-heading);
+    font-weight: 700;
+    font-size: 17px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body.forge-ui.forge-columns .forge-head-sub {
+    flex-shrink: 0;
+    color: var(--forge-muted);
+    font-size: 14px;
+}
+
+body.forge-ui.forge-columns .forge-head-buttons {
+    display: flex;
+    align-items: center;
+    gap: var(--forge-space-1);
+    flex-shrink: 0;
+}
+
+/* ---------- The profile ---------- */
+
+body.forge-ui.forge-columns #forge-profile {
+    top: 0;
+    bottom: 0;
+    right: var(--forge-stage-aside, 0px);
+    display: none;
+    flex-direction: column;
+    width: var(--forge-profile-w);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    background: var(--forge-columns-side);
+}
+
+@media (min-width: 1280px) {
+    body.forge-ui.forge-columns.forge-columns-profile #forge-profile {
+        display: flex;
+    }
+}
+
+body.forge-ui.forge-columns .forge-profile-banner {
+    flex-shrink: 0;
+    height: 132px;
+    background-color: color-mix(in srgb, var(--forge-crimson) 30%, var(--forge-card));
+    background-position: center;
+    background-size: cover;
+}
+
+body.forge-ui.forge-columns .forge-profile-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--forge-space-4);
+    flex: 1 0 auto;
+    padding: 0 18px 18px;
+}
+
+body.forge-ui.forge-columns .forge-profile-hint {
+    padding-top: var(--forge-space-4);
+}
+
+body.forge-ui.forge-columns .forge-profile-top {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    position: relative;
+    flex-shrink: 0;
+    margin-top: -44px;
+}
+
+body.forge-ui.forge-columns .forge-profile-face {
+    width: 88px;
+    height: 88px;
+    margin-bottom: var(--forge-space-2);
+    border: 5px solid var(--forge-columns-side);
+    font-size: 34px;
+}
+
+body.forge-ui.forge-columns .forge-profile-name {
+    font-family: var(--forge-heading);
+    font-weight: 700;
+    font-size: 23px;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+
+body.forge-ui.forge-columns .forge-profile-tagline {
+    color: var(--forge-brass);
+    font-size: 16px;
+}
+
+body.forge-ui.forge-columns .forge-profile-card {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    flex-shrink: 0;
+    padding: 14px;
+    border-radius: var(--forge-radius-md);
+    background: var(--forge-card);
+}
+
+body.forge-ui.forge-columns .forge-profile-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+body.forge-ui.forge-columns .forge-profile-section + .forge-profile-section {
+    padding-top: 14px;
+    border-top: 1px solid var(--forge-columns-hover);
+}
+
+body.forge-ui.forge-columns .forge-profile-about {
+    color: color-mix(in srgb, var(--forge-text) 85%, var(--forge-muted));
+    font-size: 16px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+body.forge-ui.forge-columns .forge-profile-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+body.forge-ui.forge-columns .forge-profile-chip {
+    padding: 4px 11px;
+    border-radius: var(--forge-radius-pill);
+    background: var(--forge-columns-hover);
+    font-size: 14px;
+    overflow-wrap: anywhere;
+}
+
+body.forge-ui.forge-columns .forge-profile-cast {
+    display: flex;
+    flex-direction: column;
+    gap: var(--forge-space-1);
+    flex-shrink: 0;
+}
+
+body.forge-ui.forge-columns .forge-profile-cast .forge-profile-label {
+    margin: 0 0 var(--forge-space-1) var(--forge-space-1);
+}
+
+body.forge-ui.forge-columns .forge-profile-person {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px var(--forge-space-1);
+    font-size: 16px;
+    font-weight: 500;
+}
+
+body.forge-ui.forge-columns .forge-profile-person .forge-face {
+    width: 34px;
+    height: 34px;
+    font-size: 14px;
+}
+
+body.forge-ui.forge-columns .forge-profile-you {
+    color: var(--forge-muted);
+    font-weight: 400;
+}
+
+body.forge-ui.forge-columns .forge-profile-gap {
+    flex: 1 1 0;
+}

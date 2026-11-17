@@ -46,6 +46,14 @@ body.forge-ui {
     --forge-z-plate: 3;
     --forge-z-lift: 1000;
 
+    /* The Three columns layout: the character rail, the chat list, the profile and the strip over the chat.
+       Its panels sit one layer above the chat column. */
+    --forge-rail-w: 72px;
+    --forge-chats-w: 252px;
+    --forge-profile-w: 304px;
+    --forge-head-h: 56px;
+    --forge-z-columns: 31;
+
     /* The menu panel's backdrop dims the page by 55%, and the panel grows from 0.98 as it opens */
     --forge-menu-dim: rgb(0 0 0 / 55%);
     --forge-menu-grow: 0.98;
