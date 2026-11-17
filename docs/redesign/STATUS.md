@@ -19,8 +19,8 @@ States: `todo`, `doing`, `checked` (a second agent passed it), `merged`, `blocke
 | `P4-keys-and-motion` | merged | `0e20e33` | Failed the first check (Shift+Tab left the panel; focus not given back after a mouse open), fixed, passed the second (checked by the lead, who did not write it). For I1: a token for the 0.98 scale. Lane P done. |
 | `I1-together` | merged | `bf08911` | Built and tested by the lead, no independent check. RPG Companion's right panel now gets its room; main switch off leaves nothing; lane tokens added. |
 | `I2-phone` | merged | `a40c2fd` | Built and tested by the lead, no independent check. Bar spans the form; 36px in short landscape. |
-| `I3-settings-and-look` | todo | | |
-| `I4-sign-off` | todo | | |
+| `I3-settings-and-look` | merged | `e1f0fa1` | Built and tested by the lead, no independent check. Labels match bible 7; greyed-out settings carry a title; out-of-range feature numbers are ignored on import; changelog and README written. |
+| `I4-sign-off` | merged | (this commit's merge) | Full suite 28 passed; the older Forge tests pass (forge-leave-out not run: it opens the sandbox without the Forge Tester chat and writes to it). Review found nothing. |
 
 ## Already in place (2026-11-15)
 
@@ -30,4 +30,7 @@ States: `todo`, `doing`, `checked` (a second agent passed it), `merged`, `blocke
 
 ## Waiting on the owner
 
-- Wave 1 is complete (2026-11-16): every batch is merged and `node tests/run.mjs` passes on `overhaul` (24 runs). M3's third fix has had no independent check. Wave 2 has not started.
+- The redesign is complete on `overhaul` (2026-11-16): every batch is merged and `node tests/run.mjs` passes (28 runs). Nothing has been pushed.
+- Try it in TauriTavern with `docs/redesign/OWNER-CHECK.md` (about ten minutes).
+- Then the choices at the end of that file: defaults, voice, Story, See, what ships to `main`, and how the phone gets it.
+- Not independently checked: M3's last fix and all of wave 2 (I1 to I4), built and tested by the lead at the owner's request.
