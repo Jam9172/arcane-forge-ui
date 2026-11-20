@@ -53,6 +53,8 @@ body.forge-ui {
     --forge-profile-w: 304px;
     --forge-head-h: 56px;
     --forge-z-columns: 31;
+    /* Author's Note and CFG Scale open as a window this wide, beside the rail */
+    --forge-note-w: 440px;
 
     /* The menu panel's backdrop dims the page by 55%, and the panel grows from 0.98 as it opens */
     --forge-menu-dim: rgb(0 0 0 / 55%);

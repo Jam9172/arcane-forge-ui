@@ -37,6 +37,19 @@ body.forge-ui.forge-columns #forge-menu-buttons {
     display: none;
 }
 
+/* SillyTavern's Author's Note and CFG Scale windows are as wide as the gap left of its centred chat column,
+   which this layout does not have (the window came out a sliver). Here they open beside the rail, over the
+   chat list, at a width of their own and the window's full height at most. No !important: a window moved
+   or resized with MovingUI keeps the place and size it was given. */
+body.forge-ui.forge-columns #floatingPrompt,
+body.forge-ui.forge-columns #cfgConfig {
+    top: 0;
+    left: var(--forge-rail-w);
+    width: min(var(--forge-note-w), calc(100dvw - var(--forge-rail-w)));
+    max-height: 100dvh;
+    box-sizing: border-box;
+}
+
 /* ---------- The chat column ---------- */
 
 body.forge-ui.forge-columns #sheld {

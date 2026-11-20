@@ -89,6 +89,14 @@ check('and the message box lines up with it', fullForm && near(fullForm.left, fu
 await shot('columns-full.png');
 await setForge(page, { columnsReading: 720 });
 
+// Author's Note opens as a window of a usable width beside the rail (SillyTavern would size it from the gap
+// beside its centred chat column, which this layout does not have)
+await page.evaluate(() => { document.getElementById('floatingPrompt').style.display = 'flex'; });
+const note = await box(page, '#floatingPrompt');
+check("Author's Note is 440px wide and starts at the rail's edge", note && note.right - note.left === 440 && note.left === rail.right && note.top === 0, note ? `${note.left},${note.top} to ${note.right},${note.bottom}` : 'not shown');
+await shot('columns-note.png');
+await page.evaluate(() => { document.getElementById('floatingPrompt').style.display = ''; });
+
 // The rail's Menu button opens SillyTavern's menus in the panel
 await page.click('#forge-rail .forge-rail-foot [aria-label="Menu"]');
 await page.waitForTimeout(700);
