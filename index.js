@@ -3,6 +3,7 @@ import { saveSettingsDebounced, eventSource, event_types } from '../../../../scr
 import { download } from '../../../utils.js';
 import { buildAiTab, restoreAiTab, refreshModelLine, clearOmittedParams, restoreOmittedParams, renameOmittedParamsBackup } from './aiTab.js';
 import { installDeleteModeScrollGuard } from './deleteMode.js';
+import { installDropdownScrollGuard } from './dropdownScroll.js';
 import * as stage from './stage.js';
 import * as columns from './columns.js';
 import * as menu from './menu.js';
@@ -584,4 +585,5 @@ jQuery(() => {
     if (event_types.PRESET_RENAMED) eventSource.on(event_types.PRESET_RENAMED, renameOmittedParamsBackup);
     // TauriTavern: "Delete messages" jumped the chat back to the first loaded message
     installDeleteModeScrollGuard(() => settings().enabled);
+    installDropdownScrollGuard(() => settings().enabled);
 });
