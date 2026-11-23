@@ -952,6 +952,61 @@ body.forge-ui #forge-card .forge-card-text {
     white-space: pre-wrap;
 }
 
+body.forge-ui #forge-card .forge-card-label-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--forge-space-3);
+}
+
+body.forge-ui #forge-card .forge-card-status {
+    color: var(--forge-muted);
+    font-size: 13px;
+}
+
+body.forge-ui #forge-card .forge-card-status-bad {
+    color: var(--forge-crimson-bright, #e0564f);
+    font-weight: 700;
+}
+
+/* About, typed in place: it reads as the text it is until it is hovered or clicked */
+body.forge-ui #forge-card textarea.forge-card-area {
+    display: block;
+    box-sizing: content-box;
+    width: calc(100% - 16px);
+    min-height: 2lh;
+    max-height: none;
+    margin: -4px -8px;
+    padding: 4px 8px;
+    overflow: hidden;
+    resize: none;
+    border: 0;
+    border-radius: var(--forge-radius-sm, 6px);
+    outline: 1px solid transparent;
+    background: transparent;
+    box-shadow: none;
+    color: var(--forge-text);
+    font-family: inherit;
+    cursor: text;
+}
+
+body.forge-ui #forge-card textarea.forge-card-area:hover {
+    outline-color: var(--forge-border);
+}
+
+body.forge-ui #forge-card textarea.forge-card-area:focus {
+    outline-color: var(--forge-brass);
+    background: color-mix(in srgb, var(--forge-bg) 60%, var(--forge-card));
+}
+
+body.forge-ui.forge-columns .forge-profile-opens {
+    cursor: pointer;
+}
+
+body.forge-ui.forge-columns .forge-profile-top {
+    z-index: 1;
+}
+
 body.forge-ui #forge-card .forge-card-empty {
     color: var(--forge-muted);
     font-size: 16px;

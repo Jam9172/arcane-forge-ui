@@ -471,6 +471,14 @@ function renderProfile(ctx, now) {
     const name = el('p', { class: 'forge-profile-name' });
     name.textContent = now.name;
     top.append(cardFace(picture, character ? { kind: 'character', avatar: character.avatar } : null, now.name), name);
+    // The banner and the name open the card too: a bigger thing to hit than the picture alone
+    if (character && currentSettings().columnsCard !== false) {
+        for (const part of [banner, name]) {
+            part.classList.add('forge-profile-opens');
+            part.title = `${now.name}: profile`;
+            part.addEventListener('click', () => showCard({ kind: 'character', avatar: character.avatar }));
+        }
+    }
     const tagline = character ? tagNames(ctx, character.avatar).slice(0, 3).join(' · ') : `${members(ctx, now.group).length} characters`;
     if (tagline) {
         const line = el('p', { class: 'forge-profile-tagline' });

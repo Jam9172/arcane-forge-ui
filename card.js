@@ -6,12 +6,21 @@
 // inside it, Escape closes it, and it gives the focus back. Every piece of text goes in as text, never as
 // markup. From a chat message only two things are read: who sent it and which picture it carries. Its text
 // is never read.
+//
+// About can be edited in place. What is typed is saved to the character or the persona itself, the same way
+// SillyTavern's own editor saves it: a short while after the last key, and when the box or the card is left.
 import { user_avatar } from '../../../personas.js';
 
 const CARD_ID = 'forge-card';
 const SVG = 'http://www.w3.org/2000/svg';
 const CLOSE_ICON = 'M6 6l12 12M18 6L6 18';
 const GROW_ICON = 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5';
+const ABOUT_ID = 'forge-card-about';
+const SAVE_AFTER_MS = 700;
+const SAVE_WAIT_MS = 8000;
+
+// Saves what is still unsaved in the open card's About box; set while a card with one is open
+let saveOpenCard = null;
 
 function context() {
     return globalThis.SillyTavern.getContext();
@@ -111,6 +120,8 @@ export function openCard(who, options = {}) {
         head.append(tagline);
     }
     const body = el('div', { class: 'forge-card-body', tabindex: '0' });
+    const about = profile.about ? aboutBox(profile.about, body) : null;
+    if (about) body.append(about.section);
     for (const [title, text] of profile.sections) {
         if (!text) continue;
         const section = el('div', { class: 'forge-card-section' });
@@ -158,18 +169,152 @@ export function openCard(who, options = {}) {
     dialog.addEventListener('click', (event) => {
         if (event.target === dialog) closeCard();
     });
-    dialog.addEventListener('close', () => dialog.remove());
+    dialog.addEventListener('close', () => {
+        leaveCard();
+        dialog.remove();
+    });
     document.body.append(dialog);
     dialog.showModal();
+    saveOpenCard = about?.save ?? null;
+    about?.fit();
     close.focus();
     return true;
 }
 
 export function closeCard() {
+    leaveCard();
     const dialog = document.getElementById(CARD_ID);
     if (!dialog) return;
     if (dialog.open) dialog.close();
     dialog.remove();
+}
+
+function leaveCard() {
+    const save = saveOpenCard;
+    saveOpenCard = null;
+    if (save) void save();
+}
+
+// The About section as a box to type in. It shows the text with the macros filled in ({{char}} as the name)
+// until it is clicked, and the text as it is stored while it is being edited.
+function aboutBox(about, scroller) {
+    const section = el('div', { class: 'forge-card-section forge-card-about' });
+    const row = el('div', { class: 'forge-card-label-row' });
+    const label = el('label', { class: 'forge-card-label', for: ABOUT_ID });
+    label.textContent = 'About';
+    const status = el('span', { class: 'forge-card-status', role: 'status' });
+    row.append(label, status);
+    const area = el('textarea', { id: ABOUT_ID, class: 'forge-card-text forge-card-area', rows: '2', placeholder: 'Nothing here yet. Click to write a description.', title: 'Click to edit. Changes are saved to the profile.' });
+    let raw = about.raw;
+    let unsaved = false;
+    let timer = 0;
+    area.value = about.fill(raw);
+    const fit = () => {
+        if (!area.getClientRects().length) return;
+        const at = scroller.scrollTop;
+        area.style.height = 'auto';
+        area.style.height = `${area.scrollHeight}px`;
+        scroller.scrollTop = at;
+    };
+    const save = async () => {
+        clearTimeout(timer);
+        if (!unsaved) return;
+        unsaved = false;
+        const text = raw;
+        status.textContent = 'Saving…';
+        status.classList.remove('forge-card-status-bad');
+        try {
+            await about.save(text);
+            if (!unsaved) status.textContent = 'Saved';
+        } catch (error) {
+            console.error('[Arcane Forge UI] The profile could not be saved', error);
+            if (raw === text) unsaved = true;
+            status.textContent = 'Not saved';
+            status.classList.add('forge-card-status-bad');
+        }
+    };
+    area.addEventListener('focus', () => {
+        if (area.value === raw) return;
+        area.value = raw;
+        fit();
+    });
+    area.addEventListener('input', () => {
+        raw = area.value;
+        unsaved = true;
+        status.textContent = '';
+        fit();
+        clearTimeout(timer);
+        timer = setTimeout(save, SAVE_AFTER_MS);
+    });
+    area.addEventListener('blur', async () => {
+        await save();
+        if (document.activeElement === area || !area.isConnected) return;
+        area.value = about.fill(raw);
+        fit();
+    });
+    // The box is as tall as its text, also after the card changes size or comes back from the whole picture
+    if (typeof ResizeObserver === 'function') new ResizeObserver(fit).observe(scroller);
+    section.append(row, area);
+    return { section, fit, save };
+}
+
+// Saves a character's description. For the character open in SillyTavern's own editor it goes through that
+// editor's field, so the two never disagree; for any other character it goes straight to the server.
+async function saveCharacterAbout(avatar, text) {
+    const ctx = context();
+    const characters = ctx.characters ?? [];
+    const index = characters.findIndex((c) => c.avatar === avatar);
+    const character = characters[index];
+    if (!character) throw new Error('The character is no longer there');
+    const edited = ctx.eventTypes?.CHARACTER_EDITED;
+    const field = document.getElementById('description_textarea');
+    const inEditor = field && ctx.menuType !== 'create' && String(ctx.characterId) === String(index) && document.getElementById('avatar_url_pole')?.value === avatar;
+    if (inEditor && edited) {
+        await new Promise((resolve, reject) => {
+            const done = () => {
+                clearTimeout(waiting);
+                ctx.eventSource.removeListener(edited, done);
+                resolve();
+            };
+            const waiting = setTimeout(() => {
+                ctx.eventSource.removeListener(edited, done);
+                reject(new Error('SillyTavern did not confirm the save'));
+            }, SAVE_WAIT_MS);
+            ctx.eventSource.on(edited, done);
+            field.value = text;
+            field.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        return;
+    }
+    const response = await fetch('/api/characters/merge-attributes', {
+        method: 'POST',
+        headers: ctx.getRequestHeaders(),
+        body: JSON.stringify({ avatar, description: text, data: { description: text } }),
+    });
+    if (!response.ok) throw new Error(`The server answered ${response.status}`);
+    character.description = text;
+    if (character.data) character.data.description = text;
+    try {
+        await ctx.getOneCharacter?.(avatar);
+    } catch { /* the copy in memory is already changed */ }
+    if (edited) await ctx.eventSource.emit(edited, { detail: { id: String(index), character: (ctx.characters ?? [])[index] } });
+}
+
+// Saves a persona's description: the one in use through SillyTavern's own field, any other in the settings
+async function savePersonaAbout(file, text) {
+    const ctx = context();
+    const power = ctx.powerUserSettings;
+    const field = document.getElementById('persona_description');
+    if (file === user_avatar && field) {
+        field.value = text;
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+        return;
+    }
+    power.persona_descriptions ??= {};
+    const saved = power.persona_descriptions[file] ??= { description: '', position: 0, depth: 2, role: 0, lorebook: '', title: '' };
+    saved.description = text;
+    if (file === user_avatar) power.persona_description = text;
+    ctx.saveSettingsDebounced();
 }
 
 function characterProfile(who) {
@@ -184,8 +329,10 @@ function characterProfile(who) {
         tagline: tags.join(' · '),
         image: `/characters/${encodeURIComponent(character.avatar)}`,
         thumb: thumbnail(ctx, 'avatar', character.avatar),
+        // A character whose full text is not loaded yet is shown as it is, and not edited
+        about: character.shallow ? null : { raw: String(character.description ?? ''), fill: (text) => filled(context(), text), save: (text) => saveCharacterAbout(character.avatar, text) },
         sections: [
-            ['About', filled(ctx, character.description)],
+            ['About', character.shallow ? filled(ctx, character.description) : ''],
             ['Personality', filled(ctx, character.personality)],
             ["Creator's notes", filled(ctx, character.data?.creator_notes || character.creatorcomment)],
         ],
@@ -205,7 +352,8 @@ function personaProfile(who) {
         tagline: String(saved.title ?? '').trim(),
         image: `/User Avatars/${encodeURIComponent(who.file)}`,
         thumb: thumbnail(ctx, 'persona', who.file),
-        sections: [['About', filled(ctx, description)]],
+        about: { raw: String(description ?? ''), fill: (text) => filled(context(), text), save: (text) => savePersonaAbout(who.file, text) },
+        sections: [],
         books: [saved.lorebook].filter((book) => typeof book === 'string' && book),
     };
 }

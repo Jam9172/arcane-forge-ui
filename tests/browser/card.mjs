@@ -52,15 +52,52 @@ await page.waitForTimeout(300);
 c = await card();
 check('clicking it again brings the profile back', c && !c.whole && c.sideShown, JSON.stringify(c));
 
-await page.keyboard.press('Escape');
+// About is typed in place and saved to the character itself (the sandbox's test character; put back after)
+const stored = () => page.evaluate(() => { const ctx = SillyTavern.getContext(); return { character: ctx.characters[ctx.characterId].description, field: document.getElementById('description_textarea').value, status: document.querySelector('#forge-card .forge-card-status')?.textContent, box: document.getElementById('forge-card-about')?.value }; });
+// The test helper answers saves itself, so nothing in the sandbox changes: what is checked is what was sent
+const sent = [];
+page.on('request', (request) => { if (request.url().endsWith('/api/characters/edit')) sent.push(request.postData() ?? ''); });
+const before = (await stored()).character;
+await page.click('#forge-card-about');
+await page.keyboard.press('ControlOrMeta+A');
+await page.keyboard.type('Edited in the card. {{char}} waves.');
+await page.waitForTimeout(3500);
+let now = await stored();
+check('typing in About sends the text to be saved to the character', sent.some((body) => body.includes('Edited in the card. {{char}} waves.')) && now.status === 'Saved', `${sent.length} saves; ${JSON.stringify(now)}`);
+check("and SillyTavern's own editor has the same text", now.field === 'Edited in the card. {{char}} waves.', now.field);
+const fits = await page.evaluate(() => { const a = document.getElementById('forge-card-about'); return a.scrollHeight <= a.clientHeight + 1; });
+check('the box is as tall as its text', fits);
+await page.click('#forge-card .forge-card-name');
 await page.waitForTimeout(300);
+now = await stored();
+check('out of the box, the text reads with the name filled in', now.box === `Edited in the card. ${names.character} waves.`, now.box);
+await shot('card-edited.png');
+await page.click('#forge-card-about');
+await page.keyboard.press('ControlOrMeta+A');
+await page.keyboard.insertText(before);
+// Closing straight after typing still saves
+await page.keyboard.press('Escape');
+await page.waitForTimeout(3500);
+now = await stored();
 check('Escape closes the card and takes it out of the page', (await card()) === null);
+check('closing the card straight after typing still saves (the old text is back)', sent.at(-1)?.includes(before) && now.field === before, `${sent.length} saves; ${JSON.stringify(now)}`);
 
 // The user's own message
 await page.locator('#chat > .mes[is_user="true"] .mesAvatarWrapper .avatar').last().click();
 await page.waitForTimeout(400);
 c = await card();
 check("clicking your own picture in the chat opens your persona's card", c?.open && c.name === names.user && c.kind.startsWith('Persona') && c.edit === 'Edit persona', JSON.stringify(c));
+const persona = () => page.evaluate(() => { const p = SillyTavern.getContext().powerUserSettings; return p.persona_description; });
+const personaBefore = await persona();
+await page.click('#forge-card-about');
+await page.keyboard.press('ControlOrMeta+A');
+await page.keyboard.type('A persona edited in the card.');
+await page.waitForTimeout(1200);
+check('typing in a persona\'s About saves it to the persona', (await persona()) === 'A persona edited in the card.' && await page.evaluate(() => document.getElementById('persona_description').value === 'A persona edited in the card.'), await persona());
+await page.keyboard.press('ControlOrMeta+A');
+if (personaBefore) await page.keyboard.insertText(personaBefore); else await page.keyboard.press('Backspace');
+await page.waitForTimeout(1200);
+check('and it is put back', (await persona()) === personaBefore, await persona());
 await shot('card-persona.png');
 await page.click('#forge-card .forge-card-close');
 await page.waitForTimeout(300);
@@ -74,6 +111,14 @@ check("the profile panel's picture opens the character's card", c?.open && c.nam
 await page.mouse.click(8, 8);
 await page.waitForTimeout(300);
 check('a click on the dimmed page beside the card closes it', (await card()) === null);
+for (const part of ['.forge-profile-banner', '.forge-profile-name']) {
+    await page.click(`#forge-profile ${part}`);
+    await page.waitForTimeout(400);
+    c = await card();
+    check(`the profile panel's ${part} opens the character's card too`, c?.open && c.name === names.character, JSON.stringify(c));
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+}
 await page.click('#forge-chats .forge-chats-you .forge-face-button');
 await page.waitForTimeout(400);
 c = await card();
