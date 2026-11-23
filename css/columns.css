@@ -743,3 +743,263 @@ body.forge-ui.forge-columns .forge-profile-you {
 body.forge-ui.forge-columns .forge-profile-gap {
     flex: 1 1 0;
 }
+
+/* ---------- Pictures that open a profile card ---------- */
+
+body.forge-ui.forge-columns .forge-face-button {
+    display: flex;
+    flex-shrink: 0;
+    align-self: flex-start;
+    padding: 0;
+    border: 0;
+    border-radius: var(--forge-radius-pill);
+    background: none;
+    cursor: pointer;
+}
+
+body.forge-ui.forge-columns .forge-profile-person .forge-face-button,
+body.forge-ui.forge-columns .forge-chats-you .forge-face-button {
+    align-self: center;
+}
+
+body.forge-ui.forge-columns .forge-face-button:hover .forge-face {
+    filter: brightness(1.15);
+}
+
+body.forge-ui.forge-columns #chat > .mes .mesAvatarWrapper .avatar {
+    cursor: pointer;
+}
+
+/* ---------- The profile card (card.js): the picture at the left, the profile beside it ---------- */
+
+body.forge-ui dialog#forge-card {
+    position: fixed;
+    inset: 0;
+    display: none;
+    grid-template-columns: minmax(0, 44%) minmax(0, 1fr);
+    box-sizing: border-box;
+    width: min(920px, calc(100vw - 2 * var(--forge-space-5)));
+    height: min(640px, calc(100dvh - 2 * var(--forge-space-5)));
+    max-width: none;
+    max-height: none;
+    margin: auto;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--forge-border);
+    border-radius: var(--forge-radius-lg);
+    background: color-mix(in srgb, var(--forge-bg) 88%, var(--forge-card));
+    box-shadow: var(--forge-shadow);
+    color: var(--forge-text);
+    font-family: var(--forge-body-font);
+}
+
+body.forge-ui dialog#forge-card[open] {
+    display: grid;
+}
+
+body.forge-ui dialog#forge-card::backdrop {
+    background: var(--forge-menu-dim);
+}
+
+body.forge-ui #forge-card p,
+body.forge-ui #forge-card h2 {
+    margin: 0;
+}
+
+body.forge-ui #forge-card button {
+    font-family: inherit;
+    cursor: pointer;
+}
+
+body.forge-ui #forge-card .forge-line-icon {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* The picture fills its half, cropped from the top; a click shows the whole of it across the card */
+body.forge-ui #forge-card .forge-card-picture {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+    background: color-mix(in srgb, var(--forge-crimson) 40%, var(--forge-bg));
+    cursor: zoom-in;
+}
+
+body.forge-ui #forge-card .forge-card-letter {
+    color: var(--forge-text);
+    font-family: var(--forge-heading);
+    font-weight: 700;
+    font-size: 120px;
+}
+
+body.forge-ui #forge-card .forge-card-picture img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+    object-fit: cover;
+    object-position: center top;
+}
+
+body.forge-ui #forge-card .forge-card-grow {
+    position: absolute;
+    left: var(--forge-space-3);
+    bottom: var(--forge-space-3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--forge-control);
+    height: var(--forge-control);
+    border-radius: var(--forge-radius-md);
+    background: rgb(0 0 0 / 55%);
+    color: var(--forge-text);
+}
+
+body.forge-ui #forge-card.forge-card-whole {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+body.forge-ui #forge-card.forge-card-whole .forge-card-side {
+    display: none;
+}
+
+body.forge-ui #forge-card.forge-card-whole .forge-card-picture {
+    background: var(--forge-bg);
+    cursor: zoom-out;
+}
+
+body.forge-ui #forge-card.forge-card-whole .forge-card-picture img {
+    object-fit: contain;
+    object-position: center;
+}
+
+body.forge-ui #forge-card .forge-card-side {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+body.forge-ui #forge-card .forge-card-head {
+    display: flex;
+    flex-direction: column;
+    gap: var(--forge-space-1);
+    flex-shrink: 0;
+    padding: var(--forge-space-5) calc(var(--forge-space-5) + var(--forge-round)) var(--forge-space-4) var(--forge-space-5);
+    border-bottom: 1px solid color-mix(in srgb, var(--forge-border) 55%, var(--forge-card));
+}
+
+body.forge-ui #forge-card .forge-card-kind,
+body.forge-ui #forge-card .forge-card-label {
+    color: var(--forge-muted);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+body.forge-ui #forge-card .forge-card-name {
+    font-family: var(--forge-heading);
+    font-weight: 700;
+    font-size: 30px;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+}
+
+body.forge-ui #forge-card .forge-card-tagline {
+    color: var(--forge-brass);
+    font-size: 16px;
+}
+
+body.forge-ui #forge-card .forge-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--forge-space-4);
+    flex: 1 1 0;
+    min-height: 0;
+    padding: var(--forge-space-4) var(--forge-space-5);
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+
+body.forge-ui #forge-card .forge-card-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px;
+    border-radius: var(--forge-radius-md);
+    background: var(--forge-card);
+}
+
+body.forge-ui #forge-card .forge-card-text {
+    font-size: 17px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+body.forge-ui #forge-card .forge-card-empty {
+    color: var(--forge-muted);
+    font-size: 16px;
+}
+
+body.forge-ui #forge-card .forge-card-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+body.forge-ui #forge-card .forge-card-chip {
+    padding: 4px 11px;
+    border-radius: var(--forge-radius-pill);
+    background: color-mix(in srgb, var(--forge-border) 55%, var(--forge-card));
+    font-size: 14px;
+    overflow-wrap: anywhere;
+}
+
+body.forge-ui #forge-card .forge-card-edit {
+    flex-shrink: 0;
+    height: var(--forge-round);
+    margin: 0 var(--forge-space-5) var(--forge-space-5);
+    border: 1px solid var(--forge-border);
+    border-radius: var(--forge-radius-md);
+    background: transparent;
+    color: var(--forge-brass);
+    font-size: 15px;
+    font-weight: 700;
+}
+
+body.forge-ui #forge-card .forge-card-edit:hover {
+    background: color-mix(in srgb, var(--forge-border) 55%, var(--forge-card));
+    color: var(--forge-text);
+}
+
+body.forge-ui #forge-card .forge-card-close {
+    position: absolute;
+    top: var(--forge-space-3);
+    right: var(--forge-space-3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--forge-round);
+    height: var(--forge-round);
+    padding: 0;
+    border: 0;
+    border-radius: var(--forge-radius-pill);
+    background: rgb(0 0 0 / 55%);
+    color: var(--forge-text);
+}

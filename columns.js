@@ -20,6 +20,7 @@ import { getGroupPastChats, openGroupById } from '../../../group-chats.js';
 import { user_avatar } from '../../../personas.js';
 import { timestampToMoment } from '../../../utils.js';
 import { selected_world_info } from '../../../world-info.js';
+import { closeCard, openCard, whoSent } from './card.js';
 
 export const id = 'columns';
 
@@ -28,12 +29,13 @@ export const id = 'columns';
 const WIDTH_MIN = 560;
 const WIDTH_MAX = 1600;
 
-export const defaults = { columnsProfile: true, columnsReading: WIDTH_MAX, columnsPreview: true };
+export const defaults = { columnsProfile: true, columnsReading: WIDTH_MAX, columnsPreview: true, columnsCard: true };
 
 export const lookKeys = {
     columnsProfile: { type: 'boolean' },
     columnsReading: { type: 'number', min: WIDTH_MIN, max: WIDTH_MAX },
     columnsPreview: { type: 'boolean' },
+    columnsCard: { type: 'boolean' },
 };
 
 const MODULE = 'arcaneForgeUi';
@@ -46,7 +48,7 @@ const CHATS_ID = 'forge-chats';
 const HEAD_ID = 'forge-chat-head';
 const PROFILE_ID = 'forge-profile';
 const NEED = 'Needs "Forge layout: Three columns (desktop)"';
-const CONTROLS = ['forge-ui-columns-profile', 'forge-ui-columns-width', 'forge-ui-columns-preview'];
+const CONTROLS = ['forge-ui-columns-profile', 'forge-ui-columns-width', 'forge-ui-columns-preview', 'forge-ui-columns-card'];
 // How many characters and groups the rail shows, most recently used first; the rest are one click away
 // in SillyTavern's own character list
 const RAIL_MAX = 40;
@@ -89,6 +91,10 @@ export function settingsHtml(s) {
                     <input type="checkbox" id="forge-ui-columns-preview"${s.columnsPreview ? ' checked' : ''}${off}>
                     <span>Show each chat's last line in the chat list</span>
                 </label>
+                <label class="checkbox_label" for="forge-ui-columns-card">
+                    <input type="checkbox" id="forge-ui-columns-card"${s.columnsCard !== false ? ' checked' : ''}${off}>
+                    <span>Clicking a picture opens that character's or persona's profile card</span>
+                </label>
 `;
 }
 
@@ -111,6 +117,10 @@ export function bindSettings($root, s, save) {
         s.columnsPreview = this.checked;
         save();
     });
+    $root.find('#forge-ui-columns-card').on('change', function () {
+        s.columnsCard = this.checked;
+        save();
+    });
 }
 
 export function apply(s) {
@@ -118,7 +128,9 @@ export function apply(s) {
     active = Boolean(s.enabled && s.layout === 'columns' && window.matchMedia(DESKTOP).matches);
     body.classList.toggle(BODY_CLASS, active);
     body.classList.toggle(PROFILE_CLASS, active && Boolean(s.columnsProfile));
+    followPictures(active && s.columnsCard !== false);
     if (!active) {
+        closeCard();
         stopListening();
         clearTimeout(refreshTimer);
         body.style.removeProperty(WIDTH);
@@ -133,6 +145,45 @@ export function apply(s) {
     if (!document.getElementById(PROFILE_ID)) body.append(el('aside', { id: PROFILE_ID, 'aria-label': 'Profile' }));
     startListening();
     refresh();
+}
+
+// ---------- Profile cards ----------
+
+// Whether clicks on pictures are being caught, so the listener is added and removed only once
+let followingPictures = false;
+
+function followPictures(on) {
+    if (on === followingPictures) return;
+    followingPictures = on;
+    if (on) document.addEventListener('click', onPictureClick, true);
+    else {
+        document.removeEventListener('click', onPictureClick, true);
+        closeCard();
+    }
+}
+
+// A click on a message's picture opens the sender's card, before SillyTavern's own handler (which zooms the
+// picture) sees it. Narration, system messages and anyone the card cannot show are left to SillyTavern.
+function onPictureClick(event) {
+    const picture = event.target instanceof Element ? event.target.closest('#chat .mes .mesAvatarWrapper .avatar') : null;
+    if (!picture) return;
+    const who = whoSent(picture.closest('.mes'));
+    if (!who || !showCard(who)) return;
+    event.preventDefault();
+    event.stopPropagation();
+}
+
+function showCard(who) {
+    return openCard(who, { edit: (shown) => openMenu(shown.kind === 'persona' ? MENU.persona : MENU.characters) });
+}
+
+// One of our own pictures as a button that opens the card, or the plain picture while the setting is off
+function cardFace(picture, who, name) {
+    if (!who || currentSettings().columnsCard === false) return picture;
+    const button = el('button', { type: 'button', class: 'forge-face-button', title: `${name}: profile`, 'aria-label': `${name}: profile` });
+    button.append(picture);
+    button.addEventListener('click', () => showCard(who));
+    return button;
 }
 
 function readingWidth(value) {
@@ -324,7 +375,8 @@ function renderYou(ctx, you) {
     const change = el('button', { type: 'button', class: 'forge-icon-button', title: 'Change persona', 'aria-label': 'Change persona' });
     change.append(lineIcon(ICONS.pen));
     change.addEventListener('click', () => openMenu(MENU.persona));
-    you.replaceChildren(face(ctx.name1 || 'You', user_avatar ? thumbnail(ctx, 'persona', user_avatar) : ''), text, change);
+    const picture = face(ctx.name1 || 'You', user_avatar ? thumbnail(ctx, 'persona', user_avatar) : '');
+    you.replaceChildren(cardFace(picture, user_avatar ? { kind: 'persona', file: user_avatar } : null, ctx.name1 || 'You'), text, change);
 }
 
 async function openChat(now, name) {
@@ -418,7 +470,7 @@ function renderProfile(ctx, now) {
     picture.classList.add('forge-profile-face');
     const name = el('p', { class: 'forge-profile-name' });
     name.textContent = now.name;
-    top.append(picture, name);
+    top.append(cardFace(picture, character ? { kind: 'character', avatar: character.avatar } : null, now.name), name);
     const tagline = character ? tagNames(ctx, character.avatar).slice(0, 3).join(' · ') : `${members(ctx, now.group).length} characters`;
     if (tagline) {
         const line = el('p', { class: 'forge-profile-tagline' });
@@ -442,8 +494,8 @@ function renderProfile(ctx, now) {
     }
     if (card.firstChild) body.append(card);
 
-    const people = now.kind === 'group' ? members(ctx, now.group).map((member) => ({ name: member.name, src: thumbnail(ctx, 'avatar', member.avatar) })) : [{ name: now.name, src: thumbnail(ctx, 'avatar', character.avatar) }];
-    people.push({ name: ctx.name1 || 'You', src: user_avatar ? thumbnail(ctx, 'persona', user_avatar) : '', you: true });
+    const people = now.kind === 'group' ? members(ctx, now.group).map((member) => ({ name: member.name, src: thumbnail(ctx, 'avatar', member.avatar), who: { kind: 'character', avatar: member.avatar } })) : [{ name: now.name, src: thumbnail(ctx, 'avatar', character.avatar), who: { kind: 'character', avatar: character.avatar } }];
+    people.push({ name: ctx.name1 || 'You', src: user_avatar ? thumbnail(ctx, 'persona', user_avatar) : '', you: true, who: user_avatar ? { kind: 'persona', file: user_avatar } : null });
     const cast = el('div', { class: 'forge-profile-cast' });
     const label = el('p', { class: 'forge-profile-label' });
     label.textContent = `In this chat · ${people.length}`;
@@ -457,7 +509,7 @@ function renderProfile(ctx, now) {
             you.textContent = ' (you)';
             who.append(you);
         }
-        row.append(face(person.name, person.src), who);
+        row.append(cardFace(face(person.name, person.src), person.who, person.name), who);
         cast.append(row);
     }
     body.append(cast, el('div', { class: 'forge-profile-gap' }));

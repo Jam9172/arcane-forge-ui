@@ -4,6 +4,7 @@ Newest first. The version number is in `manifest.json`. Changes collect under "U
 
 ## Unreleased
 
+- Three columns: **profile cards**. Click a picture (in the chat, in the profile on the right, in the list of who is in the chat, or your own beside your persona's name) and a window opens with that character's or persona's picture at full size and their profile beside it: name, tags, description, personality, creator's notes and lorebook for a character; name, description and lorebook for a persona. Click the picture to see the whole of it; Escape, the close button or a click beside the window closes it; **Edit** goes to SillyTavern's own editor. Narration and system messages keep SillyTavern's own picture zoom. Turn it off under Three columns to get that zoom back everywhere.
 - A menu no longer freezes after you use one of its drop-downs. SillyTavern's searchable drop-downs (the lorebook pickers in **Lorebooks**, tags and others) stop the menu behind them from scrolling for as long as their list is open, and the ones that pick several things stay open after a pick. Scrolling outside an open list now closes it, so the menu scrolls.
 - Three columns: **Author's Note** and **CFG Scale** open as a proper window beside the character rail (they came out as a thin sliver at the left edge).
 - **Do** no longer puts "You" or "I" in front of a sentence that already has its own subject: "My leg hurts." and "The door creaks open." are sent as typed (it used to send "I My leg hurts.").
