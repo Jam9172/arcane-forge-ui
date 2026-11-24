@@ -1,0 +1,275 @@
+/* Trackers (trackers.js): time and place, stat wheels and an inventory in the Three columns profile. */
+
+/* The block a reply carries the values in is never shown: it is read and taken out when the reply arrives,
+   and this keeps it out of sight while the reply is still streaming */
+body.forge-ui #chat .mes_text .forge-trackers,
+body.forge-ui #chat .mes_text .custom-forge-trackers {
+    display: none;
+}
+
+body.forge-ui.forge-columns #forge-trackers {
+    display: flex;
+    flex-direction: column;
+    gap: var(--forge-space-4);
+    flex-shrink: 0;
+}
+
+body.forge-ui.forge-columns #forge-trackers:empty {
+    display: none;
+}
+
+body.forge-ui.forge-columns .forge-track {
+    display: flex;
+    flex-direction: column;
+    gap: var(--forge-space-2);
+}
+
+body.forge-ui.forge-columns .forge-track p {
+    margin: 0;
+}
+
+body.forge-ui.forge-columns .forge-track-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 24px;
+    padding: 0 var(--forge-space-1);
+}
+
+body.forge-ui.forge-columns .forge-track-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--forge-radius-sm);
+    background: none;
+    color: var(--forge-muted);
+    cursor: pointer;
+}
+
+body.forge-ui.forge-columns .forge-track-button:hover {
+    background: var(--forge-columns-hover);
+    color: var(--forge-text);
+}
+
+body.forge-ui.forge-columns .forge-track-button .forge-line-icon {
+    width: 16px;
+    height: 16px;
+}
+
+body.forge-ui.forge-columns .forge-track-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--forge-space-2);
+    padding: 12px 14px;
+    border-radius: var(--forge-radius-md);
+    background: var(--forge-card);
+}
+
+/* Time and place: each value is a box to type in that reads as plain text until it is hovered or clicked */
+body.forge-ui.forge-columns .forge-track-field {
+    display: flex;
+    align-items: center;
+    gap: var(--forge-space-2);
+    margin: 0;
+    color: var(--forge-muted);
+}
+
+body.forge-ui.forge-columns .forge-track-field .forge-line-icon {
+    width: 17px;
+    height: 17px;
+}
+
+body.forge-ui.forge-columns .forge-track-field input,
+body.forge-ui.forge-columns .forge-track-list textarea,
+body.forge-ui.forge-columns .forge-track-list input {
+    flex: 1 1 0;
+    box-sizing: border-box;
+    min-width: 0;
+    width: 100%;
+    height: auto;
+    margin: 0;
+    padding: 2px 6px;
+    border: 0;
+    border-radius: var(--forge-radius-sm);
+    outline: 1px solid transparent;
+    background: transparent;
+    box-shadow: none;
+    color: var(--forge-text);
+    font-family: inherit;
+    font-size: 15px;
+    line-height: 1.4;
+    text-overflow: ellipsis;
+}
+
+body.forge-ui.forge-columns .forge-track-field input::placeholder,
+body.forge-ui.forge-columns .forge-track-list textarea::placeholder,
+body.forge-ui.forge-columns .forge-track-list input::placeholder {
+    color: var(--forge-dim);
+    opacity: 1;
+}
+
+body.forge-ui.forge-columns .forge-track-field input:hover {
+    outline-color: var(--forge-border);
+}
+
+body.forge-ui.forge-columns .forge-track-field input:focus,
+body.forge-ui.forge-columns .forge-track-list textarea,
+body.forge-ui.forge-columns .forge-track-list input {
+    outline-color: var(--forge-brass);
+    background: color-mix(in srgb, var(--forge-bg) 60%, var(--forge-card));
+}
+
+body.forge-ui.forge-columns .forge-track-time .forge-track-field.forge-track-time input {
+    font-size: 21px;
+    font-weight: 700;
+}
+
+body.forge-ui.forge-columns .forge-track-date {
+    padding-left: 25px;
+    padding-bottom: var(--forge-space-2);
+    border-bottom: 1px solid var(--forge-columns-line);
+}
+
+body.forge-ui.forge-columns .forge-track-date input {
+    color: var(--forge-muted);
+    font-size: 14px;
+}
+
+body.forge-ui.forge-columns .forge-track-list textarea {
+    resize: vertical;
+    padding: 6px 8px;
+}
+
+/* Stat wheels: four to a row, a fifth starts the next row */
+body.forge-ui.forge-columns .forge-track-wheels {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--forge-space-3) var(--forge-space-1);
+}
+
+body.forge-ui.forge-columns .forge-track-wheel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    min-width: 0;
+    padding: 4px 0;
+    border: 0;
+    border-radius: var(--forge-radius-sm);
+    background: none;
+    color: var(--forge-soft);
+    font-family: inherit;
+    font-size: 12.5px;
+    cursor: pointer;
+}
+
+body.forge-ui.forge-columns .forge-track-wheel:hover,
+body.forge-ui.forge-columns .forge-track-wheel[aria-pressed="true"] {
+    background: var(--forge-columns-hover);
+    color: var(--forge-text);
+}
+
+body.forge-ui.forge-columns .forge-track-wheel svg {
+    width: 54px;
+    height: 54px;
+}
+
+body.forge-ui.forge-columns .forge-track-wheel .forge-track-ring {
+    stroke: var(--forge-columns-hover);
+}
+
+body.forge-ui.forge-columns .forge-track-wheel[aria-pressed="true"] .forge-track-ring,
+body.forge-ui.forge-columns .forge-track-wheel:hover .forge-track-ring {
+    stroke: var(--forge-bg);
+}
+
+body.forge-ui.forge-columns .forge-track-wheel text {
+    fill: var(--forge-text);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+body.forge-ui.forge-columns .forge-track-wheel span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body.forge-ui.forge-columns .forge-track-slider {
+    display: flex;
+    align-items: center;
+    gap: var(--forge-space-3);
+    font-size: 14px;
+}
+
+body.forge-ui.forge-columns .forge-track-slider:empty {
+    display: none;
+}
+
+body.forge-ui.forge-columns .forge-track-slider input {
+    flex: 1 1 0;
+    min-width: 0;
+    margin: 0;
+}
+
+/* Inventory */
+body.forge-ui.forge-columns .forge-track-lists {
+    gap: var(--forge-space-3);
+}
+
+body.forge-ui.forge-columns .forge-track-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+body.forge-ui.forge-columns .forge-track-list-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 26px;
+    color: var(--forge-muted);
+    font-size: 13.5px;
+}
+
+body.forge-ui.forge-columns .forge-track-none {
+    color: var(--forge-dim);
+    font-size: 14px;
+}
+
+/* The settings screen's list of stats */
+.arcane-forge-ui-settings .forge-ui-tracker-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 8px 0;
+}
+
+.arcane-forge-ui-settings .forge-ui-tracker-stat {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.arcane-forge-ui-settings .forge-ui-tracker-stat .text_pole {
+    flex: 1 1 0;
+    min-width: 0;
+    margin: 0;
+}
+
+.arcane-forge-ui-settings .forge-ui-tracker-stat input[type="color"] {
+    flex-shrink: 0;
+    width: 36px;
+    height: 30px;
+    padding: 0;
+}
+
+.arcane-forge-ui-settings .forge-ui-tracker-stat .menu_button {
+    flex-shrink: 0;
+    margin: 0;
+}

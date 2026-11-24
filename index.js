@@ -8,13 +8,14 @@ import * as stage from './stage.js';
 import * as columns from './columns.js';
 import * as menu from './menu.js';
 import * as modes from './modes.js';
+import * as trackers from './trackers.js';
 
 const MODULE = 'arcaneForgeUi';
 
 // The redesign's features (docs/redesign/BIBLE.md, section 9). Each module brings its own defaults, look keys,
 // settings section and apply(), so a feature reaches the settings, the look file and Reset through its own
 // file alone; nothing here changes when a feature grows.
-const FEATURES = [stage, columns, menu, modes];
+const FEATURES = [stage, columns, trackers, menu, modes];
 const FONT_LINK_ID = 'arcane-forge-ui-fonts';
 
 const HEADING_FONTS = {

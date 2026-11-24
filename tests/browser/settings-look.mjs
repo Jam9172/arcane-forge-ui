@@ -46,7 +46,7 @@ await page.waitForTimeout(600);
 // 1. The three sections, in order, between Panels and Keyboard
 const headings = await page.evaluate(() => [...document.querySelectorAll('.arcane-forge-ui-settings h4')].map((h) => h.textContent.trim()));
 const at = (name) => headings.indexOf(name);
-check('the headings run Panels, Layout, Three columns, Menus, Message box, Keyboard', at('Panels') >= 0 && at('Layout') === at('Panels') + 1 && at('Three columns') === at('Layout') + 1 && at('Menus') === at('Three columns') + 1 && at('Message box') === at('Menus') + 1 && at('Keyboard') === at('Message box') + 1, headings.join(', '));
+check('the headings run Panels, Layout, Three columns, Trackers, Menus, Message box, Keyboard', at('Panels') >= 0 && at('Layout') === at('Panels') + 1 && at('Three columns') === at('Layout') + 1 && at('Trackers') === at('Three columns') + 1 && at('Menus') === at('Trackers') + 1 && at('Message box') === at('Menus') + 1 && at('Keyboard') === at('Message box') + 1, headings.join(', '));
 
 // The control a label names, found by the label's own words
 const control = (label) => page.evaluate((label) => {

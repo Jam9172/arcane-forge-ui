@@ -21,6 +21,7 @@ import { user_avatar } from '../../../personas.js';
 import { timestampToMoment } from '../../../utils.js';
 import { selected_world_info } from '../../../world-info.js';
 import { closeCard, openCard, whoSent } from './card.js';
+import { holder as trackerHolder } from './trackers.js';
 
 export const id = 'columns';
 
@@ -520,7 +521,8 @@ function renderProfile(ctx, now) {
         row.append(cardFace(face(person.name, person.src), person.who, person.name), who);
         cast.append(row);
     }
-    body.append(cast, el('div', { class: 'forge-profile-gap' }));
+    // The trackers (trackers.js) go under the people; the element is empty while they are off
+    body.append(cast, trackerHolder(), el('div', { class: 'forge-profile-gap' }));
 
     const edit = el('button', { type: 'button', class: 'forge-profile-edit' });
     edit.textContent = now.kind === 'group' ? 'Edit group' : 'Edit character';
