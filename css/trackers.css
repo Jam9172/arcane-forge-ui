@@ -242,6 +242,56 @@ body.forge-ui.forge-columns .forge-track-none {
     font-size: 14px;
 }
 
+/* With another model keeping them: one line over the trackers that says who, and a button to ask again */
+body.forge-ui.forge-columns .forge-track-other {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--forge-space-2);
+    min-height: 26px;
+    padding: 0 var(--forge-space-1);
+    color: var(--forge-muted);
+    font-size: 14px;
+}
+
+body.forge-ui.forge-columns .forge-track-other span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body.forge-ui.forge-columns .forge-track-other-failed {
+    color: var(--forge-danger-soft);
+}
+
+body.forge-ui.forge-columns .forge-track-button:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+/* The settings screen: the other model's boxes */
+.arcane-forge-ui-settings .forge-ui-trackers-other:not([hidden]) {
+    display: flex;
+    flex-direction: column;
+    margin: 4px 0 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 6px;
+}
+
+.arcane-forge-ui-settings .forge-ui-trackers-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 6px 0 2px;
+}
+
+.arcane-forge-ui-settings .forge-ui-trackers-actions .menu_button {
+    margin: 0;
+    white-space: nowrap;
+}
+
 /* The settings screen's list of stats */
 .arcane-forge-ui-settings .forge-ui-tracker-stats {
     display: flex;

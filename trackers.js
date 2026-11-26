@@ -14,11 +14,17 @@
 // <div class="forge-trackers">...</div>. When the reply arrives that block is read, taken out of the
 // message, and the values are updated. While a reply is still streaming, css/trackers.css hides the block.
 // Everything can also be changed by hand in the profile.
+//
+// Another model can do the keeping instead ("Kept up to date by: Another model"): then nothing is added to
+// what the story's AI is sent, and after each reply a second request goes to the chat completions address the
+// user typed in, with the values as they stand and the last few messages; its answer is the same block. That
+// request is sent by the app's own custom connection. The key is kept in this device's own storage, never
+// in the settings.
 import { extension_settings } from '../../../extensions.js';
 
 export const id = 'trackers';
 
-export const defaults = { trackers: false, trackersTime: true, trackersStats: true, trackersInventory: true, trackersUpdate: true };
+export const defaults = { trackers: false, trackersTime: true, trackersStats: true, trackersInventory: true, trackersUpdate: true, trackersBy: 'story', trackersUrl: '', trackersModel: '', trackersRead: 4 };
 
 export const lookKeys = {
     trackersTime: { type: 'boolean' },
@@ -40,6 +46,13 @@ const TEXT_MAX = 120;
 const ITEM_MAX = 80;
 const ITEMS_MAX = 60;
 const PLACES_MAX = 12;
+const BY = { story: 'The story\'s AI, in each reply', other: 'Another model, after each reply' };
+const KEY_STORE = 'arcane_forge_trackers_key';
+const READ = [1, 20];          // messages the other model is shown
+const READ_TEXT_MAX = 16000;   // characters of them
+const ANSWER_TOKENS = 1000;
+const URL_MAX = 300;
+const MODEL_MAX = 120;
 const DEFAULT_STATS = [
     { id: 'health', name: 'Health', color: '#c8553d' },
     { id: 'satiety', name: 'Satiety', color: '#d9a441' },
@@ -59,6 +72,7 @@ const ICONS = {
     cloud: 'M7 18a4 4 0 0 1-.5-8A5.5 5.5 0 0 1 17 8.5 4.5 4.5 0 0 1 17.5 18z',
     pen: 'M4 20l4-1 11-11-3-3L5 16z',
     plus: 'M12 5v14M5 12h14',
+    again: 'M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7',
 };
 
 let active = false;
@@ -68,6 +82,10 @@ let saveTimer = 0;
 let openStat = '';
 let openList = '';
 let addingPlace = false;
+// The other model: the request in flight, and what went wrong with the last one
+let asking = null;
+let otherFailed = '';
+let lastToast = { text: '', time: 0 };
 
 function context() {
     return globalThis.SillyTavern.getContext();
@@ -284,7 +302,10 @@ function onReply(messageId) {
     const message = ctx.chat?.[Number(messageId)];
     if (!message || message.is_user || message.is_system || typeof message.mes !== 'string') return;
     const found = takeBlock(message.mes);
-    if (!found) return;
+    if (!found) {
+        if (byOther(s)) askOther(Number(messageId));
+        return;
+    }
     message.mes = found.text;
     if (Array.isArray(message.swipes) && typeof message.swipe_id === 'number' && typeof message.swipes[message.swipe_id] === 'string') message.swipes[message.swipe_id] = found.text;
     const next = readLines(found.lines, values(), s, statList(s));
@@ -301,13 +322,169 @@ function onReply(messageId) {
     render();
 }
 
+// ---------- Another model keeps them up to date ----------
+
+function byOther(s) {
+    return s.trackersBy === 'other';
+}
+
+/**
+ * The address as the app's custom connection takes it: without "/chat/completions" at its end. Empty when
+ * what was typed is not a web address.
+ */
+export function endpoint(raw) {
+    const text = String(raw ?? '').trim().replace(/[?#].*$/, '').replace(/\/+$/, '').replace(/\/chat\/completions$/i, '').replace(/\/+$/, '');
+    return /^https?:\/\/[^\s/]+/i.test(text) ? text : '';
+}
+
+// The key lives in this device's own storage: the settings are a file, are synced, and go into look files
+function savedKey() {
+    try {
+        return localStorage.getItem(KEY_STORE) ?? '';
+    } catch {
+        return '';
+    }
+}
+
+/** Whether a key is kept on this device (the key itself is never handed out). */
+export function hasKey() {
+    return Boolean(savedKey());
+}
+
+/** Keeps a key on this device; an empty one forgets it. */
+export function keepKey(value) {
+    try {
+        const key = String(value ?? '').trim();
+        if (key) localStorage.setItem(KEY_STORE, key);
+        else localStorage.removeItem(KEY_STORE);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function plain(mes) {
+    return String(mes ?? '')
+        .replace(/```[\s\S]*?```/g, ' ')
+        .replace(/<div\b[^>]*\bforge-trackers\b[^>]*>[\s\S]*?(<\/div\s*>|$)/gi, ' ')
+        .replace(/<[^>]+>/g, '')
+        .replace(/[ \t]+/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
+
+/** What the other model is sent: how the trackers work, the values as they stand, and the last messages. */
+export function otherMessages(ctx, s, messageId, now = values()) {
+    const stats = statList(s);
+    const who = String(ctx.name1 ?? '').trim() || 'the main character';
+    const rules = ['Keep the same lines in the same order, one per line.'];
+    if (s.trackersTime !== false) rules.push('Move the time on by however long the events of the last message took.');
+    if (s.trackersStats !== false && stats.length) rules.push(`${stats.map((stat) => stat.name).join(', ')}: whole numbers from 0 to 100; change one only when the story changes it.`);
+    if (s.trackersInventory !== false) rules.push(`The lists are ${who}'s things, separated by commas ("none" when empty); change them only when something is gained, lost, used up, put on, taken off or put away. For things kept somewhere else, use one line per place: Stored (place): things.`);
+    rules.push('Where a value says "not set", choose one that fits the story.', 'When the last message changes nothing, write the values again as they are.');
+    const most = Math.min(READ[1], Math.max(READ[0], Math.round(Number(s.trackersRead)) || defaults.trackersRead));
+    const story = [];
+    let room = READ_TEXT_MAX;
+    for (let i = messageId; i >= 0 && story.length < most; i--) {
+        const message = ctx.chat?.[i];
+        if (!message || message.is_system || typeof message.mes !== 'string') continue;
+        const text = plain(message.mes);
+        if (!text) continue;
+        // The newest message always goes, cut short when it is very long; older ones only while there is room
+        if (story.length && text.length > room) break;
+        story.unshift(`${message.name || (message.is_user ? ctx.name1 : ctx.name2) || 'Narrator'}: ${text.slice(0, READ_TEXT_MAX)}`);
+        room -= text.length;
+    }
+    return [
+        { role: 'system', content: `You keep the trackers of ${who}, the main character of an ongoing story, up to date. You do not write the story and you do not continue it.\n\nYou are given the trackers as they stand and the last part of the story. Work out what the LAST message changes, and answer with the block again, with the values as they stand after it. Answer with the block and nothing else.\n\n${rules.map((rule) => `- ${rule}`).join('\n')}` },
+        { role: 'user', content: `The trackers as they stand:\n<div class="${BLOCK_CLASS}">\n${blockLines(now, s, stats).join('\n')}\n</div>\n\nThe last part of the story (the last message is the newest):\n\n${story.join('\n\n')}` },
+    ];
+}
+
+// One request to the address the user typed in, sent by the app's own custom connection
+async function sendOther(s, messages, signal, tokens = ANSWER_TOKENS) {
+    const url = endpoint(s.trackersUrl);
+    const model = String(s.trackersModel ?? '').trim();
+    if (!url) throw new Error('Enter the chat completions URL first (Trackers, in the settings).');
+    if (!model) throw new Error('Enter the model\'s name first (Trackers, in the settings).');
+    const service = context().ChatCompletionService;
+    if (typeof service?.processRequest !== 'function') throw new Error('This SillyTavern cannot send a request to a second model.');
+    const request = { stream: false, messages, model, chat_completion_source: 'custom', custom_url: url, max_tokens: tokens };
+    // The request always carries its own Authorization, so that the key the app keeps for its own custom
+    // connection never goes to this address. With no key of ours it is a placeholder, which a service on
+    // this machine does not look at.
+    request.custom_include_headers = JSON.stringify({ Authorization: `Bearer ${savedKey() || 'none'}` });
+    const result = await service.processRequest(request, {}, true, signal);
+    return typeof result?.content === 'string' ? result.content : '';
+}
+
+function otherProblem(error) {
+    otherFailed = String(error?.message ?? error ?? 'It did not answer.').slice(0, 240);
+    console.error('[Arcane Forge UI] The trackers\' other model did not update them', error);
+    // The same trouble is said once, not after every reply
+    if (lastToast.text !== otherFailed || Date.now() - lastToast.time > 60000) globalThis.toastr?.error(otherFailed, 'Trackers: the other model');
+    lastToast = { text: otherFailed, time: Date.now() };
+}
+
+/** Asks the other model what one reply changes, and stores its answer on that reply. */
+async function askOther(messageId) {
+    const s = settings();
+    const ctx = context();
+    const message = ctx.chat?.[messageId];
+    if (!active || !message || message.is_user || message.is_system) return false;
+    asking?.abort();
+    const mine = asking = new AbortController();
+    const chatId = ctx.chatId;
+    render();
+    try {
+        const answer = await sendOther(s, otherMessages(ctx, s, messageId), mine.signal);
+        // A newer reply, another chat or a deleted message: this answer is about something that is gone
+        if (asking !== mine || context().chatId !== chatId || context().chat?.[messageId] !== message) return false;
+        const lines = (takeBlock(answer) ?? takeBlock(`<div class="${BLOCK_CLASS}">\n${answer}`)).lines;
+        const next = readLines(lines, values(), s, statList(s));
+        if (!next) throw new Error(answer.trim() ? `Its answer had no tracker lines: "${answer.trim().slice(0, 120)}"` : 'Its answer was empty.');
+        otherFailed = '';
+        store(next, { message });
+        return true;
+    } catch (error) {
+        if (asking !== mine || mine.signal.aborted) return false;
+        otherProblem(error);
+        return false;
+    } finally {
+        if (asking === mine) asking = null;
+        render();
+    }
+}
+
+/** "Update now": asks again about the newest reply. */
+export function updateNow() {
+    const chat = context().chat ?? [];
+    for (let i = chat.length - 1; i >= 0; i--) {
+        if (!chat[i].is_user && !chat[i].is_system) return askOther(i);
+    }
+    return Promise.resolve(false);
+}
+
+/** "Test": one small request, to see that the address, the model and the key work. */
+export async function testOther() {
+    const s = settings();
+    try {
+        const answer = await sendOther(s, [{ role: 'user', content: 'Answer with the single word: ready' }], null, 60);
+        globalThis.toastr?.success(answer.trim() ? `It answered: "${answer.trim().slice(0, 80)}"` : 'It answered (with nothing in the answer).', 'Trackers: the other model');
+        return true;
+    } catch (error) {
+        globalThis.toastr?.error(String(error?.message ?? error).slice(0, 240), 'Trackers: the other model');
+        return false;
+    }
+}
+
 // ---------- The note to the AI ----------
 
 function setNote() {
     const ctx = context();
     if (!ctx.setExtensionPrompt) return;
     const s = settings();
-    const text = active && s.trackersUpdate !== false && ctx.chatMetadata ? noteText(values(), s, statList(s)) : '';
+    const text = active && s.trackersUpdate !== false && !byOther(s) && ctx.chatMetadata ? noteText(values(), s, statList(s)) : '';
     // In the chat, right at the end (position 1, depth 0), as a system note (role 0)
     ctx.setExtensionPrompt(PROMPT_KEY, text, 1, 0, false, 0);
 }
@@ -337,6 +514,9 @@ function onChatChanged() {
     openStat = '';
     openList = '';
     addingPlace = false;
+    asking?.abort();
+    asking = null;
+    otherFailed = '';
     setNote();
     render();
 }
@@ -353,6 +533,34 @@ export function settingsHtml(s) {
     return `
                 <h4>Trackers</h4>${box('forge-ui-trackers', 'trackers', 'Trackers in the profile on the right (time, stats, inventory)', false)}${box('forge-ui-trackers-time', 'trackersTime', 'Time and place', true)}${box('forge-ui-trackers-stats', 'trackersStats', 'Stat wheels', true)}${box('forge-ui-trackers-inventory', 'trackersInventory', 'Inventory', true)}${box('forge-ui-trackers-update', 'trackersUpdate', 'Ask the AI to keep them up to date in each reply', true)}
                 <small>With the last one off, nothing is added to what is sent to the AI and you change the values by hand.</small>
+                <label class="forge-ui-select">
+                    <span>Kept up to date by</span>
+                    <select id="forge-ui-trackers-by" class="text_pole forge-ui-trackers-option"${off}>${Object.entries(BY).map(([key, label]) => `<option value="${key}"${key === (byOther(s) ? 'other' : 'story') ? ' selected' : ''}>${label}</option>`).join('')}</select>
+                </label>
+                <div id="forge-ui-trackers-other" class="forge-ui-trackers-other"${byOther(s) ? '' : ' hidden'}>
+                    <small>After each reply, the values and the last few messages go to this address instead of being asked of the story's AI. Any service that speaks the chat completions format works.</small>
+                    <label class="forge-ui-select">
+                        <span>Chat completions URL</span>
+                        <input type="text" id="forge-ui-trackers-url" class="text_pole forge-ui-trackers-option" maxlength="${URL_MAX}" placeholder="https://api.example.com/v1" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"${off}>
+                    </label>
+                    <label class="forge-ui-select">
+                        <span>Model</span>
+                        <input type="text" id="forge-ui-trackers-model" class="text_pole forge-ui-trackers-option" maxlength="${MODEL_MAX}" placeholder="Paste the model's ID here" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"${off}>
+                    </label>
+                    <label class="forge-ui-select">
+                        <span>API key</span>
+                        <input type="password" id="forge-ui-trackers-key" class="text_pole forge-ui-trackers-option" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false"${off}>
+                    </label>
+                    <small>The key is kept on this device only: not in your settings file, not in a look file, and not synced. It is not shown again once saved.</small>
+                    <label class="forge-ui-select">
+                        <span>Messages it reads</span>
+                        <input type="number" id="forge-ui-trackers-read" class="text_pole forge-ui-trackers-option" min="${READ[0]}" max="${READ[1]}" step="1"${off}>
+                    </label>
+                    <div class="forge-ui-trackers-actions">
+                        <div class="menu_button" id="forge-ui-trackers-test" role="button" tabindex="0">Test</div>
+                        <div class="menu_button" id="forge-ui-trackers-forget" role="button" tabindex="0">Forget the key</div>
+                    </div>
+                </div>
                 <div id="forge-ui-tracker-stats" class="forge-ui-tracker-stats"></div>
                 <div class="menu_button menu_button_icon" id="forge-ui-tracker-add" role="button" tabindex="0"><span>Add a stat</span></div>
 `;
@@ -360,11 +568,64 @@ export function settingsHtml(s) {
 
 const BOXES = { 'forge-ui-trackers': 'trackers', 'forge-ui-trackers-time': 'trackersTime', 'forge-ui-trackers-stats': 'trackersStats', 'forge-ui-trackers-inventory': 'trackersInventory', 'forge-ui-trackers-update': 'trackersUpdate' };
 
+// The other model's boxes. What the user typed is put in as values, never as markup; the key is never put back.
+function bindOther($root, s, save) {
+    const keyBox = $root.find('#forge-ui-trackers-key');
+    const keyHint = () => keyBox.attr('placeholder', hasKey() ? 'A key is saved. Type a new one to replace it.' : 'Paste the key here');
+    $root.find('#forge-ui-trackers-by').on('change', function () {
+        s.trackersBy = this.value === 'other' ? 'other' : 'story';
+        $root.find('#forge-ui-trackers-other').prop('hidden', s.trackersBy !== 'other');
+        save();
+    });
+    $root.find('#forge-ui-trackers-url').val(String(s.trackersUrl ?? '').slice(0, URL_MAX)).on('change', function () {
+        const text = String(this.value).trim().slice(0, URL_MAX);
+        if (text && !endpoint(text)) globalThis.toastr?.warning('That is not a web address. It should start with https:// or http://', 'Trackers: the other model');
+        s.trackersUrl = text;
+        save();
+    });
+    $root.find('#forge-ui-trackers-model').val(String(s.trackersModel ?? '').slice(0, MODEL_MAX)).on('change', function () {
+        s.trackersModel = String(this.value).trim().slice(0, MODEL_MAX);
+        this.value = s.trackersModel;
+        save();
+    });
+    keyBox.on('change', function () {
+        if (!String(this.value).trim()) return;
+        const kept = keepKey(this.value);
+        this.value = '';
+        keyHint();
+        if (!kept) globalThis.toastr?.error('The key could not be kept on this device.', 'Trackers: the other model');
+    });
+    keyHint();
+    $root.find('#forge-ui-trackers-read').val(Math.min(READ[1], Math.max(READ[0], Math.round(Number(s.trackersRead)) || defaults.trackersRead))).on('change', function () {
+        s.trackersRead = Math.min(READ[1], Math.max(READ[0], Math.round(Number(this.value)) || defaults.trackersRead));
+        this.value = s.trackersRead;
+        save();
+    });
+    const press = (selector, action) => $root.find(selector).on('click keydown', function (event) {
+        if (event.type === 'keydown' && event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        action();
+    });
+    press('#forge-ui-trackers-test', () => {
+        // A key typed but not yet left: keep it first, so that the test uses it
+        keyBox.trigger('change');
+        testOther();
+    });
+    press('#forge-ui-trackers-forget', () => {
+        keepKey('');
+        keyBox.val('');
+        keyHint();
+        globalThis.toastr?.info('The key is forgotten.', 'Trackers: the other model');
+    });
+}
+
 export function bindSettings($root, s, save) {
     $root.find('#forge-ui-layout').on('change', function () {
         const on = this.value === 'columns';
         for (const boxId of Object.keys(BOXES)) $root.find(`#${boxId}`).prop('disabled', !on).attr('title', on ? null : NEED);
+        $root.find('.forge-ui-trackers-option').prop('disabled', !on).attr('title', on ? null : NEED);
     });
+    bindOther($root, s, save);
     for (const [boxId, key] of Object.entries(BOXES)) {
         $root.find(`#${boxId}`).on('change', function () {
             s[key] = this.checked;
@@ -435,6 +696,11 @@ export function apply(s) {
     active = Boolean(s.enabled && s.trackers && s.layout === 'columns' && window.matchMedia(DESKTOP).matches);
     if (active) startListening();
     else stopListening();
+    if (!active || !byOther(s) || s.trackersUpdate === false) {
+        asking?.abort();
+        asking = null;
+        otherFailed = '';
+    }
     setNote();
     render();
 }
@@ -465,10 +731,23 @@ function render() {
     }
     const now = values();
     const parts = [];
+    if (byOther(s) && s.trackersUpdate !== false) parts.push(otherRow(s));
     if (s.trackersTime !== false) parts.push(timeBlock(now));
     if (s.trackersStats !== false) parts.push(statsBlock(now, statList(s)));
     if (s.trackersInventory !== false) parts.push(inventoryBlock(now));
     box.replaceChildren(...parts.filter(Boolean));
+}
+
+// With another model keeping them: who that is, whether it is at work, and a button to ask it again
+function otherRow(s) {
+    const row = el('div', { class: `forge-track-other${otherFailed && !asking ? ' forge-track-other-failed' : ''}` });
+    const label = el('span', {});
+    label.textContent = asking ? 'Updating…' : otherFailed ? 'The last update failed' : `Kept by ${String(s.trackersModel ?? '').trim() || 'another model'}`;
+    if (otherFailed && !asking) label.title = otherFailed;
+    const button = iconButton('again', 'Update from the newest reply', () => updateNow());
+    button.disabled = Boolean(asking);
+    row.append(label, button);
+    return row;
 }
 
 function change(edit) {
