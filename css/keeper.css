@@ -1,0 +1,215 @@
+/* Lorebook keeper (keeper.js): its part of the Three columns profile, its windows (asking first, history,
+   the guide) and its settings. */
+
+/* In the profile, under the trackers; the section and card looks are the trackers' own (.forge-track) */
+body.forge-ui.forge-columns #forge-keeper {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+body.forge-ui.forge-columns #forge-keeper:empty {
+    display: none;
+}
+
+body.forge-ui.forge-columns .forge-keeper-state {
+    color: var(--forge-muted);
+    font-size: 14px;
+}
+
+body.forge-ui.forge-columns .forge-keeper-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--forge-space-2);
+}
+
+body.forge-ui.forge-columns .forge-keeper-who {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+body.forge-ui .forge-keeper-title {
+    color: var(--forge-brass);
+    font-size: 16px;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+
+body.forge-ui.forge-columns .forge-keeper-who small {
+    color: var(--forge-muted);
+    font-size: 14px;
+}
+
+body.forge-ui.forge-columns .forge-keeper-empty {
+    color: var(--forge-muted);
+    font-size: 14px;
+}
+
+body.forge-ui.forge-columns .forge-keeper-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--forge-space-2);
+    margin-top: var(--forge-space-1);
+}
+
+body.forge-ui.forge-columns .forge-keeper-button {
+    flex-shrink: 0;
+    min-height: 30px;
+    padding: 0 var(--forge-space-3);
+    border: 1px solid var(--forge-columns-hover);
+    border-radius: var(--forge-radius-sm);
+    background: none;
+    color: var(--forge-text);
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+body.forge-ui.forge-columns .forge-keeper-button:hover {
+    background: var(--forge-columns-hover);
+}
+
+body.forge-ui.forge-columns .forge-keeper-button:disabled {
+    color: var(--forge-muted);
+    cursor: default;
+}
+
+/* The windows */
+body.forge-ui .forge-keeper-window {
+    display: flex;
+    flex-direction: column;
+    gap: var(--forge-space-3);
+    text-align: left;
+}
+
+body.forge-ui .forge-keeper-window h3,
+body.forge-ui .forge-keeper-window h4,
+body.forge-ui .forge-keeper-window p {
+    margin: 0;
+}
+
+body.forge-ui .forge-keeper-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--forge-space-2);
+    padding: var(--forge-space-3);
+    border-radius: var(--forge-radius-md);
+    background: var(--forge-card);
+}
+
+body.forge-ui .forge-keeper-item summary,
+body.forge-ui .forge-keeper-first {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--forge-space-2);
+    cursor: pointer;
+}
+
+body.forge-ui .forge-keeper-first {
+    cursor: default;
+}
+
+body.forge-ui .forge-keeper-item small {
+    flex: 1 1 0;
+    color: var(--forge-muted);
+    font-size: 14px;
+}
+
+body.forge-ui .forge-keeper-item .menu_button {
+    flex-shrink: 0;
+    margin: 0;
+    white-space: nowrap;
+}
+
+body.forge-ui .forge-keeper-diff {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--forge-space-3);
+    margin-top: var(--forge-space-2);
+}
+
+body.forge-ui .forge-keeper-part-label {
+    color: var(--forge-muted);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+body.forge-ui .forge-keeper-text {
+    font-size: 16px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+body.forge-ui .forge-keeper-part + .forge-keeper-part .forge-keeper-text {
+    padding-left: var(--forge-space-2);
+    border-left: 3px solid var(--forge-ember);
+}
+
+body.forge-ui .forge-keeper-guide {
+    margin: 0;
+    padding: var(--forge-space-3);
+    border-radius: var(--forge-radius-md);
+    background: var(--forge-card);
+    font-family: inherit;
+    font-size: 16px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 700px) {
+    body.forge-ui .forge-keeper-diff {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* The settings */
+.arcane-forge-ui-settings .forge-ui-keeper-label {
+    margin: 10px 0 2px;
+    font-weight: 700;
+}
+
+.arcane-forge-ui-settings .forge-ui-keeper-books {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 190px;
+    margin: 4px 0 8px;
+    padding: 6px 8px;
+    overflow-y: auto;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 6px;
+}
+
+.arcane-forge-ui-settings .forge-ui-keeper-topic span {
+    line-height: 1.35;
+}
+
+.arcane-forge-ui-settings .forge-ui-keeper-own {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 8px 0 4px;
+}
+
+.arcane-forge-ui-settings .forge-ui-keeper-own textarea {
+    resize: vertical;
+}
+
+.arcane-forge-ui-settings .forge-ui-keeper-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 8px 0;
+}
+
+.arcane-forge-ui-settings .forge-ui-keeper-actions .menu_button {
+    margin: 0;
+}

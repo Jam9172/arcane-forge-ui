@@ -9,13 +9,14 @@ import * as columns from './columns.js';
 import * as menu from './menu.js';
 import * as modes from './modes.js';
 import * as trackers from './trackers.js';
+import * as keeper from './keeper.js';
 
 const MODULE = 'arcaneForgeUi';
 
 // The redesign's features (docs/redesign/BIBLE.md, section 9). Each module brings its own defaults, look keys,
 // settings section and apply(), so a feature reaches the settings, the look file and Reset through its own
 // file alone; nothing here changes when a feature grows.
-const FEATURES = [stage, columns, trackers, menu, modes];
+const FEATURES = [stage, columns, trackers, keeper, menu, modes];
 const FONT_LINK_ID = 'arcane-forge-ui-fonts';
 
 const HEADING_FONTS = {
@@ -540,7 +541,7 @@ function bindSettings($root) {
         // Each feature first takes itself off with the settings it had, so it can undo what only they record
         // (the menu panel's pins); then every feature setting goes back to its default with the rest.
         applyFeatures({ ...s, enabled: false });
-        extension_settings[MODULE] = structuredClone({ ...featureDefaults(), ...defaults, enabled: s.enabled, aiLayout: s.aiLayout, userLayout: s.userLayout, menuCards: s.menuCards, extCards: s.extCards, icons: s.icons, swipesRight: s.swipesRight, aiHelp: s.aiHelp, aiDescriptions: s.aiDescriptions, omitParamsBackup: s.omitParamsBackup ?? {}, savedPalettes: s.savedPalettes ?? {} });
+        extension_settings[MODULE] = structuredClone({ ...featureDefaults(), ...defaults, enabled: s.enabled, aiLayout: s.aiLayout, userLayout: s.userLayout, menuCards: s.menuCards, extCards: s.extCards, icons: s.icons, swipesRight: s.swipesRight, aiHelp: s.aiHelp, aiDescriptions: s.aiDescriptions, omitParamsBackup: s.omitParamsBackup ?? {}, savedPalettes: s.savedPalettes ?? {}, keeperLog: s.keeperLog ?? [], keeperOriginals: s.keeperOriginals ?? {} });
         save();
         mountSettings();
     });
