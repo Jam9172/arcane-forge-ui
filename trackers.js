@@ -36,6 +36,8 @@ const MODULE = 'arcaneForgeUi';
 const DESKTOP = '(min-width: 1001px)';
 const HOLDER_ID = 'forge-trackers';
 const KEY = 'forge_trackers';
+// The values set by hand while no reply could hold them (an empty chat): what a chat goes back to
+const START_KEY = 'forge_trackers_start';
 const PROMPT_KEY = 'arcane_forge_trackers';
 const BLOCK_CLASS = 'forge-trackers';
 const NEED = 'Needs "Forge layout: Three columns (desktop)"';
@@ -53,6 +55,8 @@ const READ_TEXT_MAX = 16000;   // characters of them
 const ANSWER_TOKENS = 1000;
 const URL_MAX = 300;
 const MODEL_MAX = 120;
+// Names a stat cannot have: the reader takes a line with one of these for the built-in line of that name
+const TAKEN_NAMES = ['time', 'date', 'location', 'place', 'weather', 'on person', 'carried', 'carrying', 'wearing', 'clothing', 'worn'];
 const DEFAULT_STATS = [
     { id: 'health', name: 'Health', color: '#c8553d' },
     { id: 'satiety', name: 'Satiety', color: '#d9a441' },
@@ -82,8 +86,13 @@ let saveTimer = 0;
 let openStat = '';
 let openList = '';
 let addingPlace = false;
-// The other model: the request in flight, and what went wrong with the last one
+// The other model: the request in flight, the reply it is about, the reply to ask about next, and what went
+// wrong with the last one
 let asking = null;
+let askingFor = null;
+let queued = null;
+// The kind of request SillyTavern is building ('normal', 'swipe', 'impersonate', 'quiet', ...)
+let generationType = 'normal';
 let otherFailed = '';
 let lastToast = { text: '', time: 0 };
 
@@ -104,11 +113,17 @@ export function statList(s = settings()) {
     for (const stat of Array.isArray(s.trackerStats) ? s.trackerStats : DEFAULT_STATS) {
         const name = String(stat?.name ?? '').replace(/[:\n\r<>]/g, '').trim().slice(0, NAME_MAX);
         const statId = String(stat?.id ?? '');
-        if (!name || !statId || seen.has(statId) || out.length >= STATS_MAX) continue;
+        // Two stats with one name, or one named like a built-in line, could not be told apart in a reply
+        if (!name || !statId || seen.has(statId) || out.length >= STATS_MAX || !nameIsFree(name, out)) continue;
         seen.add(statId);
         out.push({ id: statId, name, color: /^#[0-9a-f]{6}$/i.test(stat?.color) ? stat.color : '#c8553d' });
     }
     return out;
+}
+
+function nameIsFree(name, others) {
+    const lower = name.toLowerCase();
+    return !TAKEN_NAMES.includes(lower) && !/^stored\b/.test(lower) && !others.some((other) => other.name.toLowerCase() === lower);
 }
 
 // ---------- The values ----------
@@ -123,7 +138,7 @@ function tidyText(value) {
 
 /** A list of things out of text ("a, b, c") or an array; "none" and the like give an empty list. */
 export function tidyList(value) {
-    const parts = Array.isArray(value) ? value : String(value ?? '').split(/[,;\n]+/);
+    const parts = Array.isArray(value) ? value : splitList(String(value ?? ''));
     const out = [];
     for (const part of parts) {
         const item = String(part ?? '').replace(/\s+/g, ' ').replace(/^[\s\-*•]+|[\s.]+$/g, '').slice(0, ITEM_MAX);
@@ -131,6 +146,28 @@ export function tidyList(value) {
         if (!out.includes(item) && out.length < ITEMS_MAX) out.push(item);
     }
     return out;
+}
+
+// "1,000 gold coins, map (torn, stained)" is two things: a comma between two digits or inside brackets
+// belongs to the thing itself
+function splitList(text) {
+    const parts = [];
+    let part = '';
+    let depth = 0;
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        if (char === '(' || char === '[') depth++;
+        else if ((char === ')' || char === ']') && depth > 0) depth--;
+        const inNumber = char === ',' && /\d/.test(text[i - 1] ?? '') && /\d{3}(?!\d)/.test(text.slice(i + 1, i + 5));
+        if (char === '\n' || ((char === ',' || char === ';') && depth === 0 && !inNumber)) {
+            parts.push(part);
+            part = '';
+            // A bracket left open ends with its line
+            if (char === '\n') depth = 0;
+        } else part += char;
+    }
+    parts.push(part);
+    return parts;
 }
 
 function tidy(raw) {
@@ -173,6 +210,7 @@ function store(next, { message } = {}) {
     if (!ctx.chatMetadata) return;
     ctx.chatMetadata[KEY] = next;
     const holder = message ?? lastReply(ctx);
+    if (!holder) ctx.chatMetadata[START_KEY] = structuredClone(next);
     if (holder) {
         holder.extra ??= {};
         holder.extra[KEY] = structuredClone(next);
@@ -190,19 +228,46 @@ function store(next, { message } = {}) {
     setNote();
 }
 
-// After a reply is deleted or swiped away: the values go back to the last copy a reply still holds
-function followChat() {
+// After a reply is deleted or swiped away: the values go back to the last copy a reply still holds, or to
+// nothing set when no reply holds one (the reply that first stated them is the one that went)
+function followChat(swipedId) {
     const ctx = context();
     const chat = ctx.chat ?? [];
-    for (let i = chat.length - 1; i >= 0; i--) {
-        const kept = chat[i]?.extra?.[KEY];
-        if (!kept) continue;
-        ctx.chatMetadata[KEY] = tidy(kept);
+    // A swipe that is about to be written anew: SillyTavern keeps the message's extra data, so it still carries
+    // the copy of the reply being replaced. That copy stays with the old swipe (swipe_info) and comes off here.
+    const swiped = Number.isInteger(swipedId) ? chat[swipedId] : null;
+    // One of several replies from a single request, shown for the first time: it still carries its own block
+    // (only the first was read when they arrived) under a copy of the first one's values
+    const late = Boolean(swiped) && typeof swiped.swipes?.[swiped.swipe_id] === 'string' && typeof swiped.mes === 'string' && /<div\b[^>]*\bforge-trackers\b/i.test(swiped.mes);
+    if (swiped && Array.isArray(swiped.swipes) && (late || typeof swiped.swipes[swiped.swipe_id] !== 'string')) delete swiped.extra?.[KEY];
+    // The other model was asked about a reply that has gone, or about another swipe of it: its answer is not wanted
+    if (askingFor && (!chat.includes(askingFor.message) || swipeOf(askingFor.message) !== askingFor.swipe)) dropAsking();
+    if (queued && !chat.includes(queued)) queued = null;
+    let kept = null;
+    for (let i = chat.length - 1; i >= 0 && !kept; i--) kept = chat[i]?.extra?.[KEY] ?? null;
+    if (ctx.chatMetadata) {
+        ctx.chatMetadata[KEY] = kept ? tidy(kept) : tidy(ctx.chatMetadata[START_KEY]);
         ctx.saveMetadataDebounced?.();
-        break;
+    }
+    // ... which is read and taken out now, from the values as they stood before this reply
+    if (late) {
+        onReply(swipedId, 'swipe');
+        return;
     }
     setNote();
     render();
+}
+
+// A fresh reply is given its swipe number (0) only after SillyTavern has announced it, so none yet counts as 0
+function swipeOf(message) {
+    return message.swipe_id ?? 0;
+}
+
+function dropAsking() {
+    asking?.abort();
+    asking = null;
+    askingFor = null;
+    queued = null;
 }
 
 // ---------- The block in a reply ----------
@@ -232,11 +297,13 @@ export function noteText(now, s, stats) {
     return `{{user}}'s trackers, as they stand now:\n<div class="${BLOCK_CLASS}">\n${lines.join('\n')}\n</div>\nAt the very end of your reply, after the story text, write this block again with the values as they stand after your reply. ${rules.join(' ')}`;
 }
 
-// What a model may write around its block: a last line like "[Trackers for Name:" before it, loose brackets after it
-const SHELL_OPEN = /(?:^|\n)[ \t]*(?:[[(*_#>`]+[ \t]*(?:updated[ \t]+)?[^\n[\]]{0,40}?\btrackers?\b[^\n[\]]{0,160}\]?|[^\n[\]]{0,40}?\btrackers?\b[^\n[\]]{0,160}:)[\s*_`]*$/i;
+// What a model may write around its block: a last line like "[Trackers for Name:" before it, loose brackets after it.
+// Only a line that is nothing but that heading counts: story text that merely mentions a tracker is left alone.
+const HEADING = String.raw`(?:updated[ \t]+)?(?:[^\n[\]:]{1,40}?['’]s[ \t]+)?trackers?(?:[ \t]+for[ \t]+[^\n[\]:]{1,40}?)?(?:[.,]?[ \t]*(?:the[ \t]+values[ \t]+)?as[ \t]+they[ \t]+stand(?:[ \t]+now)?)?[ \t]*:?`;
+const SHELL_OPEN = new RegExp(String.raw`(?:^|\n)[ \t]*[[(*_#>` + '`' + String.raw`]*[ \t]*${HEADING}[ \t]*[\s\]*_` + '`' + String.raw`]*$`, 'i');
 const SHELL_CLOSE = /^[\s*_`]*[\])][\s*_`]*/;
 // The same heading with no block inside it, at the end of a reply: "[Trackers for Name: ... ]"
-const SHELL_ALONE = /(?:^|\n)[ \t]*[*_`]*\[[ \t]*(?:updated[ \t]+)?[^\n[\]]{0,40}?\btrackers?\b[^\n[\]]{0,160}(?:\n([^[\]]{0,2000}))?\][\s*_`]*$/i;
+const SHELL_ALONE = new RegExp(String.raw`(?:^|\n)[ \t]*[*_` + '`' + String.raw`]*\[[ \t]*${HEADING}[ \t]*(?:\n([^[\]]{0,2000}))?\][\s*_` + '`' + String.raw`]*$`, 'i');
 
 function takeShell(source) {
     const match = SHELL_ALONE.exec(source);
@@ -247,7 +314,8 @@ function takeShell(source) {
 
 /** The note for the story's AI when another model keeps the trackers: the values to go by, with nothing to write back. */
 export function tellText(now, s, stats) {
-    const lines = blockLines(now, s, stats).filter((line) => !/: not set$/.test(line));
+    // A list nobody has filled in reads "none"; told as a fact it would have the story strip the character bare
+    const lines = blockLines(now, s, stats).filter((line) => !/: (?:not set|none)$/.test(line));
     if (!lines.length) return '';
     return `{{user}}'s situation right now, for you to go by in the story. Keep the story consistent with it, and do not write this list out or mention it:\n${lines.join('\n')}`;
 }
@@ -268,10 +336,22 @@ export function takeBlock(text) {
     }
     if (start < 0) return takeShell(source);
     const closing = source.slice(bodyStart).search(/<\/div\s*>/i);
-    const body = closing < 0 ? source.slice(bodyStart) : source.slice(bodyStart, bodyStart + closing);
+    let body = closing < 0 ? source.slice(bodyStart) : source.slice(bodyStart, bodyStart + closing);
+    // A block with no end was cut off (the reply ran out of length, or Stop was pressed): its last line may be
+    // half a value, so it is left out unless the line was finished
+    if (closing < 0 && !/\n\s*$/.test(body)) body = body.slice(0, Math.max(0, body.lastIndexOf('\n')));
+    // Earlier blocks in the same reply (the note's own block copied first, say) go too; the last one is read
+    let before = source.slice(0, start).replace(/<div\b[^>]*\bforge-trackers\b[^>]*>[\s\S]*?<\/div\s*>/gi, '');
     // A model may copy a heading and brackets around the block ("[Trackers for Name:" ... "]"): they go with it
-    const after = (closing < 0 ? '' : source.slice(bodyStart + closing).replace(/^<\/div\s*>/i, '')).replace(SHELL_CLOSE, '');
-    const rest = `${source.slice(0, start).replace(SHELL_OPEN, '').trimEnd()}${after.trim() ? `\n\n${after.trim()}` : ''}`.trimEnd();
+    let after = (closing < 0 ? '' : source.slice(bodyStart + closing).replace(/^<\/div\s*>/i, '')).replace(SHELL_CLOSE, '');
+    // ... or put the block in a code fence, which would stay behind as an empty box
+    const fenceOpen = /(?:^|\n)[ \t]*```[a-z]*[ \t]*\n?\s*$/i;
+    const fenceClose = /^\s*```[ \t]*(?=\n|$)/;
+    if (fenceOpen.test(before) && (fenceClose.test(after) || closing < 0)) {
+        before = before.replace(fenceOpen, '');
+        after = after.replace(fenceClose, '');
+    }
+    const rest = `${before.replace(SHELL_OPEN, '').trimEnd()}${after.trim() ? `\n\n${after.trim()}` : ''}`.trim();
     const lines = body.split(/\n|<br\s*\/?>/i).map((line) => line.replace(/<[^>]*>/g, '').replace(/^[\s\-*•]+|\*+/g, '').trim()).filter(Boolean);
     return { text: rest, lines };
 }
@@ -293,9 +373,9 @@ export function readLines(lines, before, s, stats) {
             next[field ? field[0] : 'location'] = tidyText(value);
             changed = true;
         } else if (byName.has(name)) {
-            const number = /-?\d+(?:\.\d+)?/.exec(value);
-            if (s.trackersStats === false || !number) continue;
-            next.stats[byName.get(name)] = Math.min(100, Math.max(0, Math.round(Number(number[0]))));
+            const number = statNumber(value);
+            if (s.trackersStats === false || number === null) continue;
+            next.stats[byName.get(name)] = Math.min(100, Math.max(0, Math.round(number)));
             changed = true;
         } else if (s.trackersInventory !== false) {
             const stored = /^stored\s*(?:\(([^)]*)\)|(?:at|in|[-–])\s*(.+))$/i.exec(line.slice(0, at).trim());
@@ -316,16 +396,30 @@ export function readLines(lines, before, s, stats) {
     return changed ? next : null;
 }
 
-function onReply(messageId) {
+// The number a stat line states. "100 → 85" (or "100 -> 85") states the one after the arrow; "8/10" is a
+// share, so it counts as 80.
+function statNumber(value) {
+    const after = /(?:→|->|=>)\s*(-?\d+(?:\.\d+)?)/.exec(value);
+    if (after) return Number(after[1]);
+    const share = /^\D*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/.exec(value);
+    if (share && Number(share[2]) > 0 && Number(share[2]) !== 100) return Number(share[1]) * 100 / Number(share[2]);
+    const number = /-?\d+(?:\.\d+)?/.exec(value);
+    return number ? Number(number[0]) : null;
+}
+
+function onReply(messageId, type) {
     const s = settings();
     if (!active || s.trackersUpdate === false) return;
     const ctx = context();
     const message = ctx.chat?.[Number(messageId)];
     if (!message || message.is_user || message.is_system || typeof message.mes !== 'string') return;
     const found = takeBlock(message.mes);
+    // A chat that opens with one message fires this for its greeting each time (SillyTavern's 'first_message'):
+    // that is not a new reply, so the other model is not asked about it again
     const other = byOther(s);
+    const ask = other && type !== 'first_message';
     if (!found) {
-        if (other) askOther(Number(messageId));
+        if (ask) askOther(Number(messageId));
         return;
     }
     message.mes = found.text;
@@ -343,7 +437,7 @@ function onReply(messageId) {
         }
     }
     render();
-    if (other) askOther(Number(messageId));
+    if (ask) askOther(Number(messageId));
 }
 
 // ---------- Another model keeps them up to date ----------
@@ -457,15 +551,24 @@ async function askOther(messageId) {
     const ctx = context();
     const message = ctx.chat?.[messageId];
     if (!active || !message || message.is_user || message.is_system) return false;
+    // An answer about an earlier reply is still on its way: this reply waits for it, so that reply's changes
+    // are not lost. (Asking again about the same reply replaces the request.)
+    if (asking && askingFor && askingFor.message !== message && ctx.chat.includes(askingFor.message)) {
+        queued = message;
+        return false;
+    }
     asking?.abort();
     const mine = asking = new AbortController();
+    const swipe = swipeOf(message);
+    askingFor = { message, swipe };
     const chatId = ctx.chatId;
     render();
     try {
         const answer = await sendOther(s, otherMessages(ctx, s, messageId), mine.signal);
-        // A newer reply, another chat or a deleted message: this answer is about something that is gone
-        if (asking !== mine || context().chatId !== chatId || context().chat?.[messageId] !== message) return false;
-        const lines = (takeBlock(answer) ?? takeBlock(`<div class="${BLOCK_CLASS}">\n${answer}`)).lines;
+        // A newer request, another chat, a deleted message or another swipe of it: this answer is about
+        // something that is gone
+        if (asking !== mine || context().chatId !== chatId || context().chat?.[messageId] !== message || swipeOf(message) !== swipe) return false;
+        const lines = (takeBlock(answer) ?? takeBlock(`<div class="${BLOCK_CLASS}">\n${answer}\n</div>`)).lines;
         const next = readLines(lines, values(), s, statList(s));
         if (!next) throw new Error(answer.trim() ? `Its answer had no tracker lines: "${answer.trim().slice(0, 120)}"` : 'Its answer was empty.');
         otherFailed = '';
@@ -476,8 +579,17 @@ async function askOther(messageId) {
         otherProblem(error);
         return false;
     } finally {
-        if (asking === mine) asking = null;
+        if (asking === mine) {
+            asking = null;
+            askingFor = null;
+        }
         render();
+        // The reply that waited is asked about now, from the values as they stand after this answer
+        if (!asking && queued) {
+            const next = context().chat?.indexOf(queued) ?? -1;
+            queued = null;
+            if (next >= 0) askOther(next);
+        }
     }
 }
 
@@ -510,12 +622,34 @@ function setNote() {
     if (!ctx.setExtensionPrompt) return;
     const s = settings();
     let text = '';
-    if (active && ctx.chatMetadata) {
+    let asksForBlock = false;
+    // Only in a chat whose trackers the profile shows, and only with "Ask the AI to keep them up to date" on
+    if (active && ctx.chatMetadata && chatOpen(ctx) && s.trackersUpdate !== false) {
         if (byOther(s)) text = s.trackersTell === true ? tellText(values(), s, statList(s)) : '';
-        else if (s.trackersUpdate !== false) text = noteText(values(), s, statList(s));
+        else {
+            text = noteText(values(), s, statList(s));
+            asksForBlock = true;
+        }
     }
-    // In the chat, right at the end (position 1, depth 0), as a system note (role 0)
-    ctx.setExtensionPrompt(PROMPT_KEY, text, 1, 0, false, 0);
+    // In the chat, right at the end (position 1, depth 0), as a system note (role 0). The note that asks for a
+    // block is left out of requests whose answer never comes back as a reply: Impersonate writes into the
+    // message box, and background requests (image prompts, summaries) go to whoever asked.
+    ctx.setExtensionPrompt(PROMPT_KEY, text, 1, 0, false, 0, asksForBlock ? wantsBlock : null);
+}
+
+function wantsBlock() {
+    return generationType !== 'impersonate' && generationType !== 'quiet';
+}
+
+function chatOpen(ctx) {
+    return ctx.chatId !== undefined && ctx.chatId !== null && ctx.chatId !== '';
+}
+
+// SillyTavern can empty every extension's note without a chat change (a card saved in a chat that has only its
+// greeting does), so the note is set again as each request starts.
+function onGenerationStarted(type) {
+    generationType = typeof type === 'string' && type ? type : 'normal';
+    setNote();
 }
 
 // ---------- Following SillyTavern ----------
@@ -523,7 +657,7 @@ function setNote() {
 function startListening() {
     if (listening.length) return;
     const { eventSource, eventTypes } = context();
-    const follow = { MESSAGE_RECEIVED: onReply, MESSAGE_DELETED: followChat, MESSAGE_SWIPED: followChat, CHAT_CHANGED: onChatChanged };
+    const follow = { MESSAGE_RECEIVED: onReply, MESSAGE_DELETED: () => followChat(), MESSAGE_SWIPED: followChat, CHAT_CHANGED: onChatChanged, GENERATION_STARTED: onGenerationStarted };
     for (const [name, handler] of Object.entries(follow)) {
         const type = eventTypes?.[name];
         if (!type) continue;
@@ -543,9 +677,19 @@ function onChatChanged() {
     openStat = '';
     openList = '';
     addingPlace = false;
-    asking?.abort();
-    asking = null;
+    dropAsking();
     otherFailed = '';
+    generationType = 'normal';
+    // A branch or checkpoint is a copy of its parent's values with fewer messages: the values that count are
+    // the ones its own last reply holds
+    const ctx = context();
+    const chat = ctx.chat ?? [];
+    let kept = null;
+    for (let i = chat.length - 1; i >= 0 && !kept; i--) kept = chat[i]?.extra?.[KEY] ?? null;
+    if (kept && ctx.chatMetadata && JSON.stringify(tidy(kept)) !== JSON.stringify(tidy(ctx.chatMetadata[KEY]))) {
+        ctx.chatMetadata[KEY] = tidy(kept);
+        ctx.saveMetadataDebounced?.();
+    }
     setNote();
     render();
 }
@@ -685,6 +829,11 @@ export function bindSettings($root, s, save) {
                     name.value = stat.name;
                     return;
                 }
+                if (!nameIsFree(text, stats.filter((one) => one.id !== stat.id))) {
+                    name.value = stat.name;
+                    globalThis.toastr?.warning(`"${text}" is already the name of another stat or of one of the tracker's own lines. Pick another name.`, 'Trackers');
+                    return;
+                }
                 keep((next) => { next[index].name = text; });
                 draw();
             });
@@ -723,13 +872,17 @@ export function bindSettings($root, s, save) {
     draw();
 }
 
+/** "Reset to Forge defaults" clears the other model's address, so the key that went with it is forgotten too. */
+export function reset() {
+    keepKey('');
+}
+
 export function apply(s) {
     active = Boolean(s.enabled && s.trackers && s.layout === 'columns' && window.matchMedia(DESKTOP).matches);
     if (active) startListening();
     else stopListening();
     if (!active || !byOther(s) || s.trackersUpdate === false) {
-        asking?.abort();
-        asking = null;
+        dropAsking();
         otherFailed = '';
     }
     setNote();
@@ -755,8 +908,7 @@ function render() {
     if (!box) return;
     const ctx = context();
     const s = settings();
-    const chatOpen = ctx.chatId !== undefined && ctx.chatId !== null && ctx.chatId !== '';
-    if (!active || !chatOpen) {
+    if (!active || !chatOpen(ctx)) {
         box.replaceChildren();
         return;
     }
