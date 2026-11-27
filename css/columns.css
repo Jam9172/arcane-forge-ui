@@ -50,6 +50,13 @@ body.forge-ui.forge-columns #cfgConfig {
     box-sizing: border-box;
 }
 
+/* SillyTavern's enlarged picture (a click on a message's picture with "Profile cards" off, or on a picture
+   the card does not show) opens in that same gap, on a layer under the chat column's. Here the rail and the
+   chat list are in its place, so it is drawn one layer above the columns. */
+body.forge-ui.forge-columns .zoomed_avatar {
+    z-index: calc(var(--forge-z-columns) + 1);
+}
+
 /* ---------- The chat column ---------- */
 
 body.forge-ui.forge-columns #sheld {

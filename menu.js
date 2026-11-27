@@ -60,6 +60,9 @@ const SVG = 'http://www.w3.org/2000/svg';
 // SillyTavern's own windows that can open over the panel and that its Escape handler (processHotkeys in
 // RossAscends-mods.js) closes itself. Its newer popups are <dialog>s, which the browser closes on Escape.
 const WINDOWS = '#dialogue_popup, #select_chat_popup, #character_popup';
+// The Three columns layout's rail buttons (columns.js), which have the round buttons' job in that layout.
+// Each names in data-forge-opens the drawer it opens.
+const RAIL_BUTTONS = '#forge-rail [data-forge-opens]';
 // What Tab can stop at, before the checks in isTabStop
 const TABBABLE = 'a[href], area[href], button, input:not([type="hidden"]), select, textarea, summary, iframe, audio[controls], video[controls], [contenteditable]:not([contenteditable="false"]), [tabindex]';
 // Set on the frame while SillyTavern's own Reduced Motion setting is on; css/menu.css then moves nothing
@@ -380,11 +383,14 @@ function onKey(event) {
     } else if (event.key === 'Tab') {
         // Alt+Tab too: in WebKit that is "Tab to every control"
         if (windowOnTop()) return;
+        // With the focus inside a shadow root (an open colour picker's fields), where the panel cannot look,
+        // the browser moves it. keepTab still brings it back if that takes it out of the panel.
+        if (document.activeElement?.shadowRoot?.activeElement) return;
         const stops = tabStops();
         const next = nextStop(stops, document.activeElement, event.shiftKey);
         if (next === undefined) return;
         event.preventDefault();
-        next?.focus();
+        if (next) stopOf(next)?.focus();
     }
 }
 
@@ -409,12 +415,20 @@ function keepTab(event, from) {
     const inside = (element) => stops.roots.some((root) => root.contains(element));
     const active = document.activeElement;
     if (inside(active) || !(nowhere(active) || inside(from))) return;
-    nextStop(stops, inside(from) ? from : null, event.shiftKey)?.focus();
+    const next = nextStop(stops, inside(from) ? from : null, event.shiftKey);
+    if (next) stopOf(next)?.focus();
 }
 
 // An open <dialog> (SillyTavern's popups, or another extension's), or one of SillyTavern's older windows
 function windowOnTop() {
-    return dialogOnTop() || [...document.querySelectorAll(WINDOWS)].some(drawn);
+    return dialogOnTop() || [...document.querySelectorAll(WINDOWS)].some((element) => drawn(element) && !underPanel(element));
+}
+
+// The advanced definitions window is under the panel, not over it, while the open menu is not one of
+// SillyTavern's side panels: SillyTavern then lifts its menus over that window, and css/menu.css lifts the
+// frame with them ("Windows over the panel").
+function underPanel(element) {
+    return element.matches('#character_popup.open') && Boolean(document.querySelector(`${OPEN_MENU}:not(.fillLeft):not(.fillRight)`));
 }
 
 function dialogOnTop() {
@@ -431,7 +445,20 @@ function tabStops() {
     const panel = document.querySelector(`#${FRAME_ID} .forge-menu-panel`);
     const menu = document.querySelector(OPEN_MENU);
     const roots = [panel, menu].filter(Boolean);
-    return { roots, list: roots.flatMap((root) => [...root.querySelectorAll(TABBABLE)].filter(isTabStop)) };
+    return { roots, list: roots.flatMap((root) => [...root.querySelectorAll('*')].filter(stopOf)) };
+}
+
+// What gets the focus when Tab stops at an element: the element itself, or, for one that keeps its controls in
+// a shadow root, where querySelectorAll does not look (SillyTavern's colour pickers), the first control in
+// there. null for an element Tab does not stop at.
+function stopOf(element) {
+    if (element.matches(TABBABLE) && isTabStop(element)) return element;
+    if (!element.shadowRoot || element.closest('[inert]')) return null;
+    for (const inner of element.shadowRoot.querySelectorAll('*')) {
+        const stop = stopOf(inner);
+        if (stop) return stop;
+    }
+    return null;
 }
 
 // The browser's own rules for Tab, as far as the panel needs them: focusable, not disabled, not inert, drawn,
@@ -482,6 +509,9 @@ function findAgain(element) {
     if (element.id) return `#${CSS.escape(element.id)}`;
     const round = [...element.classList].find((name) => name.startsWith('forge-menu-round-'));
     if (round && element.closest(`#${BUTTONS_ID}`)) return `#${BUTTONS_ID} .${round}`;
+    // columns.js builds its rail again now and then, so a rail button is found again by the drawer it opens
+    const rail = element.closest(RAIL_BUTTONS);
+    if (rail) return railButton(rail.dataset.forgeOpens);
     const toggle = element.closest(`${DRAWERS} > .drawer-toggle`);
     const drawerId = toggle?.parentElement.id;
     if (!drawerId) return null;
@@ -490,12 +520,21 @@ function findAgain(element) {
 }
 
 // The control that opens a section, as findAgain would give it: its round button (Characters for Characters,
-// Menu for the others), or, with the buttons off, its top bar icon
+// Menu for the others), or, with the buttons off, its top bar icon. In the Three columns layout the round
+// buttons are hidden (css/columns.css): there it is the rail's button for the section, or the rail's Menu
+// button, which opens AI response.
 function openerOf(drawer) {
+    if (document.querySelector(RAIL_BUTTONS)) {
+        return document.querySelector(railButton(drawer.id)) ? railButton(drawer.id) : railButton(defaults.menuLast);
+    }
     if (extension_settings[MODULE]?.menuButtons) {
         return `#${BUTTONS_ID} .forge-menu-round-${drawer.id === CHARACTERS ? 'characters' : 'menu'}`;
     }
     return findAgain(iconOf(drawer));
+}
+
+function railButton(drawerId) {
+    return `#forge-rail [data-forge-opens="${CSS.escape(drawerId)}"]`;
 }
 
 // The focus went with the frame: it is nowhere, in the frame, or in a menu that is no longer drawn

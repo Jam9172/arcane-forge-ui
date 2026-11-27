@@ -20,7 +20,7 @@ import { getGroupPastChats, openGroupById } from '../../../group-chats.js';
 import { user_avatar } from '../../../personas.js';
 import { timestampToMoment } from '../../../utils.js';
 import { selected_world_info } from '../../../world-info.js';
-import { closeCard, openCard, whoSent } from './card.js';
+import { closeCard, fillMacros, forgetFills, openCard, whoSent } from './card.js';
 import { holder as trackerHolder } from './trackers.js';
 import { holder as keeperHolder } from './keeper.js';
 
@@ -56,6 +56,8 @@ const CONTROLS = ['forge-ui-columns-profile', 'forge-ui-columns-width', 'forge-u
 const RAIL_MAX = 40;
 // How much of a character's description the profile shows
 const ABOUT_MAX = 320;
+// Where text is typed in the profile (the trackers' fields and their list editor)
+const TYPED = 'textarea, input[type="text"], input[type="search"], input[type="number"], input:not([type])';
 const SVG = 'http://www.w3.org/2000/svg';
 // SillyTavern's own menus, by the id of their drawer in the top bar
 const MENU = { characters: 'rightNavHolder', lorebooks: 'WI-SP-button', ai: 'ai-config-button', persona: 'persona-management-button' };
@@ -75,6 +77,13 @@ let active = false;
 let listening = [];
 let refreshTimer = 0;
 let chatsRun = 0;
+// The settings the columns were last built from (see builtFrom)
+let applied = '';
+// Whose chats the chat list holds (see ownerKey); '' for nobody's
+let chatsFor = '';
+// Whether the profile is waiting to be built again until the typing in it has ended, and the timer for that
+let profileWaits = false;
+let profileTimer = 0;
 
 export function settingsHtml(s) {
     const off = s.layout === 'columns' ? '' : ` disabled title="${NEED.replaceAll('"', '&quot;')}"`;
@@ -127,6 +136,7 @@ export function bindSettings($root, s, save) {
 
 export function apply(s) {
     const body = document.body;
+    const was = active;
     active = Boolean(s.enabled && s.layout === 'columns' && window.matchMedia(DESKTOP).matches);
     body.classList.toggle(BODY_CLASS, active);
     body.classList.toggle(PROFILE_CLASS, active && Boolean(s.columnsProfile));
@@ -135,18 +145,38 @@ export function apply(s) {
         closeCard();
         stopListening();
         clearTimeout(refreshTimer);
+        clearTimeout(profileTimer);
+        profileWaits = false;
+        chatsFor = '';
+        forgetFills();
         body.style.removeProperty(WIDTH);
         for (const element of [RAIL_ID, CHATS_ID, HEAD_ID, PROFILE_ID]) document.getElementById(element)?.remove();
         return;
     }
     const width = readingWidth(s.columnsReading);
     body.style.setProperty(WIDTH, width >= WIDTH_MAX ? 'none' : `${width}px`);
+    const fresh = !was || [RAIL_ID, CHATS_ID, HEAD_ID, PROFILE_ID].some((part) => !document.getElementById(part));
     if (!document.getElementById(RAIL_ID)) body.append(el('nav', { id: RAIL_ID, 'aria-label': 'Characters' }));
     if (!document.getElementById(CHATS_ID)) body.append(el('aside', { id: CHATS_ID, 'aria-label': 'Chats' }));
     if (!document.getElementById(HEAD_ID)) body.append(el('div', { id: HEAD_ID }));
-    if (!document.getElementById(PROFILE_ID)) body.append(el('aside', { id: PROFILE_ID, 'aria-label': 'Profile' }));
+    if (!document.getElementById(PROFILE_ID)) {
+        const profile = el('aside', { id: PROFILE_ID, 'aria-label': 'Profile' });
+        profile.addEventListener('focusout', profileSoon);
+        body.append(profile);
+    }
     startListening();
+    // This runs after every change on the settings screen, each step of a slider or a colour included. The
+    // columns are built again, and the chat list asked for again, only when the layout has just come on or a
+    // setting they are built from has changed. SillyTavern's events refresh them the rest of the time.
+    if (!fresh && builtFrom(s) === applied) return;
+    applied = builtFrom(s);
     refresh();
+}
+
+// The settings the columns are built from, as one text to compare. The reading width is not among them: it is
+// only the property on body.
+function builtFrom(s) {
+    return [Boolean(s.columnsProfile), s.columnsPreview !== false, s.columnsCard !== false].join();
 }
 
 // ---------- Profile cards ----------
@@ -211,12 +241,18 @@ function startListening() {
     if (listening.length) return;
     const { eventSource, eventTypes } = context();
     const later = () => refreshSoon();
+    // Another chat has its own variables, so the descriptions' macros are filled anew for it
+    const newChat = () => {
+        forgetFills();
+        refreshSoon();
+    };
     const names = ['CHAT_CHANGED', 'CHARACTER_EDITED', 'CHARACTER_DELETED', 'CHARACTER_DUPLICATED', 'CHARACTER_PAGE_LOADED', 'GROUP_UPDATED', 'GROUP_CHAT_CREATED', 'GROUP_CHAT_DELETED', 'CHAT_DELETED', 'CHAT_CREATED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED', 'MESSAGE_DELETED', 'WORLDINFO_SETTINGS_UPDATED', 'SETTINGS_UPDATED', 'APP_READY'];
     for (const name of names) {
         const type = eventTypes?.[name];
         if (!type) continue;
-        eventSource.on(type, later);
-        listening.push([type, later]);
+        const handler = name === 'CHAT_CHANGED' ? newChat : later;
+        eventSource.on(type, handler);
+        listening.push([type, handler]);
     }
 }
 
@@ -277,16 +313,22 @@ function renderRail(ctx, now) {
     }
 
     const top = el('div', { class: 'forge-rail-top' });
-    top.append(railButton('All characters', ICONS.people, () => openMenu(MENU.characters), 'forge-rail-home'), el('div', { class: 'forge-rail-rule' }));
+    top.append(railButton('All characters', ICONS.people, MENU.characters, 'forge-rail-home'), el('div', { class: 'forge-rail-rule' }));
     const foot = el('div', { class: 'forge-rail-foot' });
-    foot.append(railButton('Lorebooks', ICONS.book, () => openMenu(MENU.lorebooks)), railButton('Menu', ICONS.menu, () => openMenu(MENU.ai)));
+    foot.append(railButton('Lorebooks', ICONS.book, MENU.lorebooks), railButton('Menu', ICONS.menu, MENU.ai));
+    // The focus on one of the menu buttons (menu.js puts it back there when its panel closes) stays on that
+    // button when the rail is built again
+    const held = rail.contains(document.activeElement) ? document.activeElement.dataset.forgeOpens : '';
     rail.replaceChildren(top, list, foot);
+    if (held) rail.querySelector(`[data-forge-opens="${held}"]`)?.focus();
 }
 
-function railButton(name, path, action, extra = '') {
-    const button = el('button', { type: 'button', class: `forge-rail-button ${extra}`.trim(), title: name, 'aria-label': name });
+// A rail button that opens one of SillyTavern's menus. data-forge-opens names that menu's drawer: menu.js
+// finds the button by it, to give the focus back when its panel closes.
+function railButton(name, path, drawerId, extra = '') {
+    const button = el('button', { type: 'button', class: `forge-rail-button ${extra}`.trim(), title: name, 'aria-label': name, 'data-forge-opens': drawerId });
     button.append(lineIcon(path));
-    button.addEventListener('click', action);
+    button.addEventListener('click', () => openMenu(drawerId));
     return button;
 }
 
@@ -316,6 +358,11 @@ async function renderChats(ctx, now, s) {
     title.textContent = now.name || 'No character open';
     head.replaceChildren(title);
     renderYou(ctx, you);
+    // Another character's or group's chats do not stay in the list, under the new name, while this one's are
+    // being fetched
+    const owner = ownerKey(now);
+    if (owner !== chatsFor) body.replaceChildren();
+    chatsFor = owner;
 
     if (now.kind === 'none') {
         const hint = el('p', { class: 'forge-chats-hint' });
@@ -381,8 +428,17 @@ function renderYou(ctx, you) {
     you.replaceChildren(cardFace(picture, user_avatar ? { kind: 'persona', file: user_avatar } : null, ctx.name1 || 'You'), text, change);
 }
 
+// The character or group as one text, to tell whether two of them are the same one
+function ownerKey(now) {
+    if (now.kind === 'group') return `group:${now.group.id}`;
+    return now.kind === 'character' ? `character:${now.character.avatar}` : '';
+}
+
 async function openChat(now, name) {
     if (name === String(now.chat ?? '')) return;
+    // SillyTavern opens a chat under whoever is open at that moment. If that is no longer who this list was
+    // built for, the chat is not theirs to open.
+    if (ownerKey(current(context())) !== ownerKey(now)) return;
     try {
         const ctx = context();
         if (now.kind === 'group') await ctx.openGroupChat(String(now.group.id), name);
@@ -446,6 +502,8 @@ function toggleProfile() {
     if (box) box.checked = s.columnsProfile;
     document.body.classList.toggle(PROFILE_CLASS, active && s.columnsProfile);
     renderHead(context(), current(context()), s);
+    // The page already shows the change, so apply() has nothing to build again for it
+    applied = builtFrom(s);
 }
 
 // ---------- The profile ----------
@@ -453,6 +511,11 @@ function toggleProfile() {
 function renderProfile(ctx, now) {
     const panel = document.getElementById(PROFILE_ID);
     if (!panel) return;
+    // Built again while something is being typed in it, the field would lose the focus and the rest of the
+    // typing would go nowhere. The profile waits until the focus has left the field (profileSoon).
+    const field = document.activeElement;
+    profileWaits = Boolean(field && panel.contains(field) && field.matches(TYPED));
+    if (profileWaits) return;
     const banner = el('div', { class: 'forge-profile-banner' });
     const art = backgroundArt();
     if (art) banner.style.backgroundImage = art;
@@ -533,6 +596,24 @@ function renderProfile(ctx, now) {
     panel.replaceChildren(banner, body);
 }
 
+// The focus has left something in the profile: if the profile waited for that, it is built now. Not in the
+// middle of a click on something in it, though: the button under the pointer would be gone before the click
+// was complete.
+function profileSoon() {
+    if (!profileWaits) return;
+    clearTimeout(profileTimer);
+    profileTimer = setTimeout(() => {
+        const panel = document.getElementById(PROFILE_ID);
+        if (!active || !profileWaits || !panel) return;
+        if (panel.matches(':active')) {
+            profileSoon();
+            return;
+        }
+        const ctx = context();
+        renderProfile(ctx, current(ctx));
+    }, 120);
+}
+
 function section(title, content) {
     const box = el('div', { class: 'forge-profile-section' });
     const label = el('p', { class: 'forge-profile-label' });
@@ -553,7 +634,7 @@ function aboutText(ctx, character) {
     if (!raw) return '';
     let text = raw;
     try {
-        text = ctx.substituteParams ? ctx.substituteParams(raw) : raw;
+        text = fillMacros(ctx, raw);
     } catch { /* keep the raw text */ }
     text = String(text).replace(/\s+/g, ' ').trim();
     return text.length > ABOUT_MAX ? `${text.slice(0, ABOUT_MAX).replace(/\s+\S*$/, '')}…` : text;

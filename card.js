@@ -21,6 +21,10 @@ const SAVE_WAIT_MS = 8000;
 
 // Saves what is still unsaved in the open card's About box; set while a card with one is open
 let saveOpenCard = null;
+// What SillyTavern's macro filler made of each text, by the text and the two names ({{user}}, {{char}}) it was
+// filled with. Emptied when the chat changes, and when it has grown to FILLS_MAX texts.
+const fills = new Map();
+const FILLS_MAX = 200;
 
 function context() {
     return globalThis.SillyTavern.getContext();
@@ -268,7 +272,12 @@ async function saveCharacterAbout(avatar, text) {
     if (!character) throw new Error('The character is no longer there');
     const edited = ctx.eventTypes?.CHARACTER_EDITED;
     const field = document.getElementById('description_textarea');
-    const inEditor = field && ctx.menuType !== 'create' && String(ctx.characterId) === String(index) && document.getElementById('avatar_url_pole')?.value === avatar;
+    const button = document.getElementById('create_button');
+    // SillyTavern has one form for editing a character and for creating one. After "Create new character" and
+    // Back it is still the Create form, with the open character's file name in it: saved through it then, the
+    // text would become a new character. Only the form in edit mode is this character's editor.
+    const editing = document.getElementById('form_create')?.getAttribute('actiontype') === 'editcharacter';
+    const inEditor = field && button && editing && ctx.menuType !== 'create' && String(ctx.characterId) === String(index) && document.getElementById('avatar_url_pole')?.value === avatar;
     if (inEditor && edited) {
         await new Promise((resolve, reject) => {
             const done = () => {
@@ -283,6 +292,10 @@ async function saveCharacterAbout(avatar, text) {
             ctx.eventSource.on(edited, done);
             field.value = text;
             field.dispatchEvent(new Event('input', { bubbles: true }));
+            // After an input SillyTavern waits a second, then saves the form as it is at that moment, by clicking
+            // this button. Another chat or character opened in that second fills the form with the stored text
+            // first, and the edit is gone. Clicked now, the form is read with the text just put in it.
+            button.click();
         });
         return;
     }
@@ -363,10 +376,32 @@ function filled(ctx, text) {
     const raw = String(text ?? '').trim();
     if (!raw) return '';
     try {
-        return String(ctx.substituteParams ? ctx.substituteParams(raw) : raw).trim();
+        return fillMacros(ctx, raw).trim();
     } catch {
         return raw;
     }
+}
+
+/**
+ * A text with SillyTavern's macros filled in. Each text is filled once and the result kept: a macro that
+ * changes a variable ({{incvar}}, {{setvar}}) would otherwise run again every time the text is shown.
+ * @param {object} ctx SillyTavern's context
+ * @param {string} raw the text as it is stored
+ * @returns {string}
+ */
+export function fillMacros(ctx, raw) {
+    if (!ctx.substituteParams) return raw;
+    const key = JSON.stringify([ctx.name1, ctx.name2, raw]);
+    if (!fills.has(key)) {
+        if (fills.size >= FILLS_MAX) fills.clear();
+        fills.set(key, String(ctx.substituteParams(raw)));
+    }
+    return fills.get(key);
+}
+
+/** Forgets the filled texts. columns.js calls this when the chat changes: another chat has its own variables. */
+export function forgetFills() {
+    fills.clear();
 }
 
 function thumbnail(ctx, type, file) {
