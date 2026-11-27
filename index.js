@@ -219,13 +219,14 @@ function validLookValue(rule, value) {
             // Out of range is ignored, not clamped: a file asking for 999 asks for something else than 70
             return typeof value === 'number' && Number.isFinite(value) && value >= rule.min && value <= rule.max ? value : undefined;
         case 'string':
-            return typeof value === 'string' && value.length <= rule.max ? value : undefined;
+            return typeof value === 'string' && value.length <= rule.max && !rule.refuse?.(value) ? value : undefined;
         case 'strings': {
             // An object with some of the named keys, each a short enough string; the others are left as they are
             if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
             const out = {};
             for (const key of rule.keys) {
-                if (typeof value[key] === 'string' && value[key].length <= rule.max) out[key] = value[key];
+                // A feature can refuse a text it must never be handed by a file (rule.refuse)
+                if (typeof value[key] === 'string' && value[key].length <= rule.max && !rule.refuse?.(value[key])) out[key] = value[key];
             }
             return Object.keys(out).length ? out : undefined;
         }
@@ -246,10 +247,11 @@ function importLook(text) {
         return;
     }
     const s = settings();
-    const clamp = (value, min, max) => (Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : undefined);
+    // Only a number counts: Number(null), Number('') and Number(false) are 0, which would be taken for the smallest size
+    const clamp = (value, min, max) => (typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : undefined);
     const numbers = { fontSize: [13, 24], chatScale: [80, 150], phoneChatScale: [70, 150], panelOpacity: [50, 100], panelBlur: [0, 24], drawerOpacity: [50, 100] };
     for (const [key, [min, max]] of Object.entries(numbers)) {
-        const value = clamp(Number(look[key]), min, max);
+        const value = clamp(look[key], min, max);
         if (value !== undefined) s[key] = value;
     }
     if (typeof look.phoneCompact === 'boolean') s.phoneCompact = look.phoneCompact;
@@ -541,6 +543,8 @@ function bindSettings($root) {
         // Each feature first takes itself off with the settings it had, so it can undo what only they record
         // (the menu panel's pins); then every feature setting goes back to its default with the rest.
         applyFeatures({ ...s, enabled: false });
+        // What a feature keeps outside the settings goes with them (the trackers' key for the other model)
+        for (const feature of FEATURES) feature.reset?.();
         extension_settings[MODULE] = structuredClone({ ...featureDefaults(), ...defaults, enabled: s.enabled, aiLayout: s.aiLayout, userLayout: s.userLayout, menuCards: s.menuCards, extCards: s.extCards, icons: s.icons, swipesRight: s.swipesRight, aiHelp: s.aiHelp, aiDescriptions: s.aiDescriptions, omitParamsBackup: s.omitParamsBackup ?? {}, savedPalettes: s.savedPalettes ?? {}, keeperLog: s.keeperLog ?? [], keeperOriginals: s.keeperOriginals ?? {} });
         save();
         mountSettings();
