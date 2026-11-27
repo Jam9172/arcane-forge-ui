@@ -228,8 +228,21 @@ export function noteText(now, s, stats) {
     if (s.trackersTime !== false) rules.push('Move the time on by however long the events of your reply took.');
     if (s.trackersStats !== false && stats.length) rules.push(`${stats.map((stat) => stat.name).join(', ')}: whole numbers from 0 to 100; change one only when the story changes it.`);
     if (s.trackersInventory !== false) rules.push('The lists are {{user}}\'s things, separated by commas ("none" when empty); change them only when something is gained, lost, used up, put on, taken off or put away. For things kept somewhere else, use one line per place: Stored (place): things.');
-    rules.push('Where a value says "not set", choose one that fits the story.', 'Never mention this block in the story itself.');
-    return `[Trackers for {{user}}. The values as they stand now:\n<div class="${BLOCK_CLASS}">\n${lines.join('\n')}\n</div>\nAt the very end of your reply, after the story text, write this block again with the values as they stand after your reply. ${rules.join(' ')}]`;
+    rules.push('Where a value says "not set", choose one that fits the story.', 'Never mention this block in the story itself.', 'Write the block from <div to </div> and nothing around it: no heading, no brackets, no words before or after.');
+    return `{{user}}'s trackers, as they stand now:\n<div class="${BLOCK_CLASS}">\n${lines.join('\n')}\n</div>\nAt the very end of your reply, after the story text, write this block again with the values as they stand after your reply. ${rules.join(' ')}`;
+}
+
+// What a model may write around its block: a last line like "[Trackers for Name:" before it, loose brackets after it
+const SHELL_OPEN = /(?:^|\n)[ \t]*(?:[[(*_#>`]+[ \t]*(?:updated[ \t]+)?[^\n[\]]{0,40}?\btrackers?\b[^\n[\]]{0,160}\]?|[^\n[\]]{0,40}?\btrackers?\b[^\n[\]]{0,160}:)[\s*_`]*$/i;
+const SHELL_CLOSE = /^[\s*_`]*[\])][\s*_`]*/;
+// The same heading with no block inside it, at the end of a reply: "[Trackers for Name: ... ]"
+const SHELL_ALONE = /(?:^|\n)[ \t]*[*_`]*\[[ \t]*(?:updated[ \t]+)?[^\n[\]]{0,40}?\btrackers?\b[^\n[\]]{0,160}(?:\n([^[\]]{0,2000}))?\][\s*_`]*$/i;
+
+function takeShell(source) {
+    const match = SHELL_ALONE.exec(source);
+    if (!match) return null;
+    const lines = String(match[1] ?? '').split(/\n|<br\s*\/?>/i).map((line) => line.replace(/<[^>]*>/g, '').replace(/^[\s\-*•]+|\*+/g, '').trim()).filter(Boolean);
+    return { text: source.slice(0, match.index).trimEnd(), lines };
 }
 
 /**
@@ -246,11 +259,12 @@ export function takeBlock(text) {
         start = match.index;
         bodyStart = match.index + match[0].length;
     }
-    if (start < 0) return null;
+    if (start < 0) return takeShell(source);
     const closing = source.slice(bodyStart).search(/<\/div\s*>/i);
     const body = closing < 0 ? source.slice(bodyStart) : source.slice(bodyStart, bodyStart + closing);
-    const after = closing < 0 ? '' : source.slice(bodyStart + closing).replace(/^<\/div\s*>/i, '');
-    const rest = `${source.slice(0, start).trimEnd()}${after.trim() ? `\n\n${after.trim()}` : ''}`.trimEnd();
+    // A model may copy a heading and brackets around the block ("[Trackers for Name:" ... "]"): they go with it
+    const after = (closing < 0 ? '' : source.slice(bodyStart + closing).replace(/^<\/div\s*>/i, '')).replace(SHELL_CLOSE, '');
+    const rest = `${source.slice(0, start).replace(SHELL_OPEN, '').trimEnd()}${after.trim() ? `\n\n${after.trim()}` : ''}`.trimEnd();
     const lines = body.split(/\n|<br\s*\/?>/i).map((line) => line.replace(/<[^>]*>/g, '').replace(/^[\s\-*•]+|\*+/g, '').trim()).filter(Boolean);
     return { text: rest, lines };
 }
@@ -302,13 +316,15 @@ function onReply(messageId) {
     const message = ctx.chat?.[Number(messageId)];
     if (!message || message.is_user || message.is_system || typeof message.mes !== 'string') return;
     const found = takeBlock(message.mes);
+    const other = byOther(s);
     if (!found) {
-        if (byOther(s)) askOther(Number(messageId));
+        if (other) askOther(Number(messageId));
         return;
     }
     message.mes = found.text;
     if (Array.isArray(message.swipes) && typeof message.swipe_id === 'number' && typeof message.swipes[message.swipe_id] === 'string') message.swipes[message.swipe_id] = found.text;
-    const next = readLines(found.lines, values(), s, statList(s));
+    // With another model keeping them, what the story's AI wrote anyway is only taken out
+    const next = other ? null : readLines(found.lines, values(), s, statList(s));
     if (next) store(next, { message });
     else ctx.saveChat?.();
     // A streamed reply is already in the page with the block in it: show it again without
@@ -320,6 +336,7 @@ function onReply(messageId) {
         }
     }
     render();
+    if (other) askOther(Number(messageId));
 }
 
 // ---------- Another model keeps them up to date ----------
@@ -367,6 +384,7 @@ function plain(mes) {
     return String(mes ?? '')
         .replace(/```[\s\S]*?```/g, ' ')
         .replace(/<div\b[^>]*\bforge-trackers\b[^>]*>[\s\S]*?(<\/div\s*>|$)/gi, ' ')
+        .replace(/\[[ \t]*trackers? for [^\n[\]]{0,160}\s*\]/gi, ' ')
         .replace(/<[^>]+>/g, '')
         .replace(/[ \t]+/g, ' ')
         .replace(/\n{3,}/g, '\n\n')

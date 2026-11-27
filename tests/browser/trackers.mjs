@@ -136,11 +136,23 @@ const read = await page.evaluate(async (path) => {
     const blank = { time: '1 PM', date: '', location: '', weather: '', stats: { health: 50 }, onPerson: ['Rope'], wearing: [], stored: { Home: ['Toolbox'], Cart: ['Hay'] } };
     const messy = t.takeBlock('Story.\n<div class="forge-trackers">\n**Time:** 2 PM\n- health: 120/100\nMood: 4\nOn Person: none\nStored (Cart): none\nnot a line\n</div>\nAfterword.');
     const none = t.takeBlock('Just a story with a <div>box</div>.');
+    const B = '<div class="forge-trackers">\nTime: 2 PM\n</div>';
+    const wrapped = [`Story.\n\n[Trackers for Mira:\n${B}\n]`, `Story.\n\n[Trackers for Mira. The values as they stand now:\n${B}]`, `Story.\n\n**Mira's trackers:**\n${B}`, `Story.\n\n[Updated trackers]\n${B}`].map((text) => t.takeBlock(text));
+    const story = [`The trackers closed in.\n${B}`, `He said: "go".\n\n${B}`, `[She waits.]\n${B}`].map((text) => t.takeBlock(text).text);
+    const empty = t.takeBlock('Story.\n\n[Trackers for Mira:\n\n]');
+    const bare = t.takeBlock('Story.\n\n[Trackers for Mira:\nTime: 3 PM\nHealth: 40\n]');
+    const kept = [t.takeBlock('The trackers followed him [all night].'), t.takeBlock('[Trackers for Mira: gone]\nThe story goes on.')];
     const noStats = t.readLines(['Health: 10', 'Time: 3 PM'], blank, { ...s, trackersStats: false }, stats);
-    return { messyText: messy.text, messy: t.readLines(messy.lines, blank, s, stats), none, noStats, nothing: t.readLines(['Mood: 4'], blank, s, stats) };
+    return { wrapped: wrapped.map((w) => `${w.text}|${w.lines.join()}`), story, empty, bare: { text: bare.text, read: t.readLines(bare.lines, blank, s, stats) }, kept, note: t.noteText(blank, s, stats), messyText: messy.text, messy: t.readLines(messy.lines, blank, s, stats), none, noStats, nothing: t.readLines(['Mood: 4'], blank, s, stats) };
 }, MODULE_JS);
 check('a block with bold labels, bullets, a number over 100 and unknown lines is still read', read.messy?.time === '2 PM' && read.messy.stats.health === 100 && read.messy.onPerson.length === 0 && JSON.stringify(read.messy.stored) === JSON.stringify({ Home: ['Toolbox'] }), JSON.stringify(read.messy));
 check('text after the block stays in the message', read.messyText === 'Story.\n\nAfterword.', JSON.stringify(read.messyText));
+check('a heading and brackets a model writes around the block go with it', read.wrapped.every((w) => w === 'Story.|Time: 2 PM'), JSON.stringify(read.wrapped));
+check('but the story\'s own last line stays', JSON.stringify(read.story) === JSON.stringify(['The trackers closed in.', 'He said: "go".', '[She waits.]']), JSON.stringify(read.story));
+check('an empty "[Trackers for Name:]" at the end is taken out', read.empty?.text === 'Story.' && read.empty.lines.length === 0, JSON.stringify(read.empty));
+check('and one with the lines but no block is read', read.bare.text === 'Story.' && read.bare.read?.time === '3 PM' && read.bare.read.stats.health === 40, JSON.stringify(read.bare));
+check('"trackers" in the story itself is left alone', read.kept[0] === null && read.kept[1] === null);
+check('the note has no bracketed heading to copy, and says to write only the block', !read.note.startsWith('[') && !read.note.endsWith(']') && read.note.includes('no heading, no brackets'), read.note.slice(0, 80));
 check('a reply without a block is left alone', read.none === null && read.nothing === null);
 check('a part that is switched off is not changed by a reply', read.noStats?.stats.health === 50 && read.noStats.time === '3 PM', JSON.stringify(read.noStats));
 

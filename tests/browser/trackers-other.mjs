@@ -43,7 +43,7 @@ await page.evaluate(() => {
             return reply(globalThis.otherAnswer);
         }
         globalThis.mainBodies.push(body);
-        return reply('The rain eases as we reach the door.');
+        return reply(globalThis.mainAnswer ?? 'The rain eases as we reach the door.');
     };
     localStorage.removeItem('arcane_forge_trackers_key');
 });
@@ -101,7 +101,7 @@ let sent = await others();
 const main = await page.evaluate(() => globalThis.mainBodies);
 const asked = sent[0] ?? {};
 const askedText = (asked.messages ?? []).map((m) => m.content).join('\n');
-check('the story\'s AI was asked once, with no tracker note', main.length === 1 && !main[0].includes('forge-trackers') && !main[0].includes('Trackers for'), String(main.length));
+check('the story\'s AI was asked once, with no tracker note', main.length === 1 && !main[0].includes('forge-trackers') && !main[0].includes('trackers, as they stand'), String(main.length));
 check('then the other model was asked once, at the address without "/chat/completions"', sent.length === 1 && asked.chat_completion_source === 'custom' && asked.custom_url === 'https://trackers.test/v1' && asked.model === 'tiny-model' && asked.stream === false && asked.max_tokens > 0, JSON.stringify({ n: sent.length, url: asked.custom_url, model: asked.model }));
 check('the key went along as that request\'s own header', asked.custom_include_headers === JSON.stringify({ Authorization: `Bearer ${FAKE_KEY}` }));
 check('it was told how the trackers work and given the values as they stand', asked.messages?.[0]?.role === 'system' && asked.messages[0].content.includes('You do not write the story') && asked.messages[0].content.includes('Health, Satiety') && askedText.includes('<div class="forge-trackers">\nTime: 7:40 PM') && askedText.includes('Health: not set'), askedText.slice(0, 300));
@@ -112,6 +112,23 @@ check('its answer moved the trackers on', v?.time === '9:05 PM' && v.location ==
 const reply = await page.evaluate(() => { const m = SillyTavern.getContext().chat.at(-1); return { mes: m.mes, kept: m.extra?.forge_trackers?.time, shown: document.querySelector('#chat .mes.last_mes .mes_text')?.textContent.trim(), drawn: document.querySelector('#forge-trackers .forge-track-time input').value }; });
 check('the reply itself is untouched, and keeps its own copy of the values', reply.mes === 'The rain eases as we reach the door.' && reply.shown === reply.mes && reply.kept === '9:05 PM' && reply.drawn === '9:05 PM', JSON.stringify(reply));
 await shot('trackers-other-profile.png', page.locator('#forge-profile'));
+
+// ---------- The story's AI writes a tracker heading or block anyway ----------
+for (const [what, answer] of [
+    ['an empty "[Trackers for Name:]" at the end of a reply is taken out', 'We step inside.\n\n[Trackers for Mira:\n\n]'],
+    ['and so is a block the story\'s AI wrote anyway, with its heading and brackets, without being read', 'We step inside.\n\n[Trackers for Mira:\n<div class="forge-trackers">\nTime: 1 AM\nHealth: 3\n</div>\n]'],
+]) {
+    const before = await page.evaluate((answer) => { globalThis.mainAnswer = answer; return { chat: SillyTavern.getContext().chat.length, asked: globalThis.otherBodies.length }; }, answer);
+    await page.fill('#send_textarea', 'We go in.');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction((count) => SillyTavern.getContext().chat.length >= count + 2 && !document.body.dataset.generating, before.chat, { timeout: 15000 }).catch(() => {});
+    await page.waitForFunction((count) => globalThis.otherBodies.length > count, before.asked, { timeout: 15000 }).catch(() => {});
+    await idle();
+    await page.waitForTimeout(400);
+    const after = await page.evaluate(() => { const m = SillyTavern.getContext().chat.at(-1); return { mes: m.mes, shown: document.querySelector('#chat .mes.last_mes .mes_text')?.textContent.trim(), asked: globalThis.otherBodies.length, told: globalThis.otherBodies.at(-1)?.messages?.[1]?.content ?? '' }; });
+    check(what, after.mes === 'We step inside.' && after.shown === 'We step inside.' && after.asked === before.asked + 1 && !after.told.includes('Trackers for') && (await now())?.time === '9:05 PM' && (await now()).stats.health === 70, JSON.stringify(after).slice(0, 300));
+    await page.evaluate((count) => { globalThis.otherBodies.length = count; delete globalThis.mainAnswer; }, before.asked);
+}
 
 // ---------- Asking again, and answers that are not to the letter ----------
 await page.evaluate(() => { globalThis.otherAnswer = 'Time: 9:30 PM\n- **Health:** 66/100'; });
