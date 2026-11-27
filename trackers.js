@@ -86,6 +86,10 @@ let saveTimer = 0;
 let openStat = '';
 let openList = '';
 let addingPlace = false;
+// The box waits to be drawn again while something in it is being typed in (see render), and which chat it
+// was last drawn for
+let renderWaits = false;
+let shownChat = null;
 // The other model: the request in flight, the reply it is about, the reply to ask about next, and what went
 // wrong with the last one
 let asking = null;
@@ -239,13 +243,22 @@ function followChat(swipedId) {
     // One of several replies from a single request, shown for the first time: it still carries its own block
     // (only the first was read when they arrived) under a copy of the first one's values
     const late = Boolean(swiped) && typeof swiped.swipes?.[swiped.swipe_id] === 'string' && typeof swiped.mes === 'string' && /<div\b[^>]*\bforge-trackers\b/i.test(swiped.mes);
-    if (swiped && Array.isArray(swiped.swipes) && (late || typeof swiped.swipes[swiped.swipe_id] !== 'string')) delete swiped.extra?.[KEY];
+    let removed = !swiped;
+    if (swiped && Array.isArray(swiped.swipes) && (late || typeof swiped.swipes[swiped.swipe_id] !== 'string') && swiped.extra?.[KEY]) {
+        delete swiped.extra[KEY];
+        removed = true;
+    }
+    // A reply after the greeting that holds no copy also means "as before it". The greeting's other versions
+    // (alternate greetings) are the same opening, so values typed by hand on it stay.
+    if (swiped && swipedId > 0) removed = true;
     // The other model was asked about a reply that has gone, or about another swipe of it: its answer is not wanted
     if (askingFor && (!chat.includes(askingFor.message) || swipeOf(askingFor.message) !== askingFor.swipe)) dropAsking();
     if (queued && !chat.includes(queued)) queued = null;
     let kept = null;
     for (let i = chat.length - 1; i >= 0 && !kept; i--) kept = chat[i]?.extra?.[KEY] ?? null;
-    if (ctx.chatMetadata) {
+    // With no reply holding a copy: the values typed in a chat with no reply yet, or, when the copy that held them
+    // went (a deleted or replaced reply), nothing set; otherwise they stay as they are
+    if (ctx.chatMetadata && (kept || ctx.chatMetadata[START_KEY] || removed)) {
         ctx.chatMetadata[KEY] = kept ? tidy(kept) : tidy(ctx.chatMetadata[START_KEY]);
         ctx.saveMetadataDebounced?.();
     }
@@ -299,8 +312,10 @@ export function noteText(now, s, stats) {
 
 // What a model may write around its block: a last line like "[Trackers for Name:" before it, loose brackets after it.
 // Only a line that is nothing but that heading counts: story text that merely mentions a tracker is left alone.
-const HEADING = String.raw`(?:updated[ \t]+)?(?:[^\n[\]:]{1,40}?['’]s[ \t]+)?trackers?(?:[ \t]+for[ \t]+[^\n[\]:]{1,40}?)?(?:[.,]?[ \t]*(?:the[ \t]+values[ \t]+)?as[ \t]+they[ \t]+stand(?:[ \t]+now)?)?[ \t]*:?`;
-const SHELL_OPEN = new RegExp(String.raw`(?:^|\n)[ \t]*[[(*_#>` + '`' + String.raw`]*[ \t]*${HEADING}[ \t]*[\s\]*_` + '`' + String.raw`]*$`, 'i');
+const HEADING = String.raw`(?:(?:updated|current|new)[ \t]+)?(?:[^\n[\]:]{1,40}?['’]s[ \t]+)?trackers?(?:,?[ \t]+updated|[ \t]+updates?|[ \t]*\((?:updated|current)\))?(?:[ \t]+for[ \t]+[^\n[\]:]{1,40}?)?(?:[.,]?[ \t]*(?:the[ \t]+values[ \t]+)?as[ \t]+they[ \t]+stand(?:[ \t]+now)?)?(?:[ \t]*:)?`;
+// (No two runs of spaces sit side by side in these patterns: on a long run of spaces they would try every way
+// of sharing it out, and a reply could take seconds to read)
+const SHELL_OPEN = new RegExp(String.raw`(?:^|\n)[ \t]*(?:[[(*_#>` + '`' + String.raw`]+[ \t]*)?${HEADING}[\s\]*_` + '`' + String.raw`]*$`, 'i');
 const SHELL_CLOSE = /^[\s*_`]*[\])][\s*_`]*/;
 // The same heading with no block inside it, at the end of a reply: "[Trackers for Name: ... ]"
 const SHELL_ALONE = new RegExp(String.raw`(?:^|\n)[ \t]*[*_` + '`' + String.raw`]*\[[ \t]*${HEADING}[ \t]*(?:\n([^[\]]{0,2000}))?\][\s*_` + '`' + String.raw`]*$`, 'i');
@@ -341,11 +356,12 @@ export function takeBlock(text) {
     // half a value, so it is left out unless the line was finished
     if (closing < 0 && !/\n\s*$/.test(body)) body = body.slice(0, Math.max(0, body.lastIndexOf('\n')));
     // Earlier blocks in the same reply (the note's own block copied first, say) go too; the last one is read
-    let before = source.slice(0, start).replace(/<div\b[^>]*\bforge-trackers\b[^>]*>[\s\S]*?<\/div\s*>/gi, '');
+    // (each match stops at the next opening tag, so a reply full of opening tags cannot make this slow)
+    let before = source.slice(0, start).replace(/<div\b[^>]*\bforge-trackers\b[^>]*>(?:(?!<div\b)[\s\S])*?<\/div\s*>/gi, '');
     // A model may copy a heading and brackets around the block ("[Trackers for Name:" ... "]"): they go with it
     let after = (closing < 0 ? '' : source.slice(bodyStart + closing).replace(/^<\/div\s*>/i, '')).replace(SHELL_CLOSE, '');
     // ... or put the block in a code fence, which would stay behind as an empty box
-    const fenceOpen = /(?:^|\n)[ \t]*```[a-z]*[ \t]*\n?\s*$/i;
+    const fenceOpen = /(?:^|\n)[ \t]*```[a-z]*\s*$/i;
     const fenceClose = /^\s*```[ \t]*(?=\n|$)/;
     if (fenceOpen.test(before) && (fenceClose.test(after) || closing < 0)) {
         before = before.replace(fenceOpen, '');
@@ -415,9 +431,9 @@ function onReply(messageId, type) {
     if (!message || message.is_user || message.is_system || typeof message.mes !== 'string') return;
     const found = takeBlock(message.mes);
     // A chat that opens with one message fires this for its greeting each time (SillyTavern's 'first_message'):
-    // that is not a new reply, so the other model is not asked about it again
+    // the other model is asked about a greeting once, while it holds no values of its own yet
     const other = byOther(s);
-    const ask = other && type !== 'first_message';
+    const ask = other && (type !== 'first_message' || !message.extra?.[KEY]);
     if (!found) {
         if (ask) askOther(Number(messageId));
         return;
@@ -648,7 +664,11 @@ function chatOpen(ctx) {
 // SillyTavern can empty every extension's note without a chat change (a card saved in a chat that has only its
 // greeting does), so the note is set again as each request starts.
 function onGenerationStarted(type) {
-    generationType = typeof type === 'string' && type ? type : 'normal';
+    const kind = typeof type === 'string' && type ? type : 'normal';
+    // A background request (an extension's summary or image prompt) that starts while a reply is being written
+    // does not change what that reply's request is built with
+    if (kind === 'quiet' && document.body.dataset.generating === 'true') return;
+    generationType = kind;
     setNote();
 }
 
@@ -686,8 +706,11 @@ function onChatChanged() {
     const chat = ctx.chat ?? [];
     let kept = null;
     for (let i = chat.length - 1; i >= 0 && !kept; i--) kept = chat[i]?.extra?.[KEY] ?? null;
-    if (kept && ctx.chatMetadata && JSON.stringify(tidy(kept)) !== JSON.stringify(tidy(ctx.chatMetadata[KEY]))) {
-        ctx.chatMetadata[KEY] = tidy(kept);
+    // (SillyTavern marks a branch or checkpoint with main_chat. One made from before any reply holds no copy:
+    // it goes back to the values typed before any reply, or to nothing set.)
+    const wanted = kept ? tidy(kept) : ctx.chatMetadata?.main_chat ? tidy(ctx.chatMetadata[START_KEY]) : null;
+    if (wanted && ctx.chatMetadata && JSON.stringify(wanted) !== JSON.stringify(tidy(ctx.chatMetadata[KEY]))) {
+        ctx.chatMetadata[KEY] = wanted;
         ctx.saveMetadataDebounced?.();
     }
     setNote();
@@ -857,7 +880,9 @@ export function bindSettings($root, s, save) {
     const add = () => {
         const next = statList(s);
         if (next.length >= STATS_MAX) return;
-        next.push({ id: `stat-${Date.now().toString(36)}`, name: `Stat ${next.length + 1}`, color: '#d9a441' });
+        let number = next.length + 1;
+        while (!nameIsFree(`Stat ${number}`, next)) number++;
+        next.push({ id: `stat-${Date.now().toString(36)}`, name: `Stat ${number}`, color: '#d9a441' });
         s.trackerStats = next;
         save();
         draw();
@@ -899,19 +924,39 @@ export function holder() {
     const existing = document.getElementById(HOLDER_ID);
     if (existing) return existing;
     const made = el('div', { id: HOLDER_ID });
+    // The focus has left a field it waited for: drawn now (after the click that moved the focus is complete)
+    made.addEventListener('focusout', () => {
+        if (renderWaits) setTimeout(() => render());
+    });
     setTimeout(render);
     return made;
 }
 
-function render() {
+/**
+ * Draws the trackers in the profile.
+ * @param {boolean} [force] true when the user's own key or click inside the box asks for it (an editor closing)
+ */
+function render(force = false) {
     const box = document.getElementById(HOLDER_ID);
     if (!box) return;
     const ctx = context();
     const s = settings();
     if (!active || !chatOpen(ctx)) {
+        renderWaits = false;
+        shownChat = null;
         box.replaceChildren();
         return;
     }
+    // Drawn again while a field in it is being typed in (a reply has just changed the values), the field would
+    // lose the focus and the rest of the typing would go nowhere. In the same chat it waits until the focus
+    // leaves; another chat is always drawn at once.
+    const field = document.activeElement;
+    if (!force && shownChat === ctx.chatId && field instanceof HTMLElement && box.contains(field) && field.matches('input, textarea')) {
+        renderWaits = true;
+        return;
+    }
+    renderWaits = false;
+    shownChat = ctx.chatId;
     const now = values();
     const parts = [];
     if (byOther(s) && s.trackersUpdate !== false) parts.push(otherRow(s));
@@ -1066,7 +1111,7 @@ function inventoryBlock(now) {
                 done = true;
                 openList = '';
                 if (keep) save(tidyList(input.value));
-                render();
+                render(true);
             };
             input.addEventListener('keydown', (event) => {
                 if (event.key === 'Enter' && !event.shiftKey) {
@@ -1123,7 +1168,7 @@ function inventoryBlock(now) {
                 change((next) => { next.stored[place] = []; });
                 openList = `stored:${place}`;
             }
-            render();
+            render(true);
         };
         input.addEventListener('keydown', (event) => {
             if (event.key === 'Enter') {

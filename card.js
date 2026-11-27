@@ -220,7 +220,13 @@ function aboutBox(about, scroller) {
         area.style.height = `${area.scrollHeight}px`;
         scroller.scrollTop = at;
     };
-    const save = async () => {
+    // One save at a time: a second one waits for the first, so an older text can never be saved last
+    let saving = Promise.resolve();
+    const save = () => {
+        saving = saving.then(saveNow, saveNow);
+        return saving;
+    };
+    const saveNow = async () => {
         clearTimeout(timer);
         if (!unsaved) return;
         unsaved = false;
@@ -382,15 +388,20 @@ function filled(ctx, text) {
     }
 }
 
+// Macros that change a variable when they are filled in
+const CHANGES_VARIABLE = /\{\{\s*(?:inc|dec|set|add)(?:global)?var\b/i;
+
 /**
- * A text with SillyTavern's macros filled in. Each text is filled once and the result kept: a macro that
- * changes a variable ({{incvar}}, {{setvar}}) would otherwise run again every time the text is shown.
+ * A text with SillyTavern's macros filled in. A text with a macro that changes a variable ({{incvar}},
+ * {{setvar}}) is filled once and the result kept, or it would run again every time the text is shown; any
+ * other text is filled each time, so {{time}} or {{getvar}} stay current.
  * @param {object} ctx SillyTavern's context
  * @param {string} raw the text as it is stored
  * @returns {string}
  */
 export function fillMacros(ctx, raw) {
     if (!ctx.substituteParams) return raw;
+    if (!CHANGES_VARIABLE.test(raw)) return String(ctx.substituteParams(raw));
     const key = JSON.stringify([ctx.name1, ctx.name2, raw]);
     if (!fills.has(key)) {
         if (fills.size >= FILLS_MAX) fills.clear();

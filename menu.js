@@ -390,7 +390,7 @@ function onKey(event) {
         const next = nextStop(stops, document.activeElement, event.shiftKey);
         if (next === undefined) return;
         event.preventDefault();
-        if (next) stopOf(next)?.focus();
+        if (next) stopOf(next, event.shiftKey)?.focus();
     }
 }
 
@@ -416,7 +416,7 @@ function keepTab(event, from) {
     const active = document.activeElement;
     if (inside(active) || !(nowhere(active) || inside(from))) return;
     const next = nextStop(stops, inside(from) ? from : null, event.shiftKey);
-    if (next) stopOf(next)?.focus();
+    if (next) stopOf(next, event.shiftKey)?.focus();
 }
 
 // An open <dialog> (SillyTavern's popups, or another extension's), or one of SillyTavern's older windows
@@ -451,11 +451,13 @@ function tabStops() {
 // What gets the focus when Tab stops at an element: the element itself, or, for one that keeps its controls in
 // a shadow root, where querySelectorAll does not look (SillyTavern's colour pickers), the first control in
 // there. null for an element Tab does not stop at.
-function stopOf(element) {
+// Going back (Shift+Tab) into one, it is the last control in there.
+function stopOf(element, back = false) {
     if (element.matches(TABBABLE) && isTabStop(element)) return element;
     if (!element.shadowRoot || element.closest('[inert]')) return null;
-    for (const inner of element.shadowRoot.querySelectorAll('*')) {
-        const stop = stopOf(inner);
+    const inner = [...element.shadowRoot.querySelectorAll('*')];
+    for (const one of back ? inner.reverse() : inner) {
+        const stop = stopOf(one, back);
         if (stop) return stop;
     }
     return null;

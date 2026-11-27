@@ -87,6 +87,8 @@ let running = false;
 let note = '';        // what the profile says after a check that changed nothing or failed
 let timer = 0;
 let holdUntil = 0;
+// After this many unreadable answers in a row about the same part of the story, that part is skipped
+const UNREADABLE_MAX = 3;
 
 function context() {
     return globalThis.SillyTavern.getContext();
@@ -148,7 +150,11 @@ export function split(content) {
     // The last paragraph is what follows the last blank line
     let gap = null;
     for (const found of all.matchAll(/\n\s*\n/g)) gap = found;
-    if (!gap) return { base: text, note: '' };
+    if (!gap) {
+        // An entry that is nothing but a note the keeper wrote (an earlier version wrote these): still its note
+        const own = all.startsWith(LABEL) && !all.includes('\n') && (Array.isArray(settings().keeperLog) ? settings().keeperLog : []).some((change) => String(change?.after ?? '').trimEnd() === all);
+        return own ? { base: '', note: all.slice(LABEL.length).replace(/\s+/g, ' ').trim() } : { base: text, note: '' };
+    }
     const above = all.slice(0, gap.index).trimEnd();
     const last = all.slice(gap.index + gap[0].length);
     // "Latest:" inside a paragraph, further up, or as the whole entry is the user's, not a note of ours
@@ -285,7 +291,8 @@ function said(text) {
 
 // The whole <update> blocks of an answer: each one's attributes and its text
 function updateBlocks(answer) {
-    return [...answer.matchAll(/<update\b([^>]*)>([\s\S]*?)<\/update\s*>/gi)];
+    // (a block's text stops at the next "<update", so an answer full of unclosed blocks cannot make this slow)
+    return [...answer.matchAll(/<update\b([^>]*)>((?:(?!<update\b)[\s\S])*?)<\/update\s*>/gi)];
 }
 
 /**
@@ -317,7 +324,8 @@ export function readReply(text, records, s = settings()) {
         const now = parts ? tidyNote(body, words(s)) : tidyRewrite(body, record.content);
         if (!now || saysNothing(now) || now === parts?.note) continue;
         const after = parts ? join(parts.base, now) : now;
-        if (after === record.content || (parts && !split(after).note)) continue;
+        // (an entry that is only a note stays a one-line note; it is known as one from History once saved)
+        if (after === record.content || (parts && parts.base && !split(after).note)) continue;
         out.push({ ...record, after, mode });
     }
     return out;
@@ -470,11 +478,14 @@ function tokens(text) {
  * story's own limit, which is often too short for a rewrite or for several notes, and is cut off.
  */
 function answerLength(ctx, s, records) {
+    // Text completion takes the answer's length out of the context it has, from the start of the prompt where
+    // the guide is: there the story's own length is kept (an answer cut off is a failed check, tried again)
+    if (ctx.mainApi !== 'openai') return undefined;
     const note = modeOf(s) === 'note';
     let room = ANSWER_MIN;
     for (const record of records) room += note ? words(s) * 4 : Math.round(tokens(record.content) * 1.5) + 100;
     // Never less than the story's own limit: a model that thinks first may need all of that
-    const own = Number(ctx.mainApi === 'openai' ? ctx.chatCompletionSettings?.openai_max_tokens : document.getElementById('amount_gen')?.value);
+    const own = Number(ctx.chatCompletionSettings?.openai_max_tokens);
     return Math.max(Math.min(room, ANSWER_MAX), Number.isFinite(own) ? own : 0);
 }
 
@@ -493,11 +504,20 @@ function failure(text) {
 // ---------- Saving, the list of changes, and undoing them ----------
 
 // An entry is found by its number, and SillyTavern gives a deleted entry's number to the next new one. So
-// the title has to be the recorded one as well; if it is not, this is a different entry and is left alone
-async function entryOf(ctx, world, uid, title) {
+// the title has to be the recorded one as well; if it is not, this is a different entry and is left alone,
+// unless its text is one the keeper itself wrote there (the user renamed the entry since: still the same one)
+async function entryOf(ctx, world, uid, title, written = []) {
     const data = await ctx.loadWorldInfo(world);
     const entry = data?.entries?.[uid] ?? Object.values(data?.entries ?? {}).find((one) => one?.uid === uid);
-    return entry && titleOf(entry) === title ? { data, entry } : null;
+    if (!entry) return null;
+    const same = titleOf(entry) === title || written.includes(String(entry.content ?? ''));
+    return same ? { data, entry } : null;
+}
+
+// Every text the keeper wrote into one entry, from History
+function writtenInto(world, uid) {
+    const log = Array.isArray(settings().keeperLog) ? settings().keeperLog : [];
+    return log.filter((change) => change.world === world && change.uid === uid && typeof change.after === 'string').map((change) => change.after);
 }
 
 async function writeEntry(ctx, world, data, entry, text) {
@@ -572,7 +592,7 @@ export async function undo(changeId) {
     if (!change || change.undone) return false;
     const ctx = context();
     try {
-        const found = await entryOf(ctx, change.world, change.uid, change.title);
+        const found = await entryOf(ctx, change.world, change.uid, change.title, [change.after]);
         if (!found) {
             toast('warning', `"${change.title}" is no longer in the lorebook "${change.world}".`);
             return false;
@@ -613,7 +633,7 @@ export async function restore(key) {
     if (!first) return false;
     const ctx = context();
     try {
-        const found = await entryOf(ctx, first.world, first.uid, first.title);
+        const found = await entryOf(ctx, first.world, first.uid, first.title, writtenInto(first.world, first.uid));
         if (!found) {
             toast('warning', `"${first.title}" is no longer in the lorebook "${first.world}".`);
             return false;
@@ -679,7 +699,20 @@ export async function run({ manual = false } = {}) {
             const answer = await ask(ctx, buildMessages(s, records, story), answerLength(ctx, s, records));
             // Switched off, or another chat opened, while the AI was answering: nothing is saved
             if (!active || context().chatId !== chatId) return [];
-            if (!readable(answer)) throw failure('The AI\'s answer could not be read (it may have been cut off), so nothing was changed. That part of the story will be read again.');
+            if (!readable(answer)) {
+                // A model that answers the same way each time (a refusal, a length that always cuts it off) would
+                // hold the keeper on this part for good: after a few tries in a row it is skipped
+                const here = state(ctx);
+                const tries = (here?.unreadable ?? 0) + 1;
+                if (here && tries >= UNREADABLE_MAX) {
+                    here.upTo = end;
+                    here.unreadable = 0;
+                    ctx.saveMetadataDebounced?.();
+                    throw failure(`The AI's answer could not be read ${UNREADABLE_MAX} times in a row, so that part of the story is skipped and nothing in it was changed. Check that the AI answers the keeper's request (Lorebook keeper → What the AI is told).`);
+                }
+                if (here) here.unreadable = tries;
+                throw failure('The AI\'s answer could not be read (it may have been cut off), so nothing was changed. That part of the story will be read again.');
+            }
             let updates = readReply(answer, records, s);
             if (updates.length && s.keeperAsk) updates = await review(updates);
             ({ done: changes, failed, gone } = await saveUpdates(ctx, updates));
@@ -691,6 +724,7 @@ export async function run({ manual = false } = {}) {
             const here = state(ctx);
             if (here) {
                 here.upTo = end;
+                here.unreadable = 0;
                 ctx.saveMetadataDebounced?.();
             }
         }

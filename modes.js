@@ -46,9 +46,9 @@ const TEMPLATE_KEYS = ['do', 'say', 'see'];
 const TEMPLATE_MAX = 200;
 // A text ending in one of these gets no full stop (tidy rule 2)
 const END_MARKS = ['.', '!', '?', '…', '"', "'", '”', '’', '*', ')', ']', '~'];
-// Nor does one ending in any other punctuation, in any script ("你好。", a dash, a colon), or in a backtick
-// (the end of a piece of code)
-const ENDS_IN_PUNCTUATION = /[\p{P}`]$/u;
+// Nor does one ending in a mark that ends or pauses a sentence in another script ("你好。", "؟"), a closing
+// bracket or quote, a dash, a comma or colon, or a backtick (the end of a piece of code). "50%" still gets one.
+const ENDS_IN_PUNCTUATION = /[\p{Pe}\p{Pf}\p{Pi}\p{Pd}`,;:。．！？，、；：…‥؟،।॥]$/u;
 // The quote pairs Say takes off a text wrapped in them (tidy rule 4)
 const QUOTE_PAIRS = [['"', '"'], ['“', '”'], ["'", "'"]];
 // "you" or "I" as a whole word at the start (so "I'm" counts, "Isla" and "your" do not)
@@ -347,12 +347,13 @@ function startsWithCapitals(text) {
 }
 
 // Rule 4: one pair of quotes wrapped round the whole text comes off. An apostrophe at each end is only such
-// a pair when there is none inside as well ('Evenin', darlin' keeps both), so that text stays as typed.
+// a pair when there is none inside as well, other than within a word ('I can't go' loses them; 'Evenin',
+// darlin' keeps both), so that text stays as typed.
 function unquote(text) {
     for (const [open, close] of QUOTE_PAIRS) {
         if (text.length < open.length + close.length || !text.startsWith(open) || !text.endsWith(close)) continue;
         const inside = text.slice(open.length, text.length - close.length);
-        if (open === "'" && inside.includes("'")) continue;
+        if (open === "'" && /(?<!\p{L})'|'(?!\p{L})/u.test(inside)) continue;
         return inside.trim() || text;
     }
     return text;
