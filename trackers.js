@@ -24,7 +24,7 @@ import { extension_settings } from '../../../extensions.js';
 
 export const id = 'trackers';
 
-export const defaults = { trackers: false, trackersTime: true, trackersStats: true, trackersInventory: true, trackersUpdate: true, trackersBy: 'story', trackersUrl: '', trackersModel: '', trackersRead: 4 };
+export const defaults = { trackers: false, trackersTime: true, trackersStats: true, trackersInventory: true, trackersUpdate: true, trackersBy: 'story', trackersUrl: '', trackersModel: '', trackersRead: 4, trackersTell: false };
 
 export const lookKeys = {
     trackersTime: { type: 'boolean' },
@@ -225,7 +225,7 @@ export function noteText(now, s, stats) {
     const lines = blockLines(now, s, stats);
     if (!lines.length) return '';
     const rules = ['Keep the same lines in the same order, one per line.'];
-    if (s.trackersTime !== false) rules.push('Move the time on by however long the events of your reply took.');
+    if (s.trackersTime !== false) rules.push('The block must agree with your reply: when your reply states the time, date, place or weather, write exactly that; otherwise move the time on by however long the events of your reply took.');
     if (s.trackersStats !== false && stats.length) rules.push(`${stats.map((stat) => stat.name).join(', ')}: whole numbers from 0 to 100; change one only when the story changes it.`);
     if (s.trackersInventory !== false) rules.push('The lists are {{user}}\'s things, separated by commas ("none" when empty); change them only when something is gained, lost, used up, put on, taken off or put away. For things kept somewhere else, use one line per place: Stored (place): things.');
     rules.push('Where a value says "not set", choose one that fits the story.', 'Never mention this block in the story itself.', 'Write the block from <div to </div> and nothing around it: no heading, no brackets, no words before or after.');
@@ -243,6 +243,13 @@ function takeShell(source) {
     if (!match) return null;
     const lines = String(match[1] ?? '').split(/\n|<br\s*\/?>/i).map((line) => line.replace(/<[^>]*>/g, '').replace(/^[\s\-*•]+|\*+/g, '').trim()).filter(Boolean);
     return { text: source.slice(0, match.index).trimEnd(), lines };
+}
+
+/** The note for the story's AI when another model keeps the trackers: the values to go by, with nothing to write back. */
+export function tellText(now, s, stats) {
+    const lines = blockLines(now, s, stats).filter((line) => !/: not set$/.test(line));
+    if (!lines.length) return '';
+    return `{{user}}'s situation right now, for you to go by in the story. Keep the story consistent with it, and do not write this list out or mention it:\n${lines.join('\n')}`;
 }
 
 /**
@@ -396,10 +403,10 @@ export function otherMessages(ctx, s, messageId, now = values()) {
     const stats = statList(s);
     const who = String(ctx.name1 ?? '').trim() || 'the main character';
     const rules = ['Keep the same lines in the same order, one per line.'];
-    if (s.trackersTime !== false) rules.push('Move the time on by however long the events of the last message took.');
+    if (s.trackersTime !== false) rules.push('The story decides: when the last message states the time, date, place or weather, in its text or in a header or status line of its own, write exactly what it states, even when that differs from the trackers as they stand. Only when it does not state one, move the time on by however long its events took and keep the rest.');
     if (s.trackersStats !== false && stats.length) rules.push(`${stats.map((stat) => stat.name).join(', ')}: whole numbers from 0 to 100; change one only when the story changes it.`);
     if (s.trackersInventory !== false) rules.push(`The lists are ${who}'s things, separated by commas ("none" when empty); change them only when something is gained, lost, used up, put on, taken off or put away. For things kept somewhere else, use one line per place: Stored (place): things.`);
-    rules.push('Where a value says "not set", choose one that fits the story.', 'When the last message changes nothing, write the values again as they are.');
+    rules.push('Take everything from the scene as the messages tell it; never contradict the last message.', 'Where a value says "not set", choose one that fits the story.', 'When the last message changes nothing, write the values again as they are.');
     const most = Math.min(READ[1], Math.max(READ[0], Math.round(Number(s.trackersRead)) || defaults.trackersRead));
     const story = [];
     let room = READ_TEXT_MAX;
@@ -502,7 +509,11 @@ function setNote() {
     const ctx = context();
     if (!ctx.setExtensionPrompt) return;
     const s = settings();
-    const text = active && s.trackersUpdate !== false && !byOther(s) && ctx.chatMetadata ? noteText(values(), s, statList(s)) : '';
+    let text = '';
+    if (active && ctx.chatMetadata) {
+        if (byOther(s)) text = s.trackersTell === true ? tellText(values(), s, statList(s)) : '';
+        else if (s.trackersUpdate !== false) text = noteText(values(), s, statList(s));
+    }
     // In the chat, right at the end (position 1, depth 0), as a system note (role 0)
     ctx.setExtensionPrompt(PROMPT_KEY, text, 1, 0, false, 0);
 }
@@ -574,6 +585,8 @@ export function settingsHtml(s) {
                         <span>Messages it reads</span>
                         <input type="number" id="forge-ui-trackers-read" class="text_pole forge-ui-trackers-option" min="${READ[0]}" max="${READ[1]}" step="1"${off}>
                     </label>
+${box('forge-ui-trackers-tell', 'trackersTell', 'Tell the story\'s AI the values, so the story goes by them', false)}
+                    <small>Off: the story's AI is sent nothing about the trackers. On: the values as they stand go along at the very end of what is sent, where they do not disturb a prompt cache.</small>
                     <div class="forge-ui-trackers-actions">
                         <div class="menu_button" id="forge-ui-trackers-test" role="button" tabindex="0">Test</div>
                         <div class="menu_button" id="forge-ui-trackers-forget" role="button" tabindex="0">Forget the key</div>
@@ -584,7 +597,7 @@ export function settingsHtml(s) {
 `;
 }
 
-const BOXES = { 'forge-ui-trackers': 'trackers', 'forge-ui-trackers-time': 'trackersTime', 'forge-ui-trackers-stats': 'trackersStats', 'forge-ui-trackers-inventory': 'trackersInventory', 'forge-ui-trackers-update': 'trackersUpdate' };
+const BOXES = { 'forge-ui-trackers': 'trackers', 'forge-ui-trackers-time': 'trackersTime', 'forge-ui-trackers-stats': 'trackersStats', 'forge-ui-trackers-inventory': 'trackersInventory', 'forge-ui-trackers-update': 'trackersUpdate', 'forge-ui-trackers-tell': 'trackersTell' };
 
 // The other model's boxes. What the user typed is put in as values, never as markup; the key is never put back.
 function bindOther($root, s, save) {

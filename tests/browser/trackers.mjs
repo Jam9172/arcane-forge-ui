@@ -152,7 +152,7 @@ check('but the story\'s own last line stays', JSON.stringify(read.story) === JSO
 check('an empty "[Trackers for Name:]" at the end is taken out', read.empty?.text === 'Story.' && read.empty.lines.length === 0, JSON.stringify(read.empty));
 check('and one with the lines but no block is read', read.bare.text === 'Story.' && read.bare.read?.time === '3 PM' && read.bare.read.stats.health === 40, JSON.stringify(read.bare));
 check('"trackers" in the story itself is left alone', read.kept[0] === null && read.kept[1] === null);
-check('the note has no bracketed heading to copy, and says to write only the block', !read.note.startsWith('[') && !read.note.endsWith(']') && read.note.includes('no heading, no brackets'), read.note.slice(0, 80));
+check('the note has no bracketed heading to copy, and says to write only the block', !read.note.startsWith('[') && !read.note.endsWith(']') && read.note.includes('no heading, no brackets') && read.note.includes('The block must agree with your reply'), read.note.slice(0, 80));
 check('a reply without a block is left alone', read.none === null && read.nothing === null);
 check('a part that is switched off is not changed by a reply', read.noStats?.stats.health === 50 && read.noStats.time === '3 PM', JSON.stringify(read.noStats));
 

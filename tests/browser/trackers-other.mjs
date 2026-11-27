@@ -107,6 +107,7 @@ check('the key went along as that request\'s own header', asked.custom_include_h
 check('it was told how the trackers work and given the values as they stand', asked.messages?.[0]?.role === 'system' && asked.messages[0].content.includes('You do not write the story') && asked.messages[0].content.includes('Health, Satiety') && askedText.includes('<div class="forge-trackers">\nTime: 7:40 PM') && askedText.includes('Health: not set'), askedText.slice(0, 300));
 check('and the last two messages, the reply last', askedText.includes('We wait out the rain.') && askedText.trimEnd().endsWith('The rain eases as we reach the door.') && !askedText.includes('Reply 20'), askedText.slice(-200));
 check('no macro is left for it to puzzle over', !askedText.includes('{{'));
+check('it is told that what the reply states wins over the trackers', asked.messages?.[0]?.content.includes('write exactly what it states, even when that differs') && asked.messages[0].content.includes('never contradict the last message'));
 let v = await now();
 check('its answer moved the trackers on', v?.time === '9:05 PM' && v.location === 'The porch' && v.weather === 'Drizzle' && v.stats.health === 70 && JSON.stringify(v.onPerson) === JSON.stringify(['Pocket knife', 'Wet cloak']) && JSON.stringify(v.stored) === JSON.stringify({ Cart: ['Hay'] }), JSON.stringify(v));
 const reply = await page.evaluate(() => { const m = SillyTavern.getContext().chat.at(-1); return { mes: m.mes, kept: m.extra?.forge_trackers?.time, shown: document.querySelector('#chat .mes.last_mes .mes_text')?.textContent.trim(), drawn: document.querySelector('#forge-trackers .forge-track-time input').value }; });
@@ -214,10 +215,45 @@ if (process.env.FORGE_SHOTS) {
     await press('forge-ui-trackers-forget');
 }
 
+// ---------- Telling the story's AI the values ----------
+check('to start with the story\'s AI is told nothing, and the switch is there, off', (await note()) === '' && (await page.evaluate(() => { const box = document.querySelector('.arcane-forge-ui-settings #forge-ui-trackers-tell'); return box && !box.checked && !!box.closest('#forge-ui-trackers-other'); })));
+await setForge(page, { trackersTell: true });
+await page.waitForTimeout(300);
+const told = await note();
+check('switched on, it gets the values as they stand to go by, with nothing to write back', told.includes('Time: 9:45 PM') && told.includes('Health: 66') && told.includes('do not write this list out') && !told.includes('forge-trackers') && !told.includes('<div') && !told.includes('not set') && !told.startsWith('['), JSON.stringify(told).slice(120, 620));
+await setForge(page, { trackersTell: false });
+await page.waitForTimeout(300);
+check('switched off again, nothing is sent', (await note()) === '');
+
 // ---------- Back to the story's AI, and off ----------
 await set('forge-ui-trackers-by', 'story');
 await page.waitForTimeout(400);
 check('back with the story\'s AI, the note returns and the other model\'s line is gone', (await note()).includes('Time: 9:45 PM') && (await row()) === null && (await page.evaluate(() => document.querySelector('.arcane-forge-ui-settings #forge-ui-trackers-other').hidden)));
+
+// ---------- Kept by the story's AI: what is sent stays the same from turn to turn, up to the newest messages ----------
+// (a provider's prompt cache only works while the start of what is sent does not change)
+const turns = [];
+for (const [say, answer] of [['We sit by the fire.', 'The fire crackles.\n<div class="forge-trackers">\nTime: 10:00 PM\nHealth: 71\n</div>'], ['We sleep.', 'Morning comes.\n<div class="forge-trackers">\nTime: 7:00 AM\nHealth: 90\n</div>']]) {
+    const before = await page.evaluate((answer) => { globalThis.mainAnswer = answer; globalThis.mainBodies.length = 0; return SillyTavern.getContext().chat.length; }, answer);
+    await page.fill('#send_textarea', say);
+    await page.keyboard.press('Enter');
+    await page.waitForFunction((count) => SillyTavern.getContext().chat.length >= count + 2 && !document.body.dataset.generating, before, { timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(500);
+    turns.push(await page.evaluate(() => JSON.parse(globalThis.mainBodies[0] ?? '{}').messages ?? []));
+}
+const text = (m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content));
+const noted = turns.map((messages) => messages.map((m, i) => (text(m).includes('forge-trackers') ? i : -1)).filter((i) => i >= 0));
+const firstNote = noted[0][0] ?? -1;
+// The sandbox has another extension that adds its own note among the newest messages: that one is not ours to judge
+const ours = (messages) => messages.filter((m, i) => i < 2 || m.role !== 'system' || text(m).includes('forge-trackers'));
+const [first, second] = turns.map(ours);
+const firstEnd = first.findIndex((m) => text(m).includes('forge-trackers'));
+const sameStart = firstEnd > 3 && firstEnd === first.length - 1 && JSON.stringify(first.slice(0, firstEnd)) === JSON.stringify(second.slice(0, firstEnd));
+check('the tracker note is sent once, at the very end', noted.every((at, i) => at.length === 1 && at[0] >= turns[i].length - 2) && text(turns[1][noted[1][0]]).includes('Time: 10:00 PM'), JSON.stringify(noted.map((at, i) => [at, turns[i].length])));
+check('everything before it is word for word what was sent the turn before', sameStart, JSON.stringify({ firstEnd, a: first.slice(-3).map(text).map((t) => t.slice(0, 50)), b: second.slice(firstEnd - 2, firstEnd + 1).map(text).map((t) => t.slice(0, 50)) }));
+check('and no old reply carries a block or a changing value into it', turns[1].slice(0, noted[1][0]).every((m) => !/forge-trackers|Trackers for|10:00 PM|7:00 AM/.test(text(m))) && turns[1].some((m) => text(m).includes('The fire crackles.')));
+await page.evaluate(() => { delete globalThis.mainAnswer; });
+
 await set('forge-ui-trackers-by', 'other');
 await setForge(page, { trackersUpdate: false });
 await page.waitForTimeout(300);
