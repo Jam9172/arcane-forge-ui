@@ -6,9 +6,10 @@
 // listens to nothing.
 //
 // How it works: every few AI replies (or on "Update now") one extra request goes to the AI. It carries the
-// newest part of the story and the entries, from the lorebooks the user ticked, whose keys or titles come up
-// in it. The guide in that request (guide() below) says what belongs in a character's entry and what does
-// not. The answer names the entries that changed, and those are saved:
+// newest part of the story (what is not read yet, oldest first, as much as one request holds) and the entries,
+// from the lorebooks the user ticked, whose keys or titles come up in it. The guide in that request (guide()
+// below) says what belongs in a character's entry and what does not. The answer names the entries that
+// changed, and those are saved:
 //   - "note" (the default): the entry's own text is left alone and one "Latest: ..." paragraph is kept under it;
 //   - "rewrite": the entry's text is replaced.
 // Only an entry's text is ever changed, never its keys, title or settings. Disabled entries, Memory Books'
@@ -62,14 +63,23 @@ const LOG_MAX = 30;
 const RECORDS_MAX = 12;       // entries in one request
 const ENTRY_MAX = 8000;       // characters; a longer entry is left alone
 const RECORDS_TEXT_MAX = 24000;
-const STORY_MAX = 24000;      // characters of story in one request (the newest are kept)
+const STORY_MAX = 24000;      // characters of story in one request (the oldest unread go first)
 const MANUAL_BACK = 20;       // "Update now" with nothing new reads this many messages again
+const ANSWER_MIN = 500;       // tokens the AI gets for its answer, at least
+const ANSWER_MAX = 4096;      // and at most (more than this, some services refuse)
 const WAIT = 2500;            // after a reply, before looking whether a check is due
 const HOLD = 4;               // after a failed check, wait this many more messages before trying again
 // Macros in an entry would be filled in (and run) by SillyTavern on their way to the AI; they travel as
 // these marks instead and are put back in what comes home
 const OPEN = '⟦⟦';
 const CLOSE = '⟧⟧';
+// SillyTavern fills in its older placeholders (<USER>, <BOT> and the like) the same way; they travel as ⟪USER⟫
+const OLD_MACRO = /<(user|bot|char|charifnotgroup|group)>/gi;
+const OLD_MARK = /⟪(user|bot|char|charifnotgroup|group)⟫/gi;
+// A real tag (<b>, </i>, <br/>). "<50% and >100" is not one
+const TAG = /<\/?[a-z][\w-]*(?:\s[^<>]*)?\/?>/gi;
+// Writing without spaces between the words (Chinese, Japanese, Korean, Thai and others)
+const UNSPACED = /[\p{scx=Han}\p{scx=Hiragana}\p{scx=Katakana}\p{scx=Hangul}\p{scx=Thai}\p{scx=Lao}\p{scx=Khmer}\p{scx=Myanmar}]/u;
 
 let active = false;
 let listening = [];
@@ -127,16 +137,27 @@ function toast(kind, text) {
 
 // ---------- The "Latest" note inside an entry's text ----------
 
-/** An entry's text as the user's own part and the keeper's note under it. */
+/**
+ * An entry's text as the user's own part and the keeper's note under it. Only one line is ever the note: a
+ * "Latest: " line that starts the entry's last paragraph, with other text above it. Everything else is the
+ * user's own writing and is never taken for a note.
+ */
 export function split(content) {
     const text = String(content ?? '');
-    if (text.startsWith(LABEL) && !text.includes('\n')) return { base: '', note: text.slice(LABEL.length).trim() };
-    const at = text.lastIndexOf(`\n${LABEL}`);
-    if (at === -1) return { base: text, note: '' };
-    const tail = text.slice(at + 1 + LABEL.length);
-    // "Latest:" further up in the user's own writing is theirs, not a note of ours
-    if (/\n\s*\n/.test(tail.trimEnd())) return { base: text, note: '' };
-    return { base: text.slice(0, at).trimEnd(), note: tail.replace(/\s+/g, ' ').trim() };
+    const all = text.trimEnd();
+    // The last paragraph is what follows the last blank line
+    let gap = null;
+    for (const found of all.matchAll(/\n\s*\n/g)) gap = found;
+    if (!gap) return { base: text, note: '' };
+    const above = all.slice(0, gap.index).trimEnd();
+    const last = all.slice(gap.index + gap[0].length);
+    // "Latest:" inside a paragraph, further up, or as the whole entry is the user's, not a note of ours
+    if (!above.trim() || !last.startsWith(LABEL)) return { base: text, note: '' };
+    const [line, ...under] = last.split('\n');
+    const noteText = line.slice(LABEL.length).replace(/\s+/g, ' ').trim();
+    if (!noteText) return { base: text, note: '' };
+    // Lines typed right under the note are the user's too: they go with the user's own part
+    return { base: under.length ? `${above}\n\n${under.join('\n')}` : above, note: noteText };
 }
 
 /** The user's own part with a note under it (or without one). */
@@ -149,11 +170,11 @@ export function join(base, noteText) {
 // ---------- What the AI is told ----------
 
 function shield(text) {
-    return String(text ?? '').replaceAll('{{', OPEN).replaceAll('}}', CLOSE);
+    return String(text ?? '').replaceAll('{{', OPEN).replaceAll('}}', CLOSE).replace(OLD_MACRO, '⟪$1⟫');
 }
 
 function unshield(text) {
-    return String(text ?? '').replaceAll(OPEN, '{{').replaceAll(CLOSE, '}}');
+    return String(text ?? '').replaceAll(OPEN, '{{').replaceAll(CLOSE, '}}').replace(OLD_MARK, '<$1>');
 }
 
 /** The guide: what belongs in a character's entry, what does not, and how to write it. */
@@ -198,7 +219,7 @@ export function guide(s = settings()) {
         'Most records need no change most of the time. When in doubt, leave a record out.',
         '',
         ...how,
-        `- Marks like ${OPEN}user${CLOSE} are placeholders. Keep them exactly as they are.`,
+        `- Marks like ${OPEN}user${CLOSE} and ⟪USER⟫ are placeholders. Keep them exactly as they are.`,
         '',
         'Answer with one block for each changed record and nothing else:',
         '<update id="ID">',
@@ -225,7 +246,8 @@ export function buildMessages(s, records, story) {
 }
 
 function tidyNote(raw, limit) {
-    let text = unshield(raw).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    // The tags go before the placeholders come back, or a <USER> would go with them
+    let text = unshield(String(raw ?? '').replace(TAG, ' ')).replace(/\s+/g, ' ').trim();
     text = text.replace(/^latest\s*:\s*/i, '');
     if (!text) return '';
     const list = text.split(' ');
@@ -240,12 +262,41 @@ function tidyNote(raw, limit) {
 }
 
 function tidyRewrite(raw, old) {
-    const text = unshield(raw).replace(/^\s*```[a-z]*\n?/i, '').replace(/\n?```\s*$/, '').trim();
+    let text = unshield(raw).replace(/^\s*```[a-z]*\n?/i, '').replace(/\n?```\s*$/, '').trim();
+    // The <text> wrapper a record is shown in is not part of the entry (unless the entry has one of its own)
+    const wrapped = /^<(text|latest)>\s*([\s\S]*?)\s*<\/\1>$/i;
+    if (!wrapped.test(old.trim())) text = text.replace(wrapped, '$2');
     if (!text) return '';
     // A "rewrite" that lost half the entry is a summary, and one that tripled it is the story retold
-    if (old.length > 200 && text.length < old.length * 0.5) return '';
+    if (text.length < old.length * 0.5) return '';
     if (text.length > old.length * 3 + 1000) return '';
     return text;
+}
+
+// A block that only says there is nothing to change is not a change
+function saysNothing(text) {
+    return /^[\s<([{"'*_-]*(?:no\s+changes?(?:\s+(?:is\s+|are\s+)?needed)?|none|unchanged)[\s>)\]}"'*_.!/-]*$/i.test(text);
+}
+
+// What the AI said outside its thinking, which can hold drafts it dropped again
+function said(text) {
+    return String(text ?? '').replace(/<think(?:ing)?\b[^>]*>[\s\S]*?(?:<\/think(?:ing)?\s*>|$)/gi, '');
+}
+
+// The whole <update> blocks of an answer: each one's attributes and its text
+function updateBlocks(answer) {
+    return [...answer.matchAll(/<update\b([^>]*)>([\s\S]*?)<\/update\s*>/gi)];
+}
+
+/**
+ * Whether an answer can be gone by: it has a whole <update> block or says <none/>, and no block was cut off.
+ * A cut-off answer, an empty one or a refusal says nothing about the story, so the story is not read yet.
+ */
+export function readable(text) {
+    const answer = said(text);
+    const whole = updateBlocks(answer).length;
+    const begun = (answer.match(/<update\b/gi) ?? []).length;
+    return begun === whole && (whole > 0 || /<none\s*\/?>/i.test(answer));
 }
 
 /**
@@ -256,12 +307,17 @@ export function readReply(text, records, s = settings()) {
     const mode = modeOf(s);
     const out = [];
     const seen = new Set();
-    for (const match of String(text ?? '').matchAll(/<update\s+id\s*=\s*["']?\s*([^"'>\s]+)\s*["']?\s*>([\s\S]*?)<\/update\s*>/gi)) {
-        const record = records[Number(match[1]) - 1];
-        if (!record || seen.has(match[1])) continue;
-        seen.add(match[1]);
-        const after = mode === 'note' ? join(split(record.content).base, tidyNote(match[2], words(s))) : tidyRewrite(match[2], record.content);
-        if (!after || after === record.content || (mode === 'note' && !split(after).note)) continue;
+    for (const [, attributes, body] of updateBlocks(said(text))) {
+        // The id may come with other attributes (the name, copied from the record's own line)
+        const index = Number(attributes.match(/\bid\s*=\s*["']?\s*([^"'>\s]+)/i)?.[1]) - 1;
+        const record = records[index];
+        if (!record || seen.has(index)) continue;
+        seen.add(index);
+        const parts = mode === 'note' ? split(record.content) : null;
+        const now = parts ? tidyNote(body, words(s)) : tidyRewrite(body, record.content);
+        if (!now || saysNothing(now) || now === parts?.note) continue;
+        const after = parts ? join(parts.base, now) : now;
+        if (after === record.content || (parts && !split(after).note)) continue;
         out.push({ ...record, after, mode });
     }
     return out;
@@ -301,21 +357,28 @@ function plain(mes) {
         .trim();
 }
 
+/**
+ * The story from one message on, oldest first, as far as one request holds it.
+ * @returns {{story: string, end: number}} end = the last message that is in it (or had nothing to read);
+ *   what comes after is for the next check
+ */
 function storyText(ctx, from, to) {
     const lines = [];
+    let size = 0;
+    let end = from - 1;
     for (let i = Math.max(0, from); i <= to; i++) {
         const message = ctx.chat[i];
-        if (!message || message.is_system || typeof message.mes !== 'string') continue;
-        const text = plain(message.mes);
-        if (text) lines.push(`${message.name || (message.is_user ? ctx.name1 : ctx.name2) || 'Narrator'}: ${text}`);
+        const text = message && !message.is_system && typeof message.mes === 'string' ? plain(message.mes) : '';
+        if (text) {
+            const line = `${message.name || (message.is_user ? ctx.name1 : ctx.name2) || 'Narrator'}: ${text}`;
+            // The first message always goes, cut short when it alone is more than a request holds
+            if (lines.length && size + 2 + line.length > STORY_MAX) break;
+            lines.push(line.slice(0, STORY_MAX));
+            size += (lines.length > 1 ? 2 : 0) + line.length;
+        }
+        end = i;
     }
-    let story = lines.join('\n\n');
-    if (story.length > STORY_MAX) {
-        story = story.slice(-STORY_MAX);
-        const start = story.indexOf('\n\n');
-        if (start !== -1 && start < 2000) story = story.slice(start + 2);
-    }
-    return story;
+    return { story: lines.join('\n\n'), end };
 }
 
 function titleOf(entry) {
@@ -325,14 +388,25 @@ function titleOf(entry) {
     return key ? key.trim() : `Entry ${entry.uid}`;
 }
 
+// Whether a name has to stop at a word's edge on the side of this character: a letter or digit of writing
+// that puts spaces between its words ("Al" is not in "Alice"; 小明 is in 小明点头)
+function edged(character) {
+    return /[\p{L}\p{N}]/u.test(character) && !UNSPACED.test(character);
+}
+
 function mentions(entry, story) {
     const names = [String(entry.comment ?? ''), ...(Array.isArray(entry.key) ? entry.key : [])]
         .map((name) => String(name ?? '').trim().toLowerCase())
-        .filter((name) => name.length >= 3 && !name.startsWith('/'));
+        .filter((name) => [...name].length >= 2 && !name.startsWith('/'));
     let count = 0;
     for (const name of new Set(names)) {
+        // Most names are not in the story at all, and looking for one is far cheaper than a pattern for it
+        if (!story.includes(name)) continue;
+        const letters = [...name];
         const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        count += (story.match(new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}(?=$|[^\\p{L}\\p{N}])`, 'gu')) ?? []).length;
+        const start = edged(letters[0]) ? '(?:^|[^\\p{L}\\p{N}])' : '';
+        const end = edged(letters[letters.length - 1]) ? '(?=$|[^\\p{L}\\p{N}])' : '';
+        count += (story.match(new RegExp(`${start}${escaped}${end}`, 'gu')) ?? []).length;
     }
     return count;
 }
@@ -384,24 +458,59 @@ function textOf(ctx, data) {
     return '';
 }
 
-async function ask(ctx, messages) {
+// Roughly how many tokens a text is: about three letters to a token, and other writing (Chinese, Japanese
+// and the like) more than one token to a character
+function tokens(text) {
+    const other = (text.match(/[^\u0000-\u024F]/g) ?? []).length;
+    return Math.ceil((text.length - other) / 3 + other * 1.5);
+}
+
+/**
+ * How long the answer may get, in tokens: room for every record to change. Without it the answer gets the
+ * story's own limit, which is often too short for a rewrite or for several notes, and is cut off.
+ */
+function answerLength(ctx, s, records) {
+    const note = modeOf(s) === 'note';
+    let room = ANSWER_MIN;
+    for (const record of records) room += note ? words(s) * 4 : Math.round(tokens(record.content) * 1.5) + 100;
+    // Never less than the story's own limit: a model that thinks first may need all of that
+    const own = Number(ctx.mainApi === 'openai' ? ctx.chatCompletionSettings?.openai_max_tokens : document.getElementById('amount_gen')?.value);
+    return Math.max(Math.min(room, ANSWER_MAX), Number.isFinite(own) ? own : 0);
+}
+
+async function ask(ctx, messages, responseLength) {
     // The raw answer is read here, so that the user's regex scripts and reply clean-up (made for story text)
     // never touch it
-    if (typeof ctx.generateRawData === 'function') return textOf(ctx, await ctx.generateRawData({ prompt: messages }));
-    return await ctx.generateRaw({ prompt: messages, trimNames: false });
+    if (typeof ctx.generateRawData === 'function') return textOf(ctx, await ctx.generateRawData({ prompt: messages, responseLength }));
+    return await ctx.generateRaw({ prompt: messages, trimNames: false, responseLength });
+}
+
+// A check that stops for a reason the user is told in plain words (run() says it)
+function failure(text) {
+    return Object.assign(new Error(text), { say: text });
 }
 
 // ---------- Saving, the list of changes, and undoing them ----------
 
-async function entryOf(ctx, world, uid) {
+// An entry is found by its number, and SillyTavern gives a deleted entry's number to the next new one. So
+// the title has to be the recorded one as well; if it is not, this is a different entry and is left alone
+async function entryOf(ctx, world, uid, title) {
     const data = await ctx.loadWorldInfo(world);
     const entry = data?.entries?.[uid] ?? Object.values(data?.entries ?? {}).find((one) => one?.uid === uid);
-    return entry ? { data, entry } : null;
+    return entry && titleOf(entry) === title ? { data, entry } : null;
 }
 
 async function writeEntry(ctx, world, data, entry, text) {
+    const before = entry.content;
     entry.content = text;
-    await ctx.saveWorldInfo(world, data, true);
+    try {
+        await ctx.saveWorldInfo(world, data, true);
+    } catch (error) {
+        // SillyTavern keeps what it is given before it saves it: the page must not go on showing (and
+        // sending) a text that is not in the file
+        entry.content = before;
+        throw error;
+    }
     try {
         ctx.reloadWorldInfoEditor?.(world, false);
     } catch { /* the editor is not open */ }
@@ -417,12 +526,24 @@ function record(change) {
     context().saveSettingsDebounced?.();
 }
 
+/**
+ * @returns {Promise<{done: object[], failed: string[], gone: number}>} the changes made, the titles that
+ *   could not be saved, and how many entries were no longer there
+ */
 async function saveUpdates(ctx, updates) {
     const done = [];
+    const failed = [];
+    let gone = 0;
     for (const update of updates) {
+        // Switched off, or the lorebook unticked, while the AI was answering: it may not change that any more
+        if (!active || !books().includes(update.world)) continue;
         try {
-            const found = await entryOf(ctx, update.world, update.uid);
-            if (!found) continue;
+            const found = await entryOf(ctx, update.world, update.uid, update.title);
+            if (!found) {
+                toast('warning', `"${update.title}" is no longer in the lorebook "${update.world}".`);
+                gone++;
+                continue;
+            }
             const before = String(found.entry.content ?? '');
             // The entry may have been edited while the AI was answering: a note still goes under the newer
             // text; a rewrite of the older text is dropped
@@ -438,9 +559,10 @@ async function saveUpdates(ctx, updates) {
             done.push(change);
         } catch (error) {
             console.error(`[Arcane Forge UI] "${update.title}" could not be saved to the lorebook "${update.world}"`, error);
+            failed.push(update.title);
         }
     }
-    return done;
+    return { done, failed, gone };
 }
 
 /** Puts an entry back to what it was before one change. */
@@ -449,27 +571,39 @@ export async function undo(changeId) {
     const change = (Array.isArray(s.keeperLog) ? s.keeperLog : []).find((one) => one.id === changeId);
     if (!change || change.undone) return false;
     const ctx = context();
-    const found = await entryOf(ctx, change.world, change.uid);
-    if (!found) {
-        toast('warning', `"${change.title}" is no longer in the lorebook "${change.world}".`);
+    try {
+        const found = await entryOf(ctx, change.world, change.uid, change.title);
+        if (!found) {
+            toast('warning', `"${change.title}" is no longer in the lorebook "${change.world}".`);
+            return false;
+        }
+        const now = String(found.entry.content ?? '');
+        let next = change.before;
+        if (now !== change.after) {
+            const noteOnly = change.mode === 'note';
+            // A note change only ever takes the note back: the user's own text may have been edited since
+            if (noteOnly) next = join(split(now).base, split(change.before).note);
+            if (!noteOnly || split(now).note !== split(change.after).note) {
+                // The title is the user's own (or a downloaded card's): it is set as text, never as markup
+                const question = el('p', {}, noteOnly
+                    ? `The Latest note of "${change.title}" has been changed again since this update. Put the older note back anyway? Your own text stays as it is, and the note that is there now is kept in History.`
+                    : `"${change.title}" has been changed again since this update. Put the older text back anyway? The text that is there now is kept in History.`);
+                const ok = await ctx.callGenericPopup?.(question, ctx.POPUP_TYPE?.CONFIRM);
+                if (!ok) return false;
+            }
+        }
+        if (next !== now) await writeEntry(ctx, change.world, found.data, found.entry, next);
+        change.undone = true;
+        // An undo is a change too: the text it replaced stays in History
+        if (next !== now) record({ id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`, time: Date.now(), world: change.world, uid: change.uid, title: change.title, mode: 'undo', before: now, after: next, undone: false });
+        else ctx.saveSettingsDebounced?.();
+        render();
+        return true;
+    } catch (error) {
+        console.error(`[Arcane Forge UI] "${change.title}" could not be put back in the lorebook "${change.world}"`, error);
+        toast('error', `"${change.title}" could not be put back: the lorebook "${change.world}" could not be read or saved.`);
         return false;
     }
-    const now = String(found.entry.content ?? '');
-    let next = change.before;
-    if (now !== change.after) {
-        if (change.mode === 'note' && split(now).note === split(change.after).note) {
-            // Your own text was edited since; only the note goes back
-            next = join(split(now).base, split(change.before).note);
-        } else {
-            const ok = await ctx.callGenericPopup?.(`"${change.title}" has been changed again since this update. Put the older text back anyway?`, ctx.POPUP_TYPE?.CONFIRM);
-            if (!ok) return false;
-        }
-    }
-    await writeEntry(ctx, change.world, found.data, found.entry, next);
-    change.undone = true;
-    ctx.saveSettingsDebounced?.();
-    render();
-    return true;
 }
 
 /** Puts a rewritten entry back to the text it had before the keeper first touched it. */
@@ -478,25 +612,32 @@ export async function restore(key) {
     const first = s.keeperOriginals?.[key];
     if (!first) return false;
     const ctx = context();
-    const found = await entryOf(ctx, first.world, first.uid);
-    if (!found) {
-        toast('warning', `"${first.title}" is no longer in the lorebook "${first.world}".`);
+    try {
+        const found = await entryOf(ctx, first.world, first.uid, first.title);
+        if (!found) {
+            toast('warning', `"${first.title}" is no longer in the lorebook "${first.world}".`);
+            return false;
+        }
+        const before = String(found.entry.content ?? '');
+        if (before === first.text) return true;
+        await writeEntry(ctx, first.world, found.data, found.entry, first.text);
+        record({ id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`, time: Date.now(), world: first.world, uid: first.uid, title: first.title, mode: 'restore', before, after: first.text, undone: false });
+        render();
+        return true;
+    } catch (error) {
+        console.error(`[Arcane Forge UI] "${first.title}" could not be put back in the lorebook "${first.world}"`, error);
+        toast('error', `"${first.title}" could not be put back: the lorebook "${first.world}" could not be read or saved.`);
         return false;
     }
-    const before = String(found.entry.content ?? '');
-    if (before === first.text) return true;
-    await writeEntry(ctx, first.world, found.data, found.entry, first.text);
-    record({ id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`, time: Date.now(), world: first.world, uid: first.uid, title: first.title, mode: 'restore', before, after: first.text, undone: false });
-    render();
-    return true;
 }
 
 // ---------- A check ----------
 
 /**
- * Reads the newest part of the story and updates the entries it changed.
- * @param {{manual?: boolean}} [options] manual = "Update now": reads everything new (or the last messages
- *   again), and says what happened
+ * Reads the part of the story that is not read yet (as much of it as one request holds) and updates the
+ * entries it changed.
+ * @param {{manual?: boolean}} [options] manual = "Update now": reads up to the newest reply (or the last
+ *   messages again), and says what happened
  */
 export async function run({ manual = false } = {}) {
     const ctx = context();
@@ -511,13 +652,17 @@ export async function run({ manual = false } = {}) {
         return [];
     }
     const { upTo, last } = progress(ctx);
-    // On its own it stops before the newest reply, which may still be swiped away
+    // On its own it stops before the newest reply, which may still be swiped away. A reply that is still
+    // being written is not read by "Update now" either: the rest of it would never be
     const newest = ctx.chat[last];
-    const to = manual || !newest || newest.is_user || newest.is_system ? last : last - 1;
+    const writing = document.body.dataset.generating === 'true';
+    const to = (manual && !writing) || !newest || newest.is_user || newest.is_system ? last : last - 1;
     let from = upTo + 1;
     if (from > to) {
         if (!manual) return [];
+        // Nothing new: the last messages again, the newest of them that fit in one request
         from = Math.max(0, to - MANUAL_BACK + 1);
+        while (from < to && storyText(ctx, from, to).end < to) from++;
     }
     const chatId = ctx.chatId;
     running = true;
@@ -525,32 +670,41 @@ export async function run({ manual = false } = {}) {
     render();
     let changes = [];
     try {
-        const story = storyText(ctx, from, to);
+        // Oldest first, as much as one request holds; it is read up to there, and the next check goes on
+        const { story, end } = storyText(ctx, from, to);
         const records = story ? await findRecords(ctx, s, story) : [];
+        let failed = [];
+        let gone = 0;
         if (records.length) {
-            const answer = await ask(ctx, buildMessages(s, records, story));
-            if (context().chatId !== chatId) return [];
+            const answer = await ask(ctx, buildMessages(s, records, story), answerLength(ctx, s, records));
+            // Switched off, or another chat opened, while the AI was answering: nothing is saved
+            if (!active || context().chatId !== chatId) return [];
+            if (!readable(answer)) throw failure('The AI\'s answer could not be read (it may have been cut off), so nothing was changed. That part of the story will be read again.');
             let updates = readReply(answer, records, s);
             if (updates.length && s.keeperAsk) updates = await review(updates);
-            changes = await saveUpdates(ctx, updates);
+            ({ done: changes, failed, gone } = await saveUpdates(ctx, updates));
         }
+        if (changes.length) toast('success', `Updated ${changes.map((change) => change.title).join(', ')}.`);
+        // What could not be saved is not read yet either
+        if (failed.length) throw failure(`${failed.map((title) => `"${title}"`).join(', ')} could not be saved to the lorebook. That part of the story will be read again.`);
         if (context().chatId === chatId) {
             const here = state(ctx);
             if (here) {
-                here.upTo = to;
+                here.upTo = end;
                 ctx.saveMetadataDebounced?.();
             }
         }
-        if (changes.length) toast('success', `Updated ${changes.map((change) => change.title).join(', ')}.`);
-        else {
+        if (!changes.length) {
             note = records.length ? 'No changes last time' : 'Nobody from your lorebooks came up';
-            if (manual) toast('info', records.length ? 'Nothing needed changing.' : 'No entry from the ticked lorebooks is named in the newest part of the story.');
+            // (an entry that is no longer in its lorebook has been said already)
+            if (manual && !gone) toast('info', records.length ? 'Nothing needed changing.' : 'No entry from the ticked lorebooks is named in the newest part of the story.');
         }
+        if (manual && end < to) toast('info', 'There was more story than one request holds. Press Update now again to read the rest.');
     } catch (error) {
         console.error('[Arcane Forge UI] The lorebook keeper could not finish its check', error);
         note = 'The last check failed';
         holdUntil = (ctx.chat?.length ?? 0) + HOLD;
-        toast('error', 'The check did not finish. Is the AI connected?');
+        toast('error', error?.say ?? 'The check did not finish. Is the AI connected?');
     } finally {
         running = false;
         render();
@@ -680,7 +834,7 @@ export function showHistory() {
                 button.disabled = true;
             }
         });
-        const kind = change.mode === 'restore' ? 'put back to its first text' : change.mode === 'rewrite' ? 'rewritten' : 'Latest note';
+        const kind = change.mode === 'restore' ? 'put back to its first text' : change.mode === 'undo' ? 'put back by Undo' : change.mode === 'rewrite' ? 'rewritten' : 'Latest note';
         top.append(el('span', { class: 'forge-keeper-title' }, change.title), el('small', {}, `${change.world} · ${kind} · ${ago(change.time)}`), button);
         row.append(top, beforeAfter(change));
         body.append(row);
@@ -754,10 +908,21 @@ export function settingsHtml(s) {
 `;
 }
 
+// Each list of tick boxes with the lorebook names it was last drawn for
+const drawn = new WeakMap();
+
 // The lorebooks as tick boxes; the names are the user's own, so they are set as text, never as markup
 function fillBooks(list, s, save) {
     const names = [...worldNames()].sort((a, b) => a.localeCompare(b));
     const picked = new Set(Array.isArray(s.keeperBooks) ? s.keeperBooks : []);
+    // The same lorebooks as last time: the rows stay. A row that is replaced while a click or the Tab key
+    // is on its way to it loses the click, or the keyboard's place (Chrome focuses a box as it is pressed)
+    const which = JSON.stringify(names);
+    if (drawn.get(list) === which) {
+        [...list.querySelectorAll('input')].forEach((box, index) => { box.checked = picked.has(names[index]); });
+        return;
+    }
+    drawn.set(list, which);
     if (!names.length) {
         list.replaceChildren(el('small', {}, 'You have no lorebooks yet.'));
         return;
@@ -789,7 +954,8 @@ export function bindSettings($root, s, save) {
     const list = $root.find('#forge-ui-keeper-books')[0];
     if (list) {
         fillBooks(list, s, save);
-        // Lorebooks made or removed since: the list is drawn again when the pointer or the keyboard comes to it
+        // Lorebooks made or removed since: the list is looked at again when the pointer or the keyboard comes
+        // to it, and drawn again only if they are not the same ones
         const again = () => fillBooks(list, s, save);
         list.addEventListener('pointerenter', again);
         list.addEventListener('focusin', (event) => { if (!list.contains(event.relatedTarget)) again(); });
@@ -875,6 +1041,8 @@ function render() {
     const recent = [];
     const shown = new Set();
     for (const change of Array.isArray(s.keeperLog) ? s.keeperLog : []) {
+        // An undo is kept for History only; here, the change it took back no longer stands
+        if (change.mode === 'undo') continue;
         const key = `${change.world}\n${change.uid}`;
         if (shown.has(key)) continue;
         shown.add(key);

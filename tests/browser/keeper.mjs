@@ -107,7 +107,9 @@ const unit = await page.evaluate(async ({ path, MIRA }) => {
         picky,
         rewriteGuide,
         asked,
-        split: [k.split(`${MIRA}\n\nLatest: She limps.`), k.split('Latest: only a note'), k.split('Notes.\nLatest: mine, further up.\n\nMore of my own text.'), k.split('Plain text.')],
+        split: [k.split(`${MIRA}\n\nLatest: She limps.`), k.split('Latest: only a note'), k.split('Notes.\nLatest: mine, further up.\n\nMore of my own text.'), k.split('Plain text.'), k.split('Own text.\n\nLatest: She limps.\nTyped under the note.'), k.split('Name: Mira\nLatest: seen at the hall\nHair: black')],
+        readable: [k.readable('<none/>'), k.readable('<update id="1">A note.</update>'), k.readable(''), k.readable('I cannot help with that.'), k.readable('<update id="1">A note.</update><update id="2">cut off he')],
+        junk: read('<think><update id="2">A draft.</update></think><update id="1" name="Mira">Her debt is <50 gold. She <b>limps</b> badly.</update><update id="2">No change.</update>'),
         join: [k.join('Own text.  \n', 'A note.'), k.join('Own text.', ''), k.join('', 'A note.')],
         messy: read('Sure!\n<update id="1">\nLatest: Her hair is now   cropped short.\nShe owes the Guild.\n</update>\n<UPDATE id=2>Tomas is a farm boy.</UPDATE>\n<update id="1">A second go.</update><update id="7">Nobody.</update>'),
         none: read('<none/>'),
@@ -131,11 +133,15 @@ check('the request is the guide, then the records and the story', unit.asked.len
 check('an entry\'s own text and its Latest note travel apart', askedUser.includes('<latest>She limps.</latest>') && !askedUser.includes('Latest: She limps.'), askedUser.slice(0, 400));
 check('macros travel as marks, so that SillyTavern cannot fill them in or run them', !askedUser.includes('{{') && askedUser.includes('⟦⟦user⟧⟧ is her oldest customer') && askedUser.includes('Hello ⟦⟦user⟧⟧'));
 check('a quote in a title cannot break the record line', askedUser.includes('name="Mira \'the Smith\' Vance"'));
-check('an entry splits into its own text and the note', unit.split[0].base === MIRA && unit.split[0].note === 'She limps.' && unit.split[1].base === '' && unit.split[1].note === 'only a note' && unit.split[3].note === '', JSON.stringify(unit.split));
+check('an entry splits into its own text and the note', unit.split[0].base === MIRA && unit.split[0].note === 'She limps.' && unit.split[3].note === '', JSON.stringify(unit.split));
 check('"Latest:" further up in the user\'s own writing is left alone', unit.split[2].note === '' && unit.split[2].base.includes('More of my own text.'), JSON.stringify(unit.split[2]));
+check('so is an entry that is only a "Latest:" line, and such a line among the user\'s own lines', unit.split[1].base === 'Latest: only a note' && unit.split[1].note === '' && unit.split[5].note === '' && unit.split[5].base.includes('Latest: seen at the hall'), JSON.stringify([unit.split[1], unit.split[5]]));
+check('a line typed right under the note stays, with the user\'s own text', unit.split[4].note === 'She limps.' && unit.split[4].base === 'Own text.\n\nTyped under the note.', JSON.stringify(unit.split[4]));
 check('and joins back with one blank line between', unit.join[0] === 'Own text.\n\nLatest: A note.' && unit.join[1] === 'Own text.' && unit.join[2] === 'Latest: A note.', JSON.stringify(unit.join));
 check('a messy answer is read: chatter, a repeated "Latest:", line breaks, a second block and an unknown id', unit.messy.length === 2 && unit.messy[0].after === `${MIRA}\n\nLatest: Her hair is now cropped short. She owes the Guild.` && unit.messy[1].after.endsWith('\n\nLatest: Tomas is a farm boy.'), JSON.stringify(unit.messy));
 check('<none/>, an empty answer and an unchanged note change nothing', unit.none.length === 0 && unit.nothing.length === 0 && unit.same.length === 0);
+check('an answer with a whole block or <none/> can be gone by; an empty one, a refusal and a cut-off one cannot', JSON.stringify(unit.readable) === '[true,true,false,false,false]', JSON.stringify(unit.readable));
+check('a draft inside the thinking and a block that only says "no change" are left out; "<50" stays and real tags go', unit.junk.length === 1 && unit.junk[0].after === `${MIRA}\n\nLatest: Her debt is <50 gold. She limps badly.`, JSON.stringify(unit.junk));
 check('a note far over the limit is cut at the end of a sentence', unit.longNote && unit.longNote.split(' ').length <= 90 && unit.longNote.endsWith('end.'), String(unit.longNote?.split(' ').length));
 check('marks come home as macros', unit.marks?.endsWith('Latest: {{user}} now owes her money.'), unit.marks);
 check('a rewrite replaces the text', unit.rewrite.length === 1 && unit.rewrite[0].after.endsWith('He is now apprenticed at the forge.') && !unit.rewrite[0].after.includes('Latest:'));
@@ -200,7 +206,8 @@ await shot('keeper-profile.png', page.locator('#forge-profile'));
 await page.click('#forge-keeper .forge-keeper-row button');
 await page.waitForTimeout(500);
 s = await forge();
-check('Undo puts the entry back as it was', (await entryText(0)) === MIRA && saves.length === 2 && s.keeperLog[0].undone === true && (await section())?.rows.length === 0, await entryText(0));
+check('Undo puts the entry back as it was', (await entryText(0)) === MIRA && saves.length === 2 && s.keeperLog[1].undone === true && (await section())?.rows.length === 0, await entryText(0));
+check('and the undo is kept for History, with the text it replaced', s.keeperLog.length === 2 && s.keeperLog[0].mode === 'undo' && s.keeperLog[0].before === afterFirst && s.keeperLog[0].after === MIRA, JSON.stringify(s.keeperLog.map((c) => c.mode)));
 
 // ---------- Update now, asking first ----------
 await setForge(page, { keeperAsk: true });
@@ -252,7 +259,7 @@ check('a rewrite is shown the whole entry, its note included', rewriteAsk.includ
 await page.click('#forge-keeper .forge-keeper-actions button >> nth=1');
 await page.waitForSelector('dialog.popup[open] .forge-keeper-window', { timeout: 8000 }).catch(() => {});
 const history = await page.evaluate(() => { const w = document.querySelector('dialog.popup[open] .forge-keeper-window'); return w ? { items: [...w.querySelectorAll('details.forge-keeper-item')].map((d) => [d.querySelector('.forge-keeper-title').textContent, d.querySelector('.forge-keeper-undo').textContent]), firsts: [...w.querySelectorAll('.forge-keeper-first .forge-keeper-title')].map((t) => t.textContent) } : null; });
-check('History lists every change, newest first, with what was undone', JSON.stringify(history?.items) === JSON.stringify([['Tomas Reed', 'Undo'], ['Mira Vance', 'Undo'], ['Mira Vance', 'Undo'], ['Mira Vance', 'Undone']]), JSON.stringify(history));
+check('History lists every change, newest first, the undo among them, with what was undone', JSON.stringify(history?.items) === JSON.stringify([['Tomas Reed', 'Undo'], ['Mira Vance', 'Undo'], ['Mira Vance', 'Undo'], ['Mira Vance', 'Undo'], ['Mira Vance', 'Undone']]), JSON.stringify(history));
 check('and the rewritten entries, to put back', JSON.stringify(history?.firsts) === '["Tomas Reed"]');
 await page.click('dialog.popup[open] details.forge-keeper-item >> nth=0');
 await page.waitForTimeout(300);
