@@ -46,6 +46,9 @@ const TEMPLATE_KEYS = ['do', 'say', 'see'];
 const TEMPLATE_MAX = 200;
 // A text ending in one of these gets no full stop (tidy rule 2)
 const END_MARKS = ['.', '!', '?', '…', '"', "'", '”', '’', '*', ')', ']', '~'];
+// Nor does one ending in any other punctuation, in any script ("你好。", a dash, a colon), or in a backtick
+// (the end of a piece of code)
+const ENDS_IN_PUNCTUATION = /[\p{P}`]$/u;
 // The quote pairs Say takes off a text wrapped in them (tidy rule 4)
 const QUOTE_PAIRS = [['"', '"'], ['“', '”'], ["'", "'"]];
 // "you" or "I" as a whole word at the start (so "I'm" counts, "Isla" and "your" do not)
@@ -81,20 +84,29 @@ export const defaults = {
 };
 
 // Bible section 7: the voice, the tidying, how Story and See go in, and the wording travel in a look file;
-// the switch and the picked mode do not
+// the switch and the picked mode do not. refuse says which of the strings Import look must leave out: a
+// wording that starts with "/" would turn everything sent with it into a command, and a look file comes
+// from someone else.
 export const lookKeys = {
     modesVoice: { type: 'enum', values: Object.keys(VOICES) },
     modesTidy: { type: 'boolean' },
     modesStoryAs: { type: 'enum', values: Object.keys(STORY_AS) },
     modesSeeAs: { type: 'enum', values: Object.keys(SEE_AS) },
-    modesTemplates: { type: 'strings', keys: TEMPLATE_KEYS, max: TEMPLATE_MAX },
+    modesTemplates: { type: 'strings', keys: TEMPLATE_KEYS, max: TEMPLATE_MAX, refuse: isCommand },
 };
+
+// SillyTavern's own test for a command (processCommands in script.js): the trimmed text starts with "/"
+function isCommand(text) {
+    return text.trim().startsWith('/');
+}
 
 // The voice, tidy and wording controls only matter with the modes on, so they are greyed out (disabled)
 // while the modes are off. What a text field holds and shows is set in bindSettings, not written into
 // this HTML, so nothing the owner typed is ever read as markup.
 // The title a greyed-out control carries, saying which setting it needs
 const MODES_NEED = 'Needs "Do, Say, Story and See buttons above the message box" on';
+// The title a wording field carries while what it holds starts with "/"
+const NO_COMMAND_WORDING = 'A wording cannot start with "/". This one is ignored, and the usual wording is used instead.';
 
 export function settingsHtml(s) {
     const off = s.modes ? '' : ` disabled title="${MODES_NEED.replaceAll('"', '&quot;')}"`;
@@ -144,6 +156,7 @@ export function bindSettings($root, s, save) {
     $root.find('#forge-ui-modes').on('change', function () {
         s.modes = this.checked;
         $root.find('.forge-ui-modes-option').prop('disabled', !s.modes).attr('title', s.modes ? null : MODES_NEED);
+        markWording($root, s);
         save();
     });
     $root.find('#forge-ui-modes-voice').on('change', function () {
@@ -168,9 +181,22 @@ export function bindSettings($root, s, save) {
         this.value = typeof own === 'string' ? own : '';
     }).on('input', function () {
         s.modesTemplates = { ...ownTemplates(s), [this.dataset.template]: this.value.slice(0, TEMPLATE_MAX) };
+        markWording($root, s);
         save();
     });
     showTemplateHints($root, s);
+    markWording($root, s);
+}
+
+// A wording that starts with "/" stays as the owner typed it, but it is never used (templateFor), and its
+// field says so in a title (our own words, set as plain text). While the modes are off, every field keeps
+// the title all the greyed-out controls have.
+function markWording($root, s) {
+    if (!s.modes) return;
+    $root.find('.forge-ui-modes-template').each(function () {
+        if (isCommand(this.value)) this.title = NO_COMMAND_WORDING;
+        else this.removeAttribute('title');
+    });
 }
 
 // Each wording field shows the wording it replaces, in the voice that is chosen
@@ -262,10 +288,25 @@ export function transform(text, mode, s = {}) {
 }
 
 // The owner's wording for this mode if it has a place for the text, else the default in the chosen voice.
-// Wording without {{input}} would throw away what was typed, so it is not used.
+// Wording without {{input}} would throw away what was typed, so it is not used. Nor is wording that starts
+// with "/": SillyTavern would run everything sent with it as a command.
 function templateFor(mode, s) {
     const own = ownTemplates(s)[mode];
-    return typeof own === 'string' && own.includes(INPUT) ? own : TEMPLATES[voiceOf(s)][mode];
+    return typeof own === 'string' && own.includes(INPUT) && !isCommand(own) ? own : TEMPLATES[voiceOf(s)][mode];
+}
+
+// Whether the text already has this mode's wording round it: it starts with what the wording has before
+// {{input}} and ends with what it has after. A send SillyTavern refused leaves the shaped text in the box;
+// once it is edited there it is no longer the last rewrite, and with tidy off or the owner's own wording it
+// would get the wording a second time ("You You open the door", "**open the door.**").
+function hasWording(typed, mode, s) {
+    if (!TEMPLATE_KEYS.includes(mode)) return false;
+    const template = templateFor(mode, s);
+    const before = template.slice(0, template.indexOf(INPUT)).trimStart();
+    const after = template.slice(template.lastIndexOf(INPUT) + INPUT.length).trimEnd();
+    if ((!before && !after) || typed.length < before.length + after.length) return false;
+    // A full stop after the wording still counts: tidy adds one to such a text (shapeMessage)
+    return typed.startsWith(before) && (typed.endsWith(after) || typed.endsWith(`${after}.`));
 }
 
 // split and join, so nothing in the text (such as "$&") is read as a replacement pattern
@@ -273,9 +314,10 @@ function fill(template, input) {
     return template.split(INPUT).join(input);
 }
 
-// Rule 2: a full stop, unless the text already ends in one of the end marks
+// Rule 2: a full stop, unless the text already ends in one of the end marks or in other punctuation
 function endMark(text) {
-    return END_MARKS.includes(Array.from(text).pop()) ? text : `${text}.`;
+    // A macro at the end ("hug {{char}}") stands for a word, so its closing braces are no end mark
+    return END_MARKS.includes(Array.from(text).pop()) || (ENDS_IN_PUNCTUATION.test(text) && !text.endsWith('}}')) ? text : `${text}.`;
 }
 
 // The first character, whole even when it is outside the basic plane
@@ -304,12 +346,14 @@ function startsWithCapitals(text) {
     return isCapital(first) && isCapital(second);
 }
 
-// Rule 4: one pair of quotes wrapped round the whole text comes off
+// Rule 4: one pair of quotes wrapped round the whole text comes off. An apostrophe at each end is only such
+// a pair when there is none inside as well ('Evenin', darlin' keeps both), so that text stays as typed.
 function unquote(text) {
     for (const [open, close] of QUOTE_PAIRS) {
         if (text.length < open.length + close.length || !text.startsWith(open) || !text.endsWith(close)) continue;
-        const inside = text.slice(open.length, text.length - close.length).trim();
-        return inside || text;
+        const inside = text.slice(open.length, text.length - close.length);
+        if (open === "'" && inside.includes("'")) continue;
+        return inside.trim() || text;
     }
     return text;
 }
@@ -428,8 +472,13 @@ function shapeMessage(event) {
     // text starts with "/"), or already rewritten
     if ((!typed && mode !== 'see') || typed.startsWith('/') || (lastRewrite && text === lastRewrite)) return;
     if (typed && takeOver(event, context, mode, s, text)) return;
-    const shaped = transform(text, mode, s);
-    if (shaped === text) return;
+    // Text that already has the wording round it is given no wording again: it stays as typed, but for
+    // tidy's rules 1 and 2 (the ends trimmed, a full stop)
+    let shaped = text;
+    if (!hasWording(typed, mode, s)) shaped = transform(text, mode, s);
+    else if (s.modesTidy !== false) shaped = endMark(typed);
+    // Nothing typed as plain words leaves here as a command, whatever the wording did to it
+    if (shaped === text || isCommand(shaped)) return;
     setBox(textarea, shaped);
     lastRewrite = shaped;
 }
@@ -470,10 +519,13 @@ function canSendHere(context) {
 }
 
 // Ours run first (capture, on document), so stopping here keeps the key or the click from SillyTavern's own
-// handlers (and keyboard.js's click for Enter on the send button); Enter makes no new line either
+// handlers (and keyboard.js's click for Enter on the send button); Enter makes no new line either.
+// One of those handlers gives the focus back to the message box after a click on the send button (on a
+// phone the keyboard would close after every Story without it), so that is done here.
 function stopSend(event) {
     event.preventDefault();
     event.stopImmediatePropagation();
+    if (event.target instanceof Element && event.target.closest('#send_but')) document.getElementById('send_textarea')?.focus();
 }
 
 // The Story or picture being worked on while shapeMessage holds other sends back, or null. Each one holds its
@@ -509,22 +561,26 @@ function putBack(text) {
 
 // While a reply is being started, SillyTavern reads the message box again after its first steps (commands,
 // then the server check) and sends what it finds as your own message; in a group chat its group code reads
-// it too. So from the moment the reply is asked for until SillyTavern counts itself as generating, whatever
-// is typed is moved out of the box as it comes, and kept. Returns a function that ends this and gives back
-// what was kept. The listener is on the box only for that moment.
+// it too. So from the moment the reply is asked for until SillyTavern has read the box, whatever is typed
+// is moved out of the box as it comes, and kept. Returns a function that ends this and gives back what was
+// kept. The listeners are on the box only for that moment.
 function keepBoxClear() {
     const textarea = document.getElementById('send_textarea');
     if (!(textarea instanceof HTMLTextAreaElement)) return () => '';
     let kept = '';
     const move = (event) => {
-        // Mid-composition (an input method) the text is not settled yet; the input at its end moves it
+        // Mid-composition (an input method) the text is not settled yet; it is moved when the composition
+        // ends. Chromium marks every input event of a composition as composing, the last one too, and sends
+        // none after it, so the end of the composition is listened for as well (it is not marked).
         if (event.isComposing || !textarea.value) return;
         kept += textarea.value;
         setBox(textarea, '');
     };
     textarea.addEventListener('input', move);
+    textarea.addEventListener('compositionend', move);
     return () => {
         textarea.removeEventListener('input', move);
+        textarea.removeEventListener('compositionend', move);
         return kept;
     };
 }
@@ -572,10 +628,12 @@ async function tellStory(story, typed) {
             endKeeping();
             putBack(meanwhile);
         });
-    // Generate's first steps (such as checking the server) come before SillyTavern counts itself as
-    // generating; the box is kept clear and the hold stays on until it does, and from then on SillyTavern's
-    // own flag holds sends back. Turning the modes off (holding cleared) ends both at once.
-    while (!ended && !generating() && holding === job) await pause(REPLY_LOOK / 2);
+    // Generate's first steps (such as checking the server) come before it reads the box, which is when it
+    // sets is_send_press; the box is kept clear and the hold stays on until then, and from then on
+    // SillyTavern's own flag holds sends back. (isGenerating() is no test for that moment: in a group chat
+    // it is true before the first member's request has read the box.) Turning the modes off (holding
+    // cleared) ends both at once.
+    while (!ended && !script.is_send_press && holding === job) await pause(REPLY_LOOK / 2);
     endKeeping();
     release(job);
     await reply;
@@ -589,17 +647,22 @@ async function tellStory(story, typed) {
 // when escaped). Image Generation fills macros in its own final prompt, as for /imagine typed by hand.
 // A picture takes many seconds, and SillyTavern does not know one is being made, so other sends from the box
 // are held back until the command ends, whether it worked or not.
+// The command returns the picture's address. When it returns none (Image Generation is not set up, the
+// request failed or was stopped; it says so itself) or throws, what was typed goes back in the box, as it
+// does after a Story that could not be added.
 async function askForPicture(imagine, typed) {
     setBox(document.getElementById('send_textarea'), '');
     lastRewrite = '';
     const job = hold();
+    let picture = '';
     try {
-        await imagine.callback({}, typed);
+        picture = await imagine.callback({}, typed);
     } catch (error) {
         console.error('[Arcane Forge UI] See could not ask Image Generation for a picture.', error);
     } finally {
         release(job);
     }
+    if (!picture) putBack(typed);
 }
 
 // ---------- The bar ----------

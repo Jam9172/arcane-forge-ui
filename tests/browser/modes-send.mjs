@@ -50,6 +50,8 @@ got = await transform('hello', 'say', { modesTemplates: { ...NO_TEMPLATES, say: 
 check('SillyTavern\'s own macros in the wording are left for SillyTavern', got === '{{user}}: "Hello."', JSON.stringify(got));
 got = await transform('open the door', 'do', { modesTemplates: { ...NO_TEMPLATES, do: 'Nothing here' } });
 check('a wording without {{input}} is not used (the text would be lost)', got === 'You open the door.', JSON.stringify(got));
+got = [await transform('open the door', 'do', { modesTemplates: { ...NO_TEMPLATES, do: '/delchat |/echo {{input}}' } }), await transform('hello', 'say', { modesTidy: false, modesTemplates: { ...NO_TEMPLATES, say: '  /sys {{input}}' } })];
+check('a wording that starts with "/" is not used (SillyTavern would run what is sent as a command)', got[0] === 'You open the door.' && got[1] === 'You say, "hello"', JSON.stringify(got));
 
 // The tidy rules' finer points
 got = await transform('  open the door\nslowly  ', 'do');
@@ -58,6 +60,10 @@ got = await transform('“hi there”', 'say');
 check('Say takes off curly quotes round the whole text', got === 'You say, "Hi there."', JSON.stringify(got));
 got = await transform("'hi there'", 'say');
 check('Say takes off single quotes round the whole text', got === 'You say, "Hi there."', JSON.stringify(got));
+got = await transform("'Evenin', darlin'", 'say');
+check('Say leaves the marks at the ends when the same mark is inside too (apostrophes, not a pair of quotes)', got === 'You say, "\'Evenin\', darlin\'"', JSON.stringify(got));
+got = [await transform('你好。', 'say'), await transform('step back, then:', 'do'), await transform('read the note: `MEET AT DAWN`', 'do'), await transform('hmm~', 'do')];
+check('no full stop after text that ends in other punctuation, in any script, or in a backtick', JSON.stringify(got) === JSON.stringify(['You say, "你好。"', 'You step back, then:', 'You read the note: `MEET AT DAWN`', 'You hmm~']), JSON.stringify(got));
 got = await transform('pay $& go', 'do');
 check('nothing in the text is read as a replacement pattern', got === 'You pay $& go.', JSON.stringify(got));
 got = await transform('My leg hurts and bleeds on the ground.', 'do');
@@ -282,6 +288,10 @@ await fakeConnection(page);
 await page.waitForSelector('#send_but:not(.displayNone)', { timeout: 5000 }).catch(() => {});
 sent = await send(secondTry);
 check('once connected, it is sent as it is', only(sent, '*open the door.*'), JSON.stringify(sent));
+// Nor after it was edited in the box (then it is no longer the last rewrite): text that already has the
+// wording round it is not given the wording again
+sent = await send('*open the oak door.*');
+check('text that already has the wording round it (the rewrite, edited) is sent as it is', only(sent, '*open the oak door.*'), JSON.stringify(sent));
 await setForge(page, { modesTemplates: { ...NO_TEMPLATES } });
 
 // TauriTavern's expanded editor (a stand-in for its modal dialog): its own Send is not shaped, so the bar
@@ -379,16 +389,26 @@ await page.fill('#forge-ui-modes-template-do', '*{{input}}*');
 await page.waitForTimeout(300);
 const templates = await setting('modesTemplates');
 check('typing a Do wording saves it, and leaves the others empty', templates?.do === '*{{input}}*' && templates?.say === '' && templates?.see === '', JSON.stringify(templates));
+// A wording that starts with "/" is never used; it stays as typed, and its field says so in its title
+await page.fill('#forge-ui-modes-template-see', '/imagine {{input}}');
+await page.waitForTimeout(300);
+const titles = await page.evaluate(() => ['do', 'see'].map((key) => document.getElementById(`forge-ui-modes-template-${key}`).title));
+check('a See wording that starts with "/" is kept as typed, and its field alone says it cannot be used', (await setting('modesTemplates'))?.see === '/imagine {{input}}' && titles[0] === '' && /cannot start with "\/"/.test(titles[1]), JSON.stringify(titles));
+await page.fill('#forge-ui-modes-template-see', '');
+await page.waitForTimeout(300);
 await page.waitForTimeout(1500);
 check('the changes are saved', held.filter((p) => p.endsWith('/api/settings/save')).length > savesBefore);
 
 // The voice, the tidying and the wording travel in a look file (bible section 7)
 // (Story's and See's keys, from M3, are checked in tests/browser/modes-story-see.mjs)
+// (modesTemplates also has refuse, a function: a function does not come back from the page, so it is asked
+// here what it answers for a wording that starts with "/", with spaces first too, and for one that does not)
 const lookKeys = await page.evaluate(async (url) => {
     const { modesVoice, modesTidy, modesTemplates } = (await import(url)).lookKeys;
-    return { modesVoice, modesTidy, modesTemplates };
+    const { refuse, ...wording } = modesTemplates;
+    return { modesVoice, modesTidy, modesTemplates: wording, refuses: ['/sys {{input}}', '  /sys {{input}}', '*{{input}}*'].map((text) => refuse(text)) };
 }, MODES_JS);
-check('lookKeys: modesVoice (second or first), modesTidy, modesTemplates (do, say, see; 200 at most)', JSON.stringify(lookKeys) === JSON.stringify({ modesVoice: { type: 'enum', values: ['second', 'first'] }, modesTidy: { type: 'boolean' }, modesTemplates: { type: 'strings', keys: ['do', 'say', 'see'], max: 200 } }), JSON.stringify(lookKeys));
+check('lookKeys: modesVoice (second or first), modesTidy, modesTemplates (do, say, see; 200 at most; a wording that starts with "/" refused)', JSON.stringify(lookKeys) === JSON.stringify({ modesVoice: { type: 'enum', values: ['second', 'first'] }, modesTidy: { type: 'boolean' }, modesTemplates: { type: 'strings', keys: ['do', 'say', 'see'], max: 200 }, refuses: [true, true, false] }), JSON.stringify(lookKeys));
 const look = { format: 'arcane-forge-ui-look', version: 1, look: { modesVoice: 'second', modesTidy: true, modesTemplates: { say: '{{user}}: "{{input}}"' } } };
 await page.setInputFiles('#forge-ui-import-file', { name: 'look.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(look)) });
 await page.waitForTimeout(600);

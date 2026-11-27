@@ -148,7 +148,9 @@ const clearToasts = async () => {
 // there (the chat that is open, or the imagine command) is a stand-in. SillyTavern itself is not changed,
 // and the real getContext is put back after. The stand-in imagine can take a while, as a real picture does:
 // with `drawing`, it is not done until the test calls testPictureDone() in the page. With `fail`, it then fails.
-const standIn = (which, { drawing = false, fail = false } = {}) => page.evaluate(({ which, drawing, fail }) => {
+// It returns a made-up address for its picture, as Image Generation's command returns the picture's; with
+// `empty` it returns none, as that command does when it is not set up or its request failed.
+const standIn = (which, { drawing = false, fail = false, empty = false } = {}) => page.evaluate(({ which, drawing, fail, empty }) => {
     globalThis.testRealGetContext ??= SillyTavern.getContext;
     globalThis.testImagine = [];
     globalThis.testExecuted = [];
@@ -167,12 +169,12 @@ const standIn = (which, { drawing = false, fail = false } = {}) => page.evaluate
             globalThis.testImagine.push({ args, value });
             if (picture) await picture;
             if (fail) throw new Error('(test) the stand-in picture failed');
-            return '';
+            return empty ? '' : 'test-picture.png';
         } };
         // A command line run through the context is recorded and not run (the brief's own stand-in)
         return Object.create(context, { ...parser, executeSlashCommandsWithOptions: { value: (...args) => { globalThis.testExecuted.push(args.map(String)); return Promise.resolve(); } } });
     };
-}, { which, drawing, fail });
+}, { which, drawing, fail, empty });
 const realContext = () => page.evaluate(() => { if (globalThis.testRealGetContext) SillyTavern.getContext = globalThis.testRealGetContext; });
 
 await setForge(page, { enabled: true, modes: true, modesActive: '', modesVoice: 'second', modesTidy: true, modesStoryAs: 'narration', modesSeeAs: 'describe', modesTemplates: { ...NO_TEMPLATES } });
@@ -447,8 +449,8 @@ check('and the description form is sent', JSON.stringify(userTexts(list)) === '[
 
 // ---------- 8. See as a picture, imagine registered ----------
 
-const imagine = async (text, how = 'enter', wait = 2500) => {
-    await standIn('imagine');
+const imagine = async (text, how = 'enter', wait = 2500, options = {}) => {
+    await standIn('imagine', options);
     repliesBefore = await replies();
     const result = await send(text, how, 1, wait);
     const calls = await page.evaluate(() => ({
@@ -473,6 +475,10 @@ for (const text of tricky) reached.push((await imagine(text)).imagine[0]?.value)
 check('so are a named argument, quotes, a closure, {{trim}} and a backslash', JSON.stringify(reached) === JSON.stringify(tricky), JSON.stringify(reached));
 r = await imagine('the old door', 'button');
 check('the send button asks for a picture the same way', r.imagine.length === 1 && r.imagine[0].value === 'the old door' && r.list.length === 0, JSON.stringify(r.imagine));
+// When no picture comes of it (imagine returns no address), what was typed is not lost: it is back in the box
+r = await imagine('the old door', 'enter', 2500, { empty: true });
+check('See as a picture, no picture comes: nothing is sent, and what was typed is back in the message box', r.imagine.length === 1 && r.list.length === 0 && r.replies === 0 && r.box === 'the old door', `${r.imagine.length} asked, ${r.list.length} added, box ${JSON.stringify(r.box)}`);
+await page.fill('#send_textarea', '');
 // An empty box asks for no picture (imagine needs words); See looks around instead
 r = await imagine('', 'enter', 8000);
 check('See as a picture with an empty box: no picture is asked for; "You look around." is sent', r.imagine.length === 0 && JSON.stringify(userTexts(r.list)) === '["You look around."]', JSON.stringify(userTexts(r.list)));
@@ -498,8 +504,10 @@ const whileDrawing = async (label, sends, options = {}) => {
     const asked = await pictures();
     const list = await added(before);
     const replied = (await replies()) - repliesBefore;
-    check(`See as a picture, ${label}: one picture asked for, nothing sent, no reply`, asked.length === 1 && asked[0] === 'the far door' && list.length === 0 && replied === 0 && (await box()) === '',
-        `pictures ${JSON.stringify(asked)}, added ${kindsOf(list)}, ${replied} replies`);
+    // A picture that was made leaves the box empty; one that failed puts what was typed back in it
+    const left = options.fail ? 'the far door' : '';
+    check(`See as a picture, ${label}: one picture asked for, nothing sent, no reply${options.fail ? ', and the text back in the box' : ''}`, asked.length === 1 && asked[0] === 'the far door' && list.length === 0 && replied === 0 && (await box()) === left,
+        `pictures ${JSON.stringify(asked)}, added ${kindsOf(list)}, ${replied} replies, box ${JSON.stringify(await box())}`);
 };
 // The hold ends with the picture: the next send asks for one again
 const nextSendWorks = async (label) => {
@@ -519,6 +527,8 @@ await whileDrawing(phone ? 'a double tap on the send button' : 'a double click o
 await realContext();
 await whileDrawing('a picture that fails, with a second Enter 300 ms later', async () => { await enterKey(); await page.waitForTimeout(300); await enterKey(); }, { fail: true });
 await nextSendWorks('a picture that fails ends the hold too: the next Enter asks for a picture');
+// (that one failed as well, so its text is back in the box)
+await page.fill('#send_textarea', '');
 await setForge(page, { modesSeeAs: 'describe' });
 
 // ---------- Settings ----------
