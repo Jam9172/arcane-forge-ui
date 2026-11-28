@@ -24,7 +24,7 @@ import { extension_settings } from '../../../extensions.js';
 
 export const id = 'trackers';
 
-export const defaults = { trackers: false, trackersTime: true, trackersStats: true, trackersInventory: true, trackersUpdate: true, trackersBy: 'story', trackersUrl: '', trackersModel: '', trackersRead: 4, trackersTell: false };
+export const defaults = { trackers: false, trackersTime: true, trackersStats: true, trackersInventory: true, trackersUpdate: true, trackersBy: 'story', trackersUrl: '', trackersModel: '', trackersRead: 4, trackersTell: false, trackersChar: false };
 
 export const lookKeys = {
     trackersTime: { type: 'boolean' },
@@ -113,8 +113,13 @@ export function statList(s = settings()) {
 
 // ---------- The values ----------
 
+// One person's part: stats and things. The user's sits at the top level (as it always has), the character's under "char".
+function blankPerson() {
+    return { stats: {}, onPerson: [], wearing: [], stored: {} };
+}
+
 function blank() {
-    return { time: '', date: '', location: '', weather: '', stats: {}, onPerson: [], wearing: [], stored: {} };
+    return { time: '', date: '', location: '', weather: '', ...blankPerson(), char: blankPerson() };
 }
 
 function tidyText(value) {
@@ -133,10 +138,8 @@ export function tidyList(value) {
     return out;
 }
 
-function tidy(raw) {
-    const out = blank();
+function tidyPerson(raw, out) {
     if (!raw || typeof raw !== 'object') return out;
-    for (const [key] of FIELDS) out[key] = tidyText(raw[key]);
     if (raw.stats && typeof raw.stats === 'object') {
         for (const [statId, value] of Object.entries(raw.stats)) {
             const number = Number(value);
@@ -152,6 +155,28 @@ function tidy(raw) {
         }
     }
     return out;
+}
+
+function tidy(raw) {
+    const out = blank();
+    if (!raw || typeof raw !== 'object') return out;
+    for (const [key] of FIELDS) out[key] = tidyText(raw[key]);
+    tidyPerson(raw, out);
+    tidyPerson(raw.char, out.char);
+    return out;
+}
+
+/** The part of the values that belongs to "user" (the top level) or "char". */
+function partOf(now, who) {
+    return who === 'char' ? now.char : now;
+}
+
+/** The two names when the character is tracked too (one-on-one chats only); null when only the user is. */
+export function people(s = settings(), ctx = context()) {
+    if (s.trackersChar !== true || ctx.groupId) return null;
+    const char = String(ctx.name2 ?? '').replace(/[:\n\r]/g, '').trim();
+    if (!char) return null;
+    return { user: String(ctx.name1 ?? '').replace(/[:\n\r]/g, '').trim() || 'You', char };
 }
 
 /** The open chat's values as they stand. */
@@ -232,29 +257,50 @@ function followChat() {
 
 // ---------- The block in a reply ----------
 
-function blockLines(now, s, stats) {
+function personLines(part, s, stats) {
     const lines = [];
-    const or = (text) => text || 'not set';
-    if (s.trackersTime !== false) for (const [key, label] of FIELDS) lines.push(`${label}: ${or(now[key])}`);
-    if (s.trackersStats !== false) for (const stat of stats) lines.push(`${stat.name}: ${now.stats[stat.id] ?? 'not set'}`);
+    if (s.trackersStats !== false) for (const stat of stats) lines.push(`${stat.name}: ${part.stats[stat.id] ?? 'not set'}`);
     if (s.trackersInventory !== false) {
-        lines.push(`On person: ${now.onPerson.join(', ') || 'none'}`);
-        lines.push(`Wearing: ${now.wearing.join(', ') || 'none'}`);
-        for (const [place, items] of Object.entries(now.stored)) lines.push(`Stored (${place}): ${items.join(', ') || 'none'}`);
+        lines.push(`On person: ${part.onPerson.join(', ') || 'none'}`);
+        lines.push(`Wearing: ${part.wearing.join(', ') || 'none'}`);
+        for (const [place, items] of Object.entries(part.stored)) lines.push(`Stored (${place}): ${items.join(', ') || 'none'}`);
     }
     return lines;
 }
 
+// With the character tracked too, each person's lines come under a line with their name ("Name (you):", "Name:")
+function blockLines(raw, s, stats, names = null) {
+    const now = tidy(raw);
+    const lines = [];
+    const or = (text) => text || 'not set';
+    if (s.trackersTime !== false) for (const [key, label] of FIELDS) lines.push(`${label}: ${or(now[key])}`);
+    if (!names) return [...lines, ...personLines(now, s, stats)];
+    const user = personLines(now, s, stats);
+    const char = personLines(now.char, s, stats);
+    if (user.length) lines.push(`${names.user} (you):`, ...user, `${names.char}:`, ...char);
+    return lines;
+}
+
+// "Name (you):", "**Name:**", "[Name]", "Name's" and the like name a person's section
+function sectionOf(line, names) {
+    if (!names) return '';
+    const bare = line.replace(/<[^>]*>/g, '').replace(/[*_#=[\]\-–—•]/g, '').replace(/\(you\)/i, '').replace(/:\s*$/, '').replace(/['’]s(\s+(trackers?|stats))?$/i, '').trim().toLowerCase();
+    if (bare === names.user.toLowerCase()) return 'user';
+    if (bare === names.char.toLowerCase()) return 'char';
+    return '';
+}
+
 /** The note added to what is sent to the AI: the values as they stand and how to write them back. */
-export function noteText(now, s, stats) {
-    const lines = blockLines(now, s, stats);
+export function noteText(now, s, stats, names = null) {
+    const lines = blockLines(now, s, stats, names);
     if (!lines.length) return '';
     const rules = ['Keep the same lines in the same order, one per line.'];
     if (s.trackersTime !== false) rules.push('The block must agree with your reply: when your reply states the time, date, place or weather, write exactly that; otherwise move the time on by however long the events of your reply took.');
     if (s.trackersStats !== false && stats.length) rules.push(`${stats.map((stat) => stat.name).join(', ')}: whole numbers from 0 to 100; change one only when the story changes it.`);
-    if (s.trackersInventory !== false) rules.push('The lists are {{user}}\'s things, separated by commas ("none" when empty); change them only when something is gained, lost, used up, put on, taken off or put away. For things kept somewhere else, use one line per place: Stored (place): things.');
+    if (names) rules.push(`The block has a part for ${names.user} and a part for ${names.char}, each starting with a line with the name: keep both parts, each with that person's own values.`);
+    if (s.trackersInventory !== false) rules.push((names ? 'Each part\'s lists are that person\'s things,' : 'The lists are {{user}}\'s things,') + ' separated by commas ("none" when empty); change them only when something is gained, lost, used up, put on, taken off or put away. For things kept somewhere else, use one line per place: Stored (place): things.');
     rules.push('Where a value says "not set", choose one that fits the story.', 'Never mention this block in the story itself.', 'Write the block from <div to </div> and nothing around it: no heading, no brackets, no words before or after.');
-    return `{{user}}'s trackers, as they stand now:\n<div class="${BLOCK_CLASS}">\n${lines.join('\n')}\n</div>\nAt the very end of your reply, after the story text, write this block again with the values as they stand after your reply. ${rules.join(' ')}`;
+    return `${names ? `The trackers of ${names.user} and ${names.char}` : '{{user}}\'s trackers'}, as they stand now:\n<div class="${BLOCK_CLASS}">\n${lines.join('\n')}\n</div>\nAt the very end of your reply, after the story text, write this block again with the values as they stand after your reply. ${rules.join(' ')}`;
 }
 
 // What a model may write around its block: a last line like "[Trackers for Name:" before it, loose brackets after it
@@ -271,9 +317,10 @@ function takeShell(source) {
 }
 
 /** The note for the story's AI when another model keeps the trackers: the values to go by, with nothing to write back. */
-export function tellText(now, s, stats) {
-    const lines = blockLines(now, s, stats).filter((line) => !/: not set$/.test(line));
+export function tellText(now, s, stats, names = null) {
+    const lines = blockLines(now, s, stats, names).filter((line) => !/: not set$/.test(line));
     if (!lines.length) return '';
+    if (names) return `The situation right now, for ${names.user} (the player) and ${names.char}, for you to go by in the story. Keep the story consistent with it, and do not write this list out or mention it:\n${lines.join('\n')}`;
     return `{{user}}'s situation right now, for you to go by in the story. Keep the story consistent with it, and do not write this list out or mention it:\n${lines.join('\n')}`;
 }
 
@@ -302,12 +349,19 @@ export function takeBlock(text) {
 }
 
 /** The values after a block's lines are read into them. Lines that name nothing known are left out. */
-export function readLines(lines, before, s, stats) {
+export function readLines(lines, before, s, stats, names = null) {
     const next = tidy(before);
     const byName = new Map(stats.map((stat) => [stat.name.toLowerCase(), stat.id]));
     const unset = (value) => !value || /^(not set|unknown|n\/a|none|-+)$/i.test(value);
     let changed = false;
+    // Lines before any name line are the user's, as they were before the character was tracked too
+    let part = next;
     for (const line of lines) {
+        const section = sectionOf(line, names);
+        if (section) {
+            part = partOf(next, section);
+            continue;
+        }
         const at = line.indexOf(':');
         if (at < 1) continue;
         const name = line.slice(0, at).trim().toLowerCase();
@@ -320,20 +374,20 @@ export function readLines(lines, before, s, stats) {
         } else if (byName.has(name)) {
             const number = /-?\d+(?:\.\d+)?/.exec(value);
             if (s.trackersStats === false || !number) continue;
-            next.stats[byName.get(name)] = Math.min(100, Math.max(0, Math.round(Number(number[0]))));
+            part.stats[byName.get(name)] = Math.min(100, Math.max(0, Math.round(Number(number[0]))));
             changed = true;
         } else if (s.trackersInventory !== false) {
             const stored = /^stored\s*(?:\(([^)]*)\)|(?:at|in|[-–])\s*(.+))$/i.exec(line.slice(0, at).trim());
-            if (name === 'on person' || name === 'carried' || name === 'carrying') next.onPerson = tidyList(value);
-            else if (name === 'wearing' || name === 'clothing' || name === 'worn') next.wearing = tidyList(value);
+            if (name === 'on person' || name === 'carried' || name === 'carrying') part.onPerson = tidyList(value);
+            else if (name === 'wearing' || name === 'clothing' || name === 'worn') part.wearing = tidyList(value);
             else if (stored) {
                 const place = tidyText(stored[1] ?? stored[2]).replace(/[():]/g, '').trim().slice(0, NAME_MAX);
                 if (!place) continue;
                 const items = tidyList(value);
                 // A place the reply empties is gone; a place it does not name stays as it was
-                const known = Object.keys(next.stored).find((key) => key.toLowerCase() === place.toLowerCase());
-                if (!items.length) delete next.stored[known ?? place];
-                else if (known || Object.keys(next.stored).length < PLACES_MAX) next.stored[known ?? place] = items;
+                const known = Object.keys(part.stored).find((key) => key.toLowerCase() === place.toLowerCase());
+                if (!items.length) delete part.stored[known ?? place];
+                else if (known || Object.keys(part.stored).length < PLACES_MAX) part.stored[known ?? place] = items;
             } else continue;
             changed = true;
         }
@@ -360,7 +414,7 @@ function onReply(messageId) {
     message.mes = found.text;
     if (Array.isArray(message.swipes) && typeof message.swipe_id === 'number' && typeof message.swipes[message.swipe_id] === 'string') message.swipes[message.swipe_id] = found.text;
     // With another model keeping them, what the story's AI wrote anyway is only taken out
-    const next = other ? null : readLines(found.lines, before, s, statList(s));
+    const next = other ? null : readLines(found.lines, before, s, statList(s), people(s, ctx));
     if (next) store(next, { message });
     else ctx.saveChat?.();
     // A streamed reply is already in the page with the block in it: show it again without
@@ -430,11 +484,13 @@ function plain(mes) {
 /** What the other model is sent: how the trackers work, the values as they stand, and the last messages. */
 export function otherMessages(ctx, s, messageId, now = values()) {
     const stats = statList(s);
+    const names = people(s, ctx);
     const who = String(ctx.name1 ?? '').trim() || 'the main character';
     const rules = ['Keep the same lines in the same order, one per line.'];
     if (s.trackersTime !== false) rules.push('The story decides: when the last message states the time, date, place or weather, in its text or in a header or status line of its own, write exactly what it states, even when that differs from the trackers as they stand. Only when it does not state one, move the time on by however long its events took and keep the rest.');
     if (s.trackersStats !== false && stats.length) rules.push(`${stats.map((stat) => stat.name).join(', ')}: whole numbers from 0 to 100; change one only when the story changes it.`);
-    if (s.trackersInventory !== false) rules.push(`The lists are ${who}'s things, separated by commas ("none" when empty); change them only when something is gained, lost, used up, put on, taken off or put away. For things kept somewhere else, use one line per place: Stored (place): things.`);
+    if (names) rules.push(`The block has a part for ${names.user} and a part for ${names.char}, each starting with a line with the name. Keep both parts and each name line as they are; each part holds that person's own stats and things, taken from what the story says about that person.`);
+    if (s.trackersInventory !== false) rules.push(`${names ? 'Each part\'s lists are that person\'s' : `The lists are ${who}'s`} things, separated by commas ("none" when empty); change them only when something is gained, lost, used up, put on, taken off or put away. For things kept somewhere else, use one line per place: Stored (place): things.`);
     rules.push('Take everything from the scene as the messages tell it; never contradict the last message.', 'Where a value says "not set", choose one that fits the story.', 'When the last message changes nothing, write the values again as they are.');
     const most = Math.min(READ[1], Math.max(READ[0], Math.round(Number(s.trackersRead)) || defaults.trackersRead));
     const story = [];
@@ -450,8 +506,8 @@ export function otherMessages(ctx, s, messageId, now = values()) {
         room -= text.length;
     }
     return [
-        { role: 'system', content: `You keep the trackers of ${who}, the main character of an ongoing story, up to date. You do not write the story and you do not continue it.\n\nYou are given the trackers as they stand and the last part of the story. Work out what the LAST message changes, and answer with the block again, with the values as they stand after it. Answer with the block and nothing else.\n\n${rules.map((rule) => `- ${rule}`).join('\n')}` },
-        { role: 'user', content: `The trackers as they stand:\n<div class="${BLOCK_CLASS}">\n${blockLines(now, s, stats).join('\n')}\n</div>\n\nThe last part of the story (the last message is the newest):\n\n${story.join('\n\n')}` },
+        { role: 'system', content: `You keep the trackers of ${names ? `${names.user}, the main character of an ongoing story, and of ${names.char}` : `${who}, the main character of an ongoing story,`} up to date. You do not write the story and you do not continue it.\n\nYou are given the trackers as they stand and the last part of the story. Work out what the LAST message changes, and answer with the block again, with the values as they stand after it. Answer with the block and nothing else.\n\n${rules.map((rule) => `- ${rule}`).join('\n')}` },
+        { role: 'user', content: `The trackers as they stand:\n<div class="${BLOCK_CLASS}">\n${blockLines(now, s, stats, names).join('\n')}\n</div>\n\nThe last part of the story (the last message is the newest):\n\n${story.join('\n\n')}` },
     ];
 }
 
@@ -498,7 +554,7 @@ async function askOther(messageId) {
         // A newer reply, another swipe, another chat or a deleted message: this answer is about something that is gone
         if (asking !== mine || context().chatId !== chatId || context().chat?.[messageId] !== message || (message.swipe_id ?? 0) !== swipeId) return false;
         const lines = (takeBlock(answer) ?? takeBlock(`<div class="${BLOCK_CLASS}">\n${answer}`)).lines;
-        const next = readLines(lines, before, s, statList(s));
+        const next = readLines(lines, before, s, statList(s), people(s, ctx));
         if (!next) throw new Error(answer.trim() ? `Its answer had no tracker lines: "${answer.trim().slice(0, 120)}"` : 'Its answer was empty.');
         otherFailed = '';
         store(next, { message });
@@ -543,8 +599,8 @@ function setNote() {
     const s = settings();
     let text = '';
     if (active && ctx.chatMetadata) {
-        if (byOther(s)) text = s.trackersTell === true ? tellText(values(), s, statList(s)) : '';
-        else if (s.trackersUpdate !== false) text = noteText(values(), s, statList(s));
+        if (byOther(s)) text = s.trackersTell === true ? tellText(values(), s, statList(s), people(s, ctx)) : '';
+        else if (s.trackersUpdate !== false) text = noteText(values(), s, statList(s), people(s, ctx));
     }
     // In the chat, right at the end (position 1, depth 0), as a system note (role 0)
     ctx.setExtensionPrompt(PROMPT_KEY, text, 1, 0, false, 0);
@@ -592,7 +648,7 @@ export function settingsHtml(s) {
                     <span>${label}</span>
                 </label>`;
     return `
-                <h4>Trackers</h4>${box('forge-ui-trackers', 'trackers', 'Trackers in the profile on the right (time, stats, inventory)', false)}${box('forge-ui-trackers-time', 'trackersTime', 'Time and place', true)}${box('forge-ui-trackers-stats', 'trackersStats', 'Stat wheels', true)}${box('forge-ui-trackers-inventory', 'trackersInventory', 'Inventory', true)}${box('forge-ui-trackers-update', 'trackersUpdate', 'Ask the AI to keep them up to date in each reply', true)}
+                <h4>Trackers</h4>${box('forge-ui-trackers', 'trackers', 'Trackers in the profile on the right (time, stats, inventory)', false)}${box('forge-ui-trackers-time', 'trackersTime', 'Time and place', true)}${box('forge-ui-trackers-stats', 'trackersStats', 'Stat wheels', true)}${box('forge-ui-trackers-inventory', 'trackersInventory', 'Inventory', true)}${box('forge-ui-trackers-char', 'trackersChar', 'Also track the character: their own stats and inventory, under yours (one-on-one chats)', false)}${box('forge-ui-trackers-update', 'trackersUpdate', 'Ask the AI to keep them up to date in each reply', true)}
                 <small>With the last one off, nothing is added to what is sent to the AI and you change the values by hand.</small>
                 <label class="forge-ui-select">
                     <span>Kept up to date by</span>
@@ -629,7 +685,7 @@ ${box('forge-ui-trackers-tell', 'trackersTell', 'Tell the story\'s AI the values
 `;
 }
 
-const BOXES = { 'forge-ui-trackers': 'trackers', 'forge-ui-trackers-time': 'trackersTime', 'forge-ui-trackers-stats': 'trackersStats', 'forge-ui-trackers-inventory': 'trackersInventory', 'forge-ui-trackers-update': 'trackersUpdate', 'forge-ui-trackers-tell': 'trackersTell' };
+const BOXES = { 'forge-ui-trackers': 'trackers', 'forge-ui-trackers-time': 'trackersTime', 'forge-ui-trackers-stats': 'trackersStats', 'forge-ui-trackers-inventory': 'trackersInventory', 'forge-ui-trackers-update': 'trackersUpdate', 'forge-ui-trackers-tell': 'trackersTell', 'forge-ui-trackers-char': 'trackersChar' };
 
 // The other model's boxes. What the user typed is put in as values, never as markup; the key is never put back.
 function bindOther($root, s, save) {
@@ -796,9 +852,30 @@ function render() {
     const parts = [];
     if (byOther(s) && s.trackersUpdate !== false) parts.push(otherRow(s));
     if (s.trackersTime !== false) parts.push(timeBlock(now));
-    if (s.trackersStats !== false) parts.push(statsBlock(now, statList(s)));
-    if (s.trackersInventory !== false) parts.push(inventoryBlock(now));
+    const names = people(s, ctx);
+    const own = s.trackersStats !== false || s.trackersInventory !== false;
+    for (const who of names ? ['user', 'char'] : ['user']) {
+        if (names && own) parts.push(personRow(who === 'user' ? names.user : names.char, who));
+        if (s.trackersStats !== false) parts.push(statsBlock(now, statList(s), who));
+        if (s.trackersInventory !== false) parts.push(inventoryBlock(now, who));
+    }
     box.replaceChildren(...parts.filter(Boolean));
+}
+
+// Whose stats and things follow, when the character is tracked too
+function personRow(name, who) {
+    const row = el('div', { class: 'forge-track-person', 'data-who': who });
+    const initial = el('span', { class: 'forge-track-initial', 'aria-hidden': 'true' });
+    initial.textContent = Array.from(name)[0]?.toUpperCase() ?? '?';
+    const label = el('p', {});
+    label.textContent = name;
+    if (who === 'user') {
+        const you = el('span', { class: 'forge-profile-you' });
+        you.textContent = ' (you)';
+        label.append(you);
+    }
+    row.append(initial, label);
+    return row;
 }
 
 // With another model keeping them: who that is, whether it is at work, and a button to ask it again
@@ -854,15 +931,17 @@ function timeBlock(now) {
     return block;
 }
 
-function statsBlock(now, stats) {
+function statsBlock(now, stats, who = 'user') {
     if (!stats.length) return null;
-    const block = el('section', { class: 'forge-track', 'aria-label': 'Stats' });
+    const part = partOf(now, who);
+    const key = (stat) => `${who}:${stat.id}`;
+    const block = el('section', { class: 'forge-track', 'aria-label': 'Stats', 'data-who': who });
     const card = el('div', { class: 'forge-track-card' });
     const wheels = el('div', { class: 'forge-track-wheels' });
     const editor = el('div', { class: 'forge-track-slider' });
     const round = 2 * Math.PI * 20;
     const drawEditor = () => {
-        const stat = stats.find((one) => one.id === openStat);
+        const stat = stats.find((one) => key(one) === openStat);
         if (!stat) {
             editor.replaceChildren();
             return;
@@ -870,9 +949,9 @@ function statsBlock(now, stats) {
         const name = el('span', {});
         name.textContent = stat.name;
         const range = el('input', { type: 'range', min: '0', max: '100', step: '1', 'aria-label': `${stat.name}, percent` });
-        range.value = String(values().stats[stat.id] ?? 0);
+        range.value = String(partOf(values(), who).stats[stat.id] ?? 0);
         range.addEventListener('input', () => {
-            change((next) => { next.stats[stat.id] = Number(range.value); });
+            change((next) => { partOf(next, who).stats[stat.id] = Number(range.value); });
             paint(stat, Number(range.value));
         });
         editor.replaceChildren(name, range);
@@ -880,7 +959,7 @@ function statsBlock(now, stats) {
     const painters = new Map();
     const paint = (stat, value) => painters.get(stat.id)?.(value);
     for (const stat of stats) {
-        const button = el('button', { type: 'button', class: 'forge-track-wheel', 'aria-pressed': String(openStat === stat.id) });
+        const button = el('button', { type: 'button', class: 'forge-track-wheel', 'aria-pressed': String(openStat === key(stat)) });
         const svg = document.createElementNS(SVG, 'svg');
         svg.setAttribute('viewBox', '0 0 50 50');
         svg.setAttribute('aria-hidden', 'true');
@@ -911,11 +990,11 @@ function statsBlock(now, stats) {
             button.title = label;
             button.setAttribute('aria-label', label);
         });
-        paint(stat, now.stats[stat.id]);
+        paint(stat, part.stats[stat.id]);
         button.append(svg, name);
         button.addEventListener('click', () => {
-            openStat = openStat === stat.id ? '' : stat.id;
-            for (const other of wheels.children) other.setAttribute('aria-pressed', String(other === button && openStat === stat.id));
+            openStat = openStat === key(stat) ? '' : key(stat);
+            for (const other of wheels.children) other.setAttribute('aria-pressed', String(other === button && openStat === key(stat)));
             drawEditor();
             editor.querySelector('input')?.focus();
         });
@@ -927,10 +1006,14 @@ function statsBlock(now, stats) {
     return block;
 }
 
-function inventoryBlock(now) {
-    const block = el('section', { class: 'forge-track', 'aria-label': 'Inventory' });
+function inventoryBlock(now, who = 'user') {
+    const part = partOf(now, who);
+    // The user's keys stay as they were; the character's carry "char:" in front
+    const keyOf = (key) => (who === 'char' ? `char:${key}` : key);
+    const block = el('section', { class: 'forge-track', 'aria-label': 'Inventory', 'data-who': who });
     const card = el('div', { class: 'forge-track-card forge-track-lists' });
-    const list = (key, title, items, save) => {
+    const list = (name, title, items, save) => {
+        const key = keyOf(name);
         const part = el('div', { class: 'forge-track-list' });
         const head = el('div', { class: 'forge-track-list-head' });
         const label = el('span', {});
@@ -981,17 +1064,17 @@ function inventoryBlock(now) {
         return part;
     };
     card.append(
-        list('onPerson', 'On person', now.onPerson, (items) => change((next) => { next.onPerson = items; })),
-        list('wearing', 'Wearing', now.wearing, (items) => change((next) => { next.wearing = items; })),
+        list('onPerson', 'On person', part.onPerson, (items) => change((next) => { partOf(next, who).onPerson = items; })),
+        list('wearing', 'Wearing', part.wearing, (items) => change((next) => { partOf(next, who).wearing = items; })),
     );
-    for (const [place, items] of Object.entries(now.stored)) {
+    for (const [place, items] of Object.entries(part.stored)) {
         // Emptying a place's list takes the place away
         card.append(list(`stored:${place}`, `Stored · ${place}`, items, (kept) => change((next) => {
-            if (kept.length) next.stored[place] = kept;
-            else delete next.stored[place];
+            if (kept.length) partOf(next, who).stored[place] = kept;
+            else delete partOf(next, who).stored[place];
         })));
     }
-    if (addingPlace) {
+    if (addingPlace === who) {
         const input = el('input', { type: 'text', maxlength: String(NAME_MAX), placeholder: 'Name of the place (Home, Saddlebag…)', 'aria-label': 'Name of the place', autocomplete: 'off' });
         let done = false;
         const finish = (keep) => {
@@ -999,9 +1082,9 @@ function inventoryBlock(now) {
             done = true;
             addingPlace = false;
             const place = tidyText(input.value).replace(/[():]/g, '').trim().slice(0, NAME_MAX);
-            if (keep && place && !Object.keys(now.stored).some((key) => key.toLowerCase() === place.toLowerCase()) && Object.keys(now.stored).length < PLACES_MAX) {
-                change((next) => { next.stored[place] = []; });
-                openList = `stored:${place}`;
+            if (keep && place && !Object.keys(part.stored).some((key) => key.toLowerCase() === place.toLowerCase()) && Object.keys(part.stored).length < PLACES_MAX) {
+                change((next) => { partOf(next, who).stored[place] = []; });
+                openList = keyOf(`stored:${place}`);
             }
             render();
         };
@@ -1021,7 +1104,7 @@ function inventoryBlock(now) {
         setTimeout(() => input.isConnected && input.focus());
     }
     block.append(heading('Inventory', iconButton('plus', 'Add a place where things are stored', () => {
-        addingPlace = true;
+        addingPlace = who;
         openList = '';
         render();
     })), card);

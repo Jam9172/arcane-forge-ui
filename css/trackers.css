@@ -242,6 +242,41 @@ body.forge-ui.forge-columns .forge-track-none {
     font-size: 14px;
 }
 
+/* With the character tracked too: a name row over each person's stats and inventory */
+body.forge-ui.forge-columns .forge-track-person {
+    display: flex;
+    align-items: center;
+    gap: var(--forge-space-2);
+    margin-top: var(--forge-space-3);
+    padding: 0 var(--forge-space-1);
+}
+
+body.forge-ui.forge-columns .forge-track-person p {
+    margin: 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--forge-text);
+    font-size: 17px;
+    font-weight: 600;
+}
+
+body.forge-ui.forge-columns .forge-track-initial {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--forge-card);
+    border: 1px solid var(--forge-border);
+    color: var(--forge-brass);
+    font-size: 13px;
+    font-weight: 600;
+}
+
 /* With another model keeping them: one line over the trackers that says who, and a button to ask again */
 body.forge-ui.forge-columns .forge-track-other {
     display: flex;

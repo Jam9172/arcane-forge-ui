@@ -143,7 +143,11 @@ const read = await page.evaluate(async (path) => {
     const bare = t.takeBlock('Story.\n\n[Trackers for Mira:\nTime: 3 PM\nHealth: 40\n]');
     const kept = [t.takeBlock('The trackers followed him [all night].'), t.takeBlock('[Trackers for Mira: gone]\nThe story goes on.')];
     const noStats = t.readLines(['Health: 10', 'Time: 3 PM'], blank, { ...s, trackersStats: false }, stats);
-    return { wrapped: wrapped.map((w) => `${w.text}|${w.lines.join()}`), story, empty, bare: { text: bare.text, read: t.readLines(bare.lines, blank, s, stats) }, kept, note: t.noteText(blank, s, stats), messyText: messy.text, messy: t.readLines(messy.lines, blank, s, stats), none, noStats, nothing: t.readLines(['Mood: 4'], blank, s, stats) };
+    const pair = { user: 'Mira', char: 'Wren' };
+    const both = t.readLines(['Time: 1 PM', '**Mira (you):**', 'Health: 20', 'Wren:', 'Health: 90', 'On person: Rope', 'Stored (Den): Bone'], blank, s, stats, pair);
+    const bothNote = t.noteText(blank, s, stats, pair);
+    const loose = t.readLines(['Health: 30', "[Wren's trackers]", 'Health: 70'], blank, s, stats, pair);
+        return { both, bothNote, loose, wrapped: wrapped.map((w) => `${w.text}|${w.lines.join()}`), story, empty, bare: { text: bare.text, read: t.readLines(bare.lines, blank, s, stats) }, kept, note: t.noteText(blank, s, stats), messyText: messy.text, messy: t.readLines(messy.lines, blank, s, stats), none, noStats, nothing: t.readLines(['Mood: 4'], blank, s, stats) };
 }, MODULE_JS);
 check('a block with bold labels, bullets, a number over 100 and unknown lines is still read', read.messy?.time === '2 PM' && read.messy.stats.health === 100 && read.messy.onPerson.length === 0 && JSON.stringify(read.messy.stored) === JSON.stringify({ Home: ['Toolbox'] }), JSON.stringify(read.messy));
 check('text after the block stays in the message', read.messyText === 'Story.\n\nAfterword.', JSON.stringify(read.messyText));
@@ -153,6 +157,9 @@ check('an empty "[Trackers for Name:]" at the end is taken out', read.empty?.tex
 check('and one with the lines but no block is read', read.bare.text === 'Story.' && read.bare.read?.time === '3 PM' && read.bare.read.stats.health === 40, JSON.stringify(read.bare));
 check('"trackers" in the story itself is left alone', read.kept[0] === null && read.kept[1] === null);
 check('the note has no bracketed heading to copy, and says to write only the block', !read.note.startsWith('[') && !read.note.endsWith(']') && read.note.includes('no heading, no brackets') && read.note.includes('The block must agree with your reply'), read.note.slice(0, 80));
+check('with the character tracked too, each name line starts that person\'s part', read.both?.time === '1 PM' && read.both.stats.health === 20 && JSON.stringify(read.both.onPerson) === '["Rope"]' && read.both.char.stats.health === 90 && JSON.stringify(read.both.char.onPerson) === '["Rope"]' && JSON.stringify(read.both.char.stored) === '{"Den":["Bone"]}' && JSON.stringify(read.both.stored) === JSON.stringify({ Home: ['Toolbox'], Cart: ['Hay'] }), JSON.stringify(read.both));
+check('lines before any name line are yours, and "Name\'s trackers" counts as a name line', read.loose?.stats.health === 30 && read.loose.char.stats.health === 70, JSON.stringify(read.loose));
+check('the note names both parts', read.bothNote.includes('The trackers of Mira and Wren') && read.bothNote.includes('Mira (you):\nHealth: 50') && read.bothNote.includes('Wren:\nHealth: not set') && read.bothNote.includes('a part for Mira and a part for Wren'), read.bothNote.slice(0, 300));
 check('a reply without a block is left alone', read.none === null && read.nothing === null);
 check('a part that is switched off is not changed by a reply', read.noStats?.stats.health === 50 && read.noStats.time === '3 PM', JSON.stringify(read.noStats));
 

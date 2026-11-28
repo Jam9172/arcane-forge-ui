@@ -252,10 +252,43 @@ const askedSoFar = (await others()).length;
 const seenAgain = await ask('Time: 11:45 PM', () => page.click('#forge-trackers .forge-track-other button'));
 check('asking again about a swipe also starts from the values before the reply', (await others()).length === askedSoFar + 1 && seenAgain.includes(`Time: ${startTime}`) && (await now())?.time === '11:45 PM', seenAgain.slice(0, 120));
 
+// ---------- The character tracked too ----------
+const names = await page.evaluate(() => ({ user: SillyTavern.getContext().name1, char: SillyTavern.getContext().name2 }));
+const panel = () => page.evaluate(() => ({
+    people: [...document.querySelectorAll('#forge-trackers .forge-track-person')].map((r) => `${r.dataset.who}:${r.querySelector('p').textContent}`),
+    stats: [...document.querySelectorAll('#forge-trackers section[aria-label="Stats"]')].map((x) => x.dataset.who),
+    lists: [...document.querySelectorAll('#forge-trackers section[aria-label="Inventory"]')].map((x) => x.dataset.who),
+}));
+check('to start with only you are tracked, with no name rows', JSON.stringify(await panel()) === JSON.stringify({ people: [], stats: ['user'], lists: ['user'] }), JSON.stringify(await panel()));
+await setForge(page, { trackersChar: true });
+await page.waitForTimeout(400);
+check('with the character too, both of you are stacked: your row, stats and things, then theirs', JSON.stringify(await panel()) === JSON.stringify({ people: [`user:${names.user} (you)`, `char:${names.char}`], stats: ['user', 'char'], lists: ['user', 'char'] }) && await page.evaluate(() => { const order = [...document.querySelectorAll('#forge-trackers > *')].map((x) => x.dataset.who ?? '-').join(','); return order.endsWith('user,user,user,char,char,char'); }), JSON.stringify(await panel()));
+const bothAsked = await ask(`Time: 11:50 PM\n**${names.user} (you):**\nHealth: 55\nOn person: Rope\n${names.char}:\nHealth: 81\nOn person: Lantern\nWearing: Raincoat`, () => page.click('#forge-trackers .forge-track-other button'));
+const bothSystem = (await others()).at(-1)?.messages?.[0]?.content ?? '';
+check('the other model is told there is a part for each of you, and sent both', bothSystem.includes(`a part for ${names.user} and a part for ${names.char}`) && bothAsked.includes(`${names.user} (you):`) && bothAsked.includes(`\n${names.char}:\n`), bothAsked.slice(-300));
+let both = await now();
+check('its answer moves each of you on separately', both?.time === '11:50 PM' && both.stats.health === 55 && JSON.stringify(both.onPerson) === '["Rope"]' && both.char?.stats.health === 81 && JSON.stringify(both.char.onPerson) === '["Lantern"]' && JSON.stringify(both.char.wearing) === '["Raincoat"]', JSON.stringify(both));
+await page.evaluate(() => document.querySelector('#forge-trackers section[aria-label="Stats"][data-who="char"] .forge-track-wheel').click());
+await page.evaluate(() => { const range = document.querySelector('#forge-trackers section[aria-label="Stats"][data-who="char"] input[type="range"]'); range.value = '33'; range.dispatchEvent(new Event('input', { bubbles: true })); });
+await page.waitForTimeout(300);
+both = await now();
+check('changing one of the character\'s wheels by hand changes only theirs', both?.char.stats.health === 33 && both.stats.health === 55, JSON.stringify(both?.stats) + JSON.stringify(both?.char?.stats));
+await setForge(page, { trackersTell: true });
+await page.waitForTimeout(300);
+const toldBoth = await note();
+check('the story\'s AI, when told, gets both of you by name', toldBoth.includes(`for ${names.user} (the player) and ${names.char}`) && toldBoth.includes(`${names.user} (you):`) && toldBoth.includes(`${names.char}:\nHealth: 33`), toldBoth.slice(0, 300));
+await setForge(page, { trackersTell: false });
+await page.evaluate(() => { document.activeElement?.blur?.(); });
+await shot('trackers-char-profile.png', page.locator('#forge-profile'));
+await setForge(page, { trackersChar: false });
+await page.waitForTimeout(300);
+check('switched off again, it is only you, with your values kept', JSON.stringify(await panel()) === JSON.stringify({ people: [], stats: ['user'], lists: ['user'] }) && (await now())?.stats.health === 55);
+await page.evaluate(() => globalThis.otherBodies.length = 0);
+
 // ---------- Back to the story's AI, and off ----------
 await set('forge-ui-trackers-by', 'story');
 await page.waitForTimeout(400);
-check('back with the story\'s AI, the note returns and the other model\'s line is gone', (await note()).includes('Time: 11:45 PM') && (await row()) === null && (await page.evaluate(() => document.querySelector('.arcane-forge-ui-settings #forge-ui-trackers-other').hidden)));
+check('back with the story\'s AI, the note returns and the other model\'s line is gone', (await note()).includes('Time: 11:50 PM') && (await row()) === null && (await page.evaluate(() => document.querySelector('.arcane-forge-ui-settings #forge-ui-trackers-other').hidden)));
 
 // ---------- Kept by the story's AI: what is sent stays the same from turn to turn, up to the newest messages ----------
 // (a provider's prompt cache only works while the start of what is sent does not change)
