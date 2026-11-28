@@ -97,6 +97,10 @@ let askingFor = null;
 let queued = null;
 // The kind of request SillyTavern is building ('normal', 'swipe', 'impersonate', 'quiet', ...)
 let generationType = 'normal';
+// When the reply being written (not a background request) started, in ms; null while none is
+let replyStarted = null;
+// How long after a reply starts it counts as being written, before SillyTavern marks the page as generating
+const REPLY_STARTING_MS = 5000;
 let otherFailed = '';
 let lastToast = { text: '', time: 0 };
 
@@ -663,11 +667,19 @@ function chatOpen(ctx) {
 
 // SillyTavern can empty every extension's note without a chat change (a card saved in a chat that has only its
 // greeting does), so the note is set again as each request starts.
-function onGenerationStarted(type) {
+// A reply that has ended (or was stopped) is no longer being written
+function onGenerationOver() {
+    replyStarted = null;
+}
+
+function onGenerationStarted(type, options, dryRun) {
     const kind = typeof type === 'string' && type ? type : 'normal';
     // A background request (an extension's summary or image prompt) that starts while a reply is being written
     // does not change what that reply's request is built with
-    if (kind === 'quiet' && document.body.dataset.generating === 'true') return;
+    // (SillyTavern marks the page as generating a moment after a reply starts, so the start itself counts too)
+    if (kind === 'quiet' && (document.body.dataset.generating === 'true' || (replyStarted !== null && performance.now() - replyStarted < REPLY_STARTING_MS))) return;
+    // (a dry run, such as counting tokens, writes no reply and ends with no event)
+    if (kind !== 'quiet' && !dryRun) replyStarted = performance.now();
     generationType = kind;
     setNote();
 }
@@ -677,7 +689,7 @@ function onGenerationStarted(type) {
 function startListening() {
     if (listening.length) return;
     const { eventSource, eventTypes } = context();
-    const follow = { MESSAGE_RECEIVED: onReply, MESSAGE_DELETED: () => followChat(), MESSAGE_SWIPED: followChat, CHAT_CHANGED: onChatChanged, GENERATION_STARTED: onGenerationStarted };
+    const follow = { MESSAGE_RECEIVED: onReply, MESSAGE_DELETED: () => followChat(), MESSAGE_SWIPED: followChat, CHAT_CHANGED: onChatChanged, GENERATION_STARTED: onGenerationStarted, GENERATION_ENDED: onGenerationOver, GENERATION_STOPPED: onGenerationOver };
     for (const [name, handler] of Object.entries(follow)) {
         const type = eventTypes?.[name];
         if (!type) continue;

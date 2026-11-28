@@ -301,8 +301,9 @@ function updateBlocks(answer) {
  */
 export function readable(text) {
     const answer = said(text);
-    const whole = updateBlocks(answer).length;
-    const begun = (answer.match(/<update\b/gi) ?? []).length;
+    // Only blocks with an id count: an answer may mention "<update>" in its words
+    const whole = updateBlocks(answer).filter(([, attributes]) => /\bid\s*=/i.test(attributes)).length;
+    const begun = (answer.match(/<update\b[^>]*\bid\s*=/gi) ?? []).length;
     return begun === whole && (whole > 0 || /<none\s*\/?>/i.test(answer));
 }
 
@@ -520,11 +521,28 @@ function writtenInto(world, uid) {
     return log.filter((change) => change.world === world && change.uid === uid && typeof change.after === 'string').map((change) => change.after);
 }
 
+// SillyTavern in a browser sends a lorebook save without looking at the server's answer, so a save the server
+// refused looks like one that worked. The lorebook is read back from the server to see that it holds the new
+// text. (TauriTavern says so itself when a save fails.) When it cannot be read back, nothing is concluded.
+async function confirmSaved(ctx, world, uid, text) {
+    let stored;
+    try {
+        const response = await fetch('/api/worldinfo/get', { method: 'POST', headers: ctx.getRequestHeaders?.() ?? {}, body: JSON.stringify({ name: world }), cache: 'no-cache' });
+        if (!response.ok) return;
+        stored = await response.json();
+    } catch {
+        return;
+    }
+    const entry = stored?.entries?.[uid] ?? Object.values(stored?.entries ?? {}).find((one) => one?.uid === uid);
+    if (entry && entry.content !== text) throw new Error(`The lorebook "${world}" on the server does not hold the new text: the save was refused`);
+}
+
 async function writeEntry(ctx, world, data, entry, text) {
     const before = entry.content;
     entry.content = text;
     try {
         await ctx.saveWorldInfo(world, data, true);
+        await confirmSaved(ctx, world, entry.uid, text);
     } catch (error) {
         // SillyTavern keeps what it is given before it saves it: the page must not go on showing (and
         // sending) a text that is not in the file

@@ -44,6 +44,7 @@ export async function openForge({ phone = false, width = 1440, height = 900, cha
     const errors = [];
     const served = [];  // extension files answered from this checkout
     const held = [];    // saves and model calls that were answered here instead of by the sandbox
+    const books = new Map(); // lorebooks saved during the test (name -> what was saved), read back from here
     page.on('pageerror', (e) => errors.push(String(e)));
 
     const sandboxHost = new URL(SANDBOX).host;
@@ -64,7 +65,17 @@ export async function openForge({ phone = false, width = 1440, height = 900, cha
             held.push(path);
             return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'Test reply.' } }] }) });
         }
+        // A lorebook saved in this test is read back as it was saved (the keeper reads it back to see that the
+        // save was kept), since the save itself never reaches the sandbox
+        if (request.method() === 'POST' && path === '/api/worldinfo/get') {
+            const name = request.postDataJSON()?.name;
+            if (books.has(name)) return route.fulfill({ contentType: 'application/json', body: JSON.stringify(books.get(name)) });
+        }
         if (request.method() === 'POST' && /\/(save|edit|edit-attribute|merge-attributes|rename|delete)$/.test(path)) {
+            if (path === '/api/worldinfo/edit') {
+                const body = request.postDataJSON();
+                if (body?.name) books.set(body.name, body.data);
+            }
             held.push(path);
             return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ result: 'ok' }) });
         }
