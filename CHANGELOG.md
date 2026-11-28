@@ -4,6 +4,7 @@ Newest first. The version number is in `manifest.json`. Changes collect under "U
 
 ## Unreleased
 
+- Trackers and swipes: a new swipe now starts from the values before the reply, not from what the previous swipe made of them. Each swipe keeps its own values, so swiping back and forth shows the right ones, and an update still on its way for a swiped-away version is dropped. Asking again about a reply also starts from the values before it.
 - Trackers: **the story decides**. When a reply states the time, date, place or weather, the trackers now take exactly that, also when it differs from what they said before; time is only worked out when the reply does not state it. This holds for both keepers.
 - Trackers kept by another model: new switch **Tell the story's AI the values, so the story goes by them** (off unless you turn it on). The values as they stand go along at the very end of what is sent, with nothing to write back, so a prompt cache is not disturbed.
 - Trackers: a heading such as **[Trackers for Name: ]** no longer stays behind in a reply. Some models copied the brackets of the tracker note around their block, and only the block was taken out. Now the heading and brackets go with it, also when they come empty, and the note itself no longer has brackets to copy. With another model keeping the trackers, a block the story's AI writes anyway is taken out and not read.

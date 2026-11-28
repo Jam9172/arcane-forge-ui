@@ -190,12 +190,37 @@ function store(next, { message } = {}) {
     setNote();
 }
 
-// After a reply is deleted or swiped away: the values go back to the last copy a reply still holds
+// The copy a message holds for the version of it that is shown. A message with swipes keeps one per swipe,
+// so a swipe being written (or one from before swipes had their own copy) holds none, rather than the last swipe's.
+function heldBy(message) {
+    if (!message || message.is_system) return null;
+    if (Array.isArray(message.swipes) && message.swipes.length > 1 && typeof message.swipe_id === 'number') {
+        if (message.swipe_id >= message.swipes.length) return null;
+        return message.swipe_info?.[message.swipe_id]?.extra?.[KEY] ?? null;
+    }
+    return message.extra?.[KEY] ?? null;
+}
+
+/** The values as they stood before a message: the copy held by the nearest message above it. */
+export function valuesBefore(ctx, messageId) {
+    for (let i = Number(messageId) - 1; i >= 0; i--) {
+        const kept = heldBy(ctx.chat?.[i]);
+        if (kept) return tidy(kept);
+    }
+    return values();
+}
+
+// After a reply is deleted or swiped: the values go back to the copy the shown version of a reply holds
 function followChat() {
     const ctx = context();
     const chat = ctx.chat ?? [];
+    // A swipe that is still being written: whatever the last one found is no longer the story
+    if (asking) {
+        asking.abort();
+        asking = null;
+    }
     for (let i = chat.length - 1; i >= 0; i--) {
-        const kept = chat[i]?.extra?.[KEY];
+        const kept = heldBy(chat[i]);
         if (!kept) continue;
         ctx.chatMetadata[KEY] = tidy(kept);
         ctx.saveMetadataDebounced?.();
@@ -324,6 +349,10 @@ function onReply(messageId) {
     if (!message || message.is_user || message.is_system || typeof message.mes !== 'string') return;
     const found = takeBlock(message.mes);
     const other = byOther(s);
+    // A new reply or a new swipe starts from the values before it, not from what an earlier swipe made of them.
+    // Kept on the reply now, so its swipe copy (taken right after this) holds them until the update lands.
+    const before = valuesBefore(ctx, messageId);
+    store(before, { message });
     if (!found) {
         if (other) askOther(Number(messageId));
         return;
@@ -331,7 +360,7 @@ function onReply(messageId) {
     message.mes = found.text;
     if (Array.isArray(message.swipes) && typeof message.swipe_id === 'number' && typeof message.swipes[message.swipe_id] === 'string') message.swipes[message.swipe_id] = found.text;
     // With another model keeping them, what the story's AI wrote anyway is only taken out
-    const next = other ? null : readLines(found.lines, values(), s, statList(s));
+    const next = other ? null : readLines(found.lines, before, s, statList(s));
     if (next) store(next, { message });
     else ctx.saveChat?.();
     // A streamed reply is already in the page with the block in it: show it again without
@@ -460,13 +489,16 @@ async function askOther(messageId) {
     asking?.abort();
     const mine = asking = new AbortController();
     const chatId = ctx.chatId;
+    // A reply that has just come in has no swipe number yet; SillyTavern gives it 0 right after
+    const swipeId = message.swipe_id ?? 0;
+    const before = valuesBefore(ctx, messageId);
     render();
     try {
-        const answer = await sendOther(s, otherMessages(ctx, s, messageId), mine.signal);
-        // A newer reply, another chat or a deleted message: this answer is about something that is gone
-        if (asking !== mine || context().chatId !== chatId || context().chat?.[messageId] !== message) return false;
+        const answer = await sendOther(s, otherMessages(ctx, s, messageId, before), mine.signal);
+        // A newer reply, another swipe, another chat or a deleted message: this answer is about something that is gone
+        if (asking !== mine || context().chatId !== chatId || context().chat?.[messageId] !== message || (message.swipe_id ?? 0) !== swipeId) return false;
         const lines = (takeBlock(answer) ?? takeBlock(`<div class="${BLOCK_CLASS}">\n${answer}`)).lines;
-        const next = readLines(lines, values(), s, statList(s));
+        const next = readLines(lines, before, s, statList(s));
         if (!next) throw new Error(answer.trim() ? `Its answer had no tracker lines: "${answer.trim().slice(0, 120)}"` : 'Its answer was empty.');
         otherFailed = '';
         store(next, { message });

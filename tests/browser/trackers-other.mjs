@@ -220,15 +220,42 @@ check('to start with the story\'s AI is told nothing, and the switch is there, o
 await setForge(page, { trackersTell: true });
 await page.waitForTimeout(300);
 const told = await note();
-check('switched on, it gets the values as they stand to go by, with nothing to write back', told.includes('Time: 9:45 PM') && told.includes('Health: 66') && told.includes('do not write this list out') && !told.includes('forge-trackers') && !told.includes('<div') && !told.includes('not set') && !told.startsWith('['), JSON.stringify(told).slice(120, 620));
+check('switched on, it gets the values as they stand to go by, with nothing to write back', told.includes('Time: 9:45 PM') && told.includes('Health: 70') && told.includes('do not write this list out') && !told.includes('forge-trackers') && !told.includes('<div') && !told.includes('not set') && !told.startsWith('['), JSON.stringify(told).slice(120, 620));
 await setForge(page, { trackersTell: false });
 await page.waitForTimeout(300);
 check('switched off again, nothing is sent', (await note()) === '');
 
+// ---------- Swipes: each one starts from the values before the reply, not from the last swipe ----------
+const ask = async (answer, act) => {
+    const count = await page.evaluate((answer) => { globalThis.otherAnswer = answer; return globalThis.otherBodies.length; }, answer);
+    await act();
+    await page.waitForFunction((count) => globalThis.otherBodies.length > count && !document.body.dataset.generating, count, { timeout: 15000 }).catch(() => {});
+    await idle();
+    await page.waitForTimeout(400);
+    const sent = await others();
+    return sent.at(-1)?.messages?.[1]?.content ?? '';
+};
+const startTime = (await now())?.time;
+await ask('Time: 11:00 PM\nHealth: 50', async () => { await page.fill('#send_textarea', 'We wait.'); await page.keyboard.press('Enter'); });
+check('a new reply moves the trackers on', (await now())?.time === '11:00 PM', JSON.stringify(await now()));
+const swipe = (side) => page.evaluate((side) => document.querySelector(`#chat .mes.last_mes .swipe_${side}`)?.click(), side);
+const seenBySwipe = await ask('Time: 11:30 PM\nHealth: 40', () => swipe('right'));
+check('a new swipe sends the values from before the reply, not the last swipe\'s', seenBySwipe.includes(`Time: ${startTime}`) && !seenBySwipe.includes('11:00 PM') && !seenBySwipe.includes('Health: 50'), seenBySwipe.slice(0, 160));
+check('and its answer moves them on from there', (await now())?.time === '11:30 PM' && (await now()).stats.health === 40, JSON.stringify(await now()));
+await swipe('left');
+await page.waitForTimeout(900);
+check('swiping back to the first version brings its values back', (await now())?.time === '11:00 PM' && (await now()).stats.health === 50, JSON.stringify(await now()));
+await swipe('right');
+await page.waitForTimeout(900);
+check('and forward again, the second version\'s', (await now())?.time === '11:30 PM' && (await now()).stats.health === 40, JSON.stringify(await now()));
+const askedSoFar = (await others()).length;
+const seenAgain = await ask('Time: 11:45 PM', () => page.click('#forge-trackers .forge-track-other button'));
+check('asking again about a swipe also starts from the values before the reply', (await others()).length === askedSoFar + 1 && seenAgain.includes(`Time: ${startTime}`) && (await now())?.time === '11:45 PM', seenAgain.slice(0, 120));
+
 // ---------- Back to the story's AI, and off ----------
 await set('forge-ui-trackers-by', 'story');
 await page.waitForTimeout(400);
-check('back with the story\'s AI, the note returns and the other model\'s line is gone', (await note()).includes('Time: 9:45 PM') && (await row()) === null && (await page.evaluate(() => document.querySelector('.arcane-forge-ui-settings #forge-ui-trackers-other').hidden)));
+check('back with the story\'s AI, the note returns and the other model\'s line is gone', (await note()).includes('Time: 11:45 PM') && (await row()) === null && (await page.evaluate(() => document.querySelector('.arcane-forge-ui-settings #forge-ui-trackers-other').hidden)));
 
 // ---------- Kept by the story's AI: what is sent stays the same from turn to turn, up to the newest messages ----------
 // (a provider's prompt cache only works while the start of what is sent does not change)
